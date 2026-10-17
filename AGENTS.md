@@ -90,13 +90,22 @@ parusdb/
 │   ├── lib/supabase/             # Clients Supabase SSR : client.ts, server.ts, proxy.ts
 │   ├── proxy.ts                  # Proxy Next 16 (ex-middleware) : refresh de session
 │   └── app/globals.css           # Tokens de design (cible : charte §3)
-└── apps/supabase/                # Stack Supabase self-hosted (dépôt officiel supabase/docker)
-    ├── docker-compose.yml         # Stack de base (Envoy = gateway par défaut ; Kong en option)
-    ├── docker-compose.*.yml      # Overrides : kong, nginx, caddy, pgbouncer, pg17, s3...
-    ├── run.sh                    # Cycle de vie du stack (start/stop/logs/secrets/config)
-    ├── setup.sh                  # Bootstrap première installation (génère .env + clés)
-    ├── volumes/db/               # Données + SQL d'initialisation
-    └── CONFIG.md                 # Référence des variables d'environnement self-hosted
+├── apps/polaris/                 # Apache Polaris — catalogue Iceberg (métadonnées)
+│   ├── docker-compose.yml        # polaris + polaris-bootstrap (relational-jdbc → Postgres Supabase)
+│   ├── sql/01-init-cluster.sql   # Rôle + base `polaris` dans le Postgres Supabase (idempotent)
+│   ├── sql/02-init-database.sql  # Schéma applicatif + search_path de la base `polaris`
+│   └── run.sh / setup.sh / reset.sh / update.sh  # Cycle de vie (cf. §5)
+├── apps/supabase/                # Stack Supabase self-hosted (dépôt officiel supabase/docker)
+│   ├── docker-compose.yml         # Stack de base (Envoy = gateway par défaut ; Kong en option)
+│   ├── docker-compose.*.yml      # Overrides : kong, nginx, caddy, pgbouncer, pg17, s3...
+│   ├── run.sh                    # Cycle de vie du stack (start/stop/logs/secrets/config)
+│   ├── setup.sh                  # Bootstrap première installation (génère .env + clés)
+│   ├── volumes/db/               # Données + SQL d'initialisation
+│   └── CONFIG.md                 # Référence des variables d'environnement self-hosted
+└── apps/trino/                   # Trino — moteur SQL du lakehouse (Iceberg REST → Polaris)
+    ├── docker-compose.yml        # trino (réseau externe supabase_default)
+    ├── catalog/polaris.properties # Catalogue iceberg : Polaris + credentials vendus
+    └── run.sh / setup.sh / reset.sh / update.sh  # Cycle de vie (cf. §5)
 ```
 
 Un `AGENTS.md` imbriqué peut être ajouté dans `apps/nextjs/` ou `apps/supabase/` lorsque les
@@ -116,6 +125,9 @@ règles locales deviennent volumineuses ; il prime alors sur celui-ci pour son p
 | Démarrer le stack Supabase | `cd apps/supabase && sh run.sh start` (alias `docker compose up -d`) |
 | Logs / statut du stack | `sh run.sh logs [service]` / `sh run.sh status` |
 | Secrets du stack | `sh run.sh secrets` — **ne jamais copier le contenu dans une PR, un log ou une conversation** |
+| Démarrer Polaris (catalogue Iceberg) | `cd apps/polaris && sh setup.sh` (première fois), puis `sh run.sh start` |
+| Démarrer Trino (moteur SQL) | `cd apps/trino && sh setup.sh` (première fois), puis `sh run.sh start` — Polaris doit être démarré |
+| Réinitialiser Polaris / Trino | `sh reset.sh` dans le dossier correspondant (destructif : métadonnées Polaris + `.env`) |
 
 Le frontend utilise **npm** (`package-lock.json`). Ne pas introduire pnpm/yarn ni éditer les
 lockfiles à la main.
@@ -130,6 +142,10 @@ lockfiles à la main.
   l'historique, les commentaires, les captures).
 - Le stack self-hosted se configure via `apps/supabase/.env` (généré par `setup.sh`) ;
   référence complète : `apps/supabase/CONFIG.md`.
+- Polaris et Trino se configurent via `apps/polaris/.env` et `apps/trino/.env`
+  (générés par leurs `setup.sh`, qui importent credentials RustFS et port Postgres
+  depuis `apps/supabase/.env`). Polaris utilise le Postgres et le RustFS **de la stack
+  Supabase** ; aucun service de données supplémentaire n'est démarré.
 
 ## 6. Règles transversales
 
