@@ -1,11 +1,13 @@
+import { AuthShell } from "@/components/parus/auth-shell";
 import { SignUpForm } from "@/components/sign-up-form";
 
 export default function Page() {
   return (
-    <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
-      <div className="w-full max-w-sm">
-        <SignUpForm />
-      </div>
-    </div>
+    <AuthShell
+      title="Créer un compte"
+      description="Votre email recevra un lien de confirmation. Aucune donnée ne quitte votre infrastructure."
+    >
+      <SignUpForm />
+    </AuthShell>
   );
 }
