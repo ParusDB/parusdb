@@ -1,0 +1,19 @@
+#
+# ParusDB : politique de redémarrage du service RustFS.
+#
+# Le service `rustfs` est défini uniquement par l'override vendor
+# `docker-compose.rustfs.yml` (dépôt officiel supabase/docker), sans politique
+# `restart`. Après un redémarrage de la machine ou du démon Docker, tous les
+# services Supabase reviennent (`restart: unless-stopped` dans le compose de
+# base) SAUF RustFS : le storage Supabase et tout le lakehouse (Polaris, Trino)
+# se retrouvent alors cassés en silence.
+#
+# Ce fichier appartient à ParusDB (pas au vendor) : il survit aux `update.sh`.
+# Enregistré dans COMPOSE_FILE via :
+#   sh run.sh config add rustfs-restart
+#
+
+services:
+
+  rustfs:
+    restart: unless-stopped

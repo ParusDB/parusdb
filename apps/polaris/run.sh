@@ -90,8 +90,10 @@ case "$CMD" in
             exec docker compose up -d --wait --force-recreate --no-deps $services
         fi
         if [ $# -eq 0 ]; then
-            docker compose down
+            # Garde-fou AVANT le down : ne pas démonter la stack si la
+            # dépendance Supabase est indisponible.
             check_supabase
+            docker compose down
             exec docker compose up -d --wait
         fi
         exec docker compose up -d --wait --force-recreate --no-deps "$@"

@@ -62,8 +62,10 @@ case "$CMD" in
         ;;
     recreate)
         if [ $# -eq 0 ]; then
-            docker compose down
+            # Garde-fou AVANT le down : ne pas démonter Trino si Polaris
+            # est indisponible (sinon on détruit puis on refuse de remonter).
             check_polaris
+            docker compose down
             exec docker compose up -d --wait
         fi
         exec docker compose up -d --wait --force-recreate --no-deps "$@"

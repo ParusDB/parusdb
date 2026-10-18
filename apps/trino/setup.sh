@@ -96,6 +96,12 @@ docker network inspect supabase_default >/dev/null 2>&1 \
 docker ps --filter name=parus-polaris --format '{{.Names}}' 2>/dev/null | grep -q . \
     || fail "le conteneur parus-polaris n'est pas démarré (cd ../polaris && sh run.sh start)"
 
+# Polaris peut être « sain » alors que RustFS est éteint (santé HTTP
+# superficielle, découverte après un redémarrage machine) : Trino en a besoin
+# pour lire et écrire les fichiers Iceberg.
+docker ps --filter name=supabase-rustfs --format '{{.Names}}' 2>/dev/null | grep -q . \
+    || fail "le service RustFS de la stack Supabase n'est pas démarré (cd ../supabase && sh run.sh start)"
+
 POLARIS_MANAGEMENT_PORT=$(read_env_var "$POLARIS_ENV" POLARIS_MANAGEMENT_PORT)
 POLARIS_MANAGEMENT_PORT=${POLARIS_MANAGEMENT_PORT:-8182}
 curl -s --max-time 10 -o /dev/null -f "http://localhost:$POLARIS_MANAGEMENT_PORT/q/health" \
