@@ -1,109 +1,75 @@
-<a href="https://demo-nextjs-with-supabase.vercel.app/">
-  <img alt="Next.js and Supabase Starter Kit - the fastest way to build apps with Next.js and Supabase" src="https://demo-nextjs-with-supabase.vercel.app/opengraph-image.png">
-  <h1 align="center">Next.js and Supabase Starter Kit</h1>
-</a>
+# ParusDB — Interface (Next.js)
 
-<p align="center">
- The fastest way to build apps with Next.js and Supabase
-</p>
+Application web ParusDB : frontend + BFF (Backend-For-Frontend) en Next.js 16
+(App Router, React 19, TypeScript strict, Tailwind CSS v4 + shadcn/ui,
+`cacheComponents` activé, proxy à la racine pour le refresh de session).
 
-<p align="center">
-  <a href="#features"><strong>Features</strong></a> ·
-  <a href="#demo"><strong>Demo</strong></a> ·
-  <a href="#deploy-to-vercel"><strong>Deploy to Vercel</strong></a> ·
-  <a href="#clone-and-run-locally"><strong>Clone and run locally</strong></a> ·
-  <a href="#feedback-and-issues"><strong>Feedback and issues</strong></a>
-  <a href="#more-supabase-examples"><strong>More Examples</strong></a>
-</p>
-<br/>
+Toute l'interface est en français, la charte appliquée est « Mésange
+Charbonnière » (`docs/functional/brand_guidelines.md` — tokens dans
+`app/globals.css`, polices Inter / Space Grotesk / JetBrains Mono via
+`next/font`).
 
-## Features
+## Démarrage
 
-- Works across the entire [Next.js](https://nextjs.org) stack
-  - App Router
-  - Pages Router
-  - Proxy
-  - Client
-  - Server
-  - It just works!
-- supabase-ssr. A package to configure Supabase Auth to use cookies
-- Password-based authentication block installed via the [Supabase UI Library](https://supabase.com/ui/docs/nextjs/password-based-auth)
-- Styling with [Tailwind CSS](https://tailwindcss.com)
-- Components with [shadcn/ui](https://ui.shadcn.com/)
-- Optional deployment with [Supabase Vercel Integration and Vercel deploy](#deploy-your-own)
-  - Environment variables automatically assigned to Vercel project
+```bash
+npm install
+npm run dev        # http://localhost:3000
+```
 
-## Demo
+Prérequis : les stacks `apps/supabase` (avec overrides `rustfs` +
+`rustfs-restart`), `apps/polaris`, `apps/trino`, `apps/mcp-trino` et
+`apps/ollama` démarrées. Copier `.env.example` en `.env.local` et renseigner
+les valeurs locales (les secrets se récupèrent depuis les `.env` des stacks,
+jamais commités).
 
-You can view a fully working demo at [demo-nextjs-with-supabase.vercel.app](https://demo-nextjs-with-supabase.vercel.app/).
+## Fonctionnalités
 
-## Deploy to Vercel
+| Section | Route | État |
+|---|---|---|
+| Connexion / inscription / réinitialisation | `/auth/*` | Fonctionnel (charte : charbon + grille + halo jaune) |
+| Chat IA (Ollama + mcp-trino, streaming SSE) | `/chat` | Fonctionnel — question → exploration lakehouse → SQL → réponse |
+| Agents IA (CRUD, modèles, sources) | `/agents` | Fonctionnel |
+| Data Lakehouse (catalogues Polaris, éditeur SQL Trino) | `/data-lakehouse` | Fonctionnel |
+| Connecteurs ELT (dlt) | `/connectors` | Interfaces mockées — exécution simulée, moteur non intégré |
+| Administration (utilisateurs, rôles, serveurs, facturation) | `/admin/*` | Fonctionnel |
+| Support (documentation, tickets) | `/support` | Fonctionnel |
 
-Vercel deployment will guide you through creating a Supabase account and project.
+## Architecture applicative
 
-After installation of the Supabase integration, all relevant environment variables will be assigned to the project so the deployment is fully functioning.
+- **Auth** : Supabase self-hosted via la gateway (`http://localhost:8000`,
+  Envoy par défaut — Kong optionnel sur le même port). Les clients vivent dans
+  `lib/supabase/` (`client.ts` navigateur, `server.ts` RSC/actions,
+  `admin.ts` clé service_role — serveur uniquement). Le refresh de session est
+  assuré par `proxy.ts` → `lib/supabase/proxy.ts`.
+- **RBAC** : rôles applicatifs et permissions dans PostgreSQL (schéma `iam`,
+  tables `roles`, `user_roles`, `user_active_role`, fonction
+  `iam.has_permission`). Le rôle actif se change en bas de sidebar sans se
+  déconnecter. Les permissions filtrent la navigation ET l'accès serveur
+  (`lib/session.ts` : `requirePermission`).
+- **Schémas métier PostgreSQL** : `iam`, `agents`, `chat`, `lakehouse`,
+  `connectors`, `admin`, `support` — DDL versionné et idempotent dans
+  `apps/supabase/sql/01-parusdb-app.sql` (RLS partout, TO authenticated +
+  prédicat d'appartenance). PostgREST les expose via `PGRST_DB_SCHEMAS` ;
+  côté client, `supabase.schema('<schéma>')` envoie `Accept-Profile`.
+- **Chat IA** : route SSE `app/(app)/chat/[id]/stream/route.ts` — boucle
+  Ollama (function calling) ↔ mcp-trino (lecture seule), messages persistés
+  dans `chat.messages`, titre généré par l'IA, requêtes SQL journalisées dans
+  `lakehouse.query_history`. Le modèle ne reçoit aucune chaîne de connexion.
+- **Lakehouse** : CRUD des catalogues via l'API Management Polaris
+  (`lib/polaris.ts`), requêtage via Trino (`lib/trino.ts`), exploration des
+  schémas/tables/colonnes via `information_schema`, métriques disque via les
+  tables metadata `$files`. La création d'un catalogue génère le binding Trino
+  (`TRINO_CATALOG_DIR`) — redémarrage Trino requis pour l'activer.
+- **Secrets** : credentials des connecteurs et clés API LLM chiffrés
+  AES-256-GCM (`lib/crypto.ts`, clé `PARUSDB_ENCRYPTION_KEY`), jamais
+  renvoyés au client.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fvercel%2Fnext.js%2Ftree%2Fcanary%2Fexamples%2Fwith-supabase&project-name=nextjs-with-supabase&repository-name=nextjs-with-supabase&demo-title=nextjs-with-supabase&demo-description=This+starter+configures+Supabase+Auth+to+use+cookies%2C+making+the+user%27s+session+available+throughout+the+entire+Next.js+app+-+Client+Components%2C+Server+Components%2C+Route+Handlers%2C+Server+Actions+and+Middleware.&demo-url=https%3A%2F%2Fdemo-nextjs-with-supabase.vercel.app%2F&external-id=https%3A%2F%2Fgithub.com%2Fvercel%2Fnext.js%2Ftree%2Fcanary%2Fexamples%2Fwith-supabase&demo-image=https%3A%2F%2Fdemo-nextjs-with-supabase.vercel.app%2Fopengraph-image.png)
+## Notes
 
-The above will also clone the Starter kit to your GitHub, you can clone that locally and develop locally.
-
-If you wish to just develop locally and not deploy to Vercel, [follow the steps below](#clone-and-run-locally).
-
-## Clone and run locally
-
-1. You'll first need a Supabase project which can be made [via the Supabase dashboard](https://database.new)
-
-2. Create a Next.js app using the Supabase Starter template npx command
-
-   ```bash
-   npx create-next-app --example with-supabase with-supabase-app
-   ```
-
-   ```bash
-   yarn create next-app --example with-supabase with-supabase-app
-   ```
-
-   ```bash
-   pnpm create next-app --example with-supabase with-supabase-app
-   ```
-
-3. Use `cd` to change into the app's directory
-
-   ```bash
-   cd with-supabase-app
-   ```
-
-4. Rename `.env.example` to `.env.local` and update the following:
-
-  ```env
-  NEXT_PUBLIC_SUPABASE_URL=[INSERT SUPABASE PROJECT URL]
-  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=[INSERT SUPABASE PROJECT API PUBLISHABLE OR ANON KEY]
-  ```
-  > [!NOTE]
-  > This example uses `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, which refers to Supabase's new **publishable** key format.
-  > Both legacy **anon** keys and new **publishable** keys can be used with this variable name during the transition period. Supabase's dashboard may show `NEXT_PUBLIC_SUPABASE_ANON_KEY`; its value can be used in this example.
-  > See the [full announcement](https://github.com/orgs/supabase/discussions/29260) for more information.
-
-  Both `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` can be found in [your Supabase project's API settings](https://supabase.com/dashboard/project/_?showConnect=true)
-
-5. You can now run the Next.js local development server:
-
-   ```bash
-   npm run dev
-   ```
-
-   The starter kit should now be running on [localhost:3000](http://localhost:3000/).
-
-6. This template comes with the default shadcn/ui style initialized. If you instead want other ui.shadcn styles, delete `components.json` and [re-install shadcn/ui](https://ui.shadcn.com/docs/installation/next)
-
-> Check out [the docs for Local Development](https://supabase.com/docs/guides/getting-started/local-development) to also run Supabase locally.
-
-## Feedback and issues
-
-Please file feedback and issues over on the [Supabase GitHub org](https://github.com/supabase/supabase/issues/new/choose).
-
-## More Supabase examples
-
-- [Next.js Subscription Payments Starter](https://github.com/vercel/nextjs-subscription-payments)
-- [Cookie-based Auth and the Next.js 13 App Router (free course)](https://youtube.com/playlist?list=PL5S4mPUpp4OtMhpnp93EFSo42iQ40XjbF)
-- [Supabase Auth and the Next.js App Router](https://github.com/supabase/supabase/tree/master/examples/auth/nextjs)
+- L'exécution des modèles propriétaires (OpenAI, Anthropic…) n'est pas encore
+  active : les clés se configurent en administration, mais les conversations
+  exigent un modèle Ollama local pour l'instant.
+- Les pages du groupe `(app)` sont dynamiques (session par cookies) :
+  `export const instant = false` sur chaque page avec `cacheComponents`.
+- Vérifications avant de livrer : `npm run lint`, `npx tsc --noEmit`,
+  `npm run build` (§13 d'AGENTS.md).
