@@ -1,0 +1,48 @@
+#
+# Ollama — serveur d'inférence LLM local de ParusDB (brique Chat IA).
+#
+# Rôle strict (AGENTS.md §11) : Ollama sert les modèles open source (Gemma,
+# Mistral, Qwen…) en local, sur le GPU NVIDIA de la machine hôte. Il ne connaît
+# ni Trino, ni le lakehouse, ni aucun secret : les modèles n'accèdent aux
+# données que par les outils MCP exposés par mcp-trino (apps/mcp-trino).
+#
+# Prérequis GPU : NVIDIA Container Toolkit installé et configuré sur l'hôte
+# (https://docs.ollama.com/docker) :
+#   sudo nvidia-ctk runtime configure --runtime=docker
+#   sudo systemctl restart docker
+# `sh setup.sh` vérifie ce prérequis et affiche la procédure complète sinon.
+#
+# Démarrage : `sh run.sh start` (après `sh setup.sh`).
+#
+
+name: parus-ollama
+
+services:
+
+  ollama:
+    image: ollama/ollama:0.40.6
+    container_name: parus-ollama
+    restart: unless-stopped
+    ports:
+      # API HTTP (chat, tools, embeddings) — consommée par le BFF Next.js.
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      # Modèles, manifests et blobs — plusieurs Go par modèle.
+      - ./volumes/ollama:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            # GPU NVIDIA de l'hôte (RTX 3050 6 Go en dev). Nécessite le
+            # runtime `nvidia` : sans lui, docker refuse de créer le conteneur
+            # (erreur "could not select device driver nvidia").
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      # `ollama list` échoue tant que le serveur HTTP interne ne répond pas.
+      test: ["CMD-SHELL", "ollama list >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 30s

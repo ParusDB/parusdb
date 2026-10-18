@@ -51,9 +51,11 @@ et **techniques** (RBAC, catalogues, pipelines).
 
 ## 3. État du projet et feuille de route
 
-**Avancement actuel** : seul le template Next.js + Supabase est en place et fonctionnel :
-authentification complète (login, sign-up, forgot/update password, callback, logout), clients
-Supabase SSR, shell d'application minimal. **Aucune brique produit n'est implémentée.**
+**Avancement actuel** : le socle technique est en place — template Next.js + Supabase
+(authentification complète, clients SSR, shell minimal), stack self-hosted Supabase avec
+RustFS, Data Lakehouse (Apache Polaris + Trino) et infrastructure du Chat IA (Ollama GPU +
+mcp-trino, test e2e « question → SQL → réponse » validé). **Aucun écran produit n'est
+implémenté.**
 
 **Ordre de construction décidé (feuille de route) :**
 
@@ -83,6 +85,9 @@ parusdb/
 ├── .agents/skills/               # Skills officiels Supabase (voir §9)
 │   ├── supabase/SKILL.md
 │   └── supabase-postgres-best-practices/  # SKILL.md + references/*.md (règles par catégorie)
+├── apps/mcp-trino/               # mcp-trino — serveur MCP exposant Trino aux LLM
+│   ├── docker-compose.yml        # mcp-trino (réseau externe supabase_default, lecture seule)
+│   └── run.sh / setup.sh / reset.sh / update.sh  # Cycle de vie (cf. §5)
 ├── apps/nextjs/                  # Application Next.js 16 (App Router) — frontend + BFF
 │   ├── app/                      # Routes uniquement (App Router)
 │   ├── components/               # Composants applicatifs
@@ -90,6 +95,10 @@ parusdb/
 │   ├── lib/supabase/             # Clients Supabase SSR : client.ts, server.ts, proxy.ts
 │   ├── proxy.ts                  # Proxy Next 16 (ex-middleware) : refresh de session
 │   └── app/globals.css           # Tokens de design (cible : charte §3)
+├── apps/ollama/                  # Ollama — serveur d'inférence LLM local (GPU NVIDIA)
+│   ├── docker-compose.yml        # ollama (runtime nvidia, modèles dans volumes/ollama)
+│   ├── scripts/test-mcp-trino.mjs # Test e2e Chat IA : question → LLM → mcp-trino → Trino
+│   └── run.sh / setup.sh / reset.sh / update.sh  # Cycle de vie (cf. §5)
 ├── apps/polaris/                 # Apache Polaris — catalogue Iceberg (métadonnées)
 │   ├── docker-compose.yml        # polaris + polaris-bootstrap (relational-jdbc → Postgres Supabase)
 │   ├── sql/01-init-cluster.sql   # Rôle + base `polaris` dans le Postgres Supabase (idempotent)
@@ -113,7 +122,8 @@ règles locales deviennent volumineuses ; il prime alors sur celui-ci pour son p
 
 ## 5. Environnement et commandes
 
-**Prérequis** : Node.js LTS, npm, Docker + plugin Compose.
+**Prérequis** : Node.js LTS, npm, Docker + plugin Compose ; pour `apps/ollama`,
+NVIDIA Container Toolkit (runtime `nvidia`) — voir `apps/ollama/README.md`.
 
 | Action | Commande |
 |---|---|
@@ -127,7 +137,11 @@ règles locales deviennent volumineuses ; il prime alors sur celui-ci pour son p
 | Secrets du stack | `sh run.sh secrets` — **ne jamais copier le contenu dans une PR, un log ou une conversation** |
 | Démarrer Polaris (catalogue Iceberg) | `cd apps/polaris && sh setup.sh` (première fois), puis `sh run.sh start` |
 | Démarrer Trino (moteur SQL) | `cd apps/trino && sh setup.sh` (première fois), puis `sh run.sh start` — Polaris doit être démarré |
-| Réinitialiser Polaris / Trino | `sh reset.sh` dans le dossier correspondant (destructif : métadonnées Polaris + `.env`) |
+| Démarrer mcp-trino (serveur MCP) | `cd apps/mcp-trino && sh setup.sh` (première fois), puis `sh run.sh start` — Trino doit être démarré |
+| Démarrer Ollama (LLM local GPU) | `cd apps/ollama && sh setup.sh` (première fois : GPU vérifié + modèles), puis `sh run.sh start` |
+| Test e2e Chat IA | `cd apps/ollama && sh run.sh test` — question → LLM → mcp-trino → Trino → réponse |
+| Réinitialiser Polaris / Trino / mcp-trino | `sh reset.sh` dans le dossier correspondant (destructif : métadonnées Polaris + `.env`) |
+| Réinitialiser Ollama | `sh reset.sh` (destructif : conteneurs + modèles téléchargés + `.env`) |
 
 Le frontend utilise **npm** (`package-lock.json`). Ne pas introduire pnpm/yarn ni éditer les
 lockfiles à la main.
@@ -146,6 +160,10 @@ lockfiles à la main.
   (générés par leurs `setup.sh`, qui importent credentials RustFS et port Postgres
   depuis `apps/supabase/.env`). Polaris utilise le Postgres et le RustFS **de la stack
   Supabase** ; aucun service de données supplémentaire n'est démarré.
+- Ollama et mcp-trino se configurent via `apps/ollama/.env` et `apps/mcp-trino/.env`
+  (générés par leurs `setup.sh`). Ollama requiert le NVIDIA Container Toolkit sur l'hôte
+  (voir `apps/ollama/README.md`) ; mcp-trino rejoint le réseau `supabase_default` et
+  reste en **lecture seule** sur Trino (`TRINO_ALLOW_WRITE_QUERIES=false`).
 
 ## 6. Règles transversales
 
@@ -306,6 +324,12 @@ Stack self-hosted `self-hosted/v0.8.2` (Envoy par défaut, Kong en override
   ou le SQL d'init d'une des deux apps.
 
 ## 11. Chat IA — Ollama + mcp-trino
+
+**Déploiement en place** : `apps/ollama` (serveur d'inférence GPU, modèle par défaut
+`gemma4:e2b`, function calling natif) et `apps/mcp-trino` (endpoint MCP Streamable HTTP
+`http://localhost:8185/mcp`, lecture seule, schémas autorisés bornés par
+`TRINO_ALLOWED_SCHEMAS`). Le test e2e `sh run.sh test` (apps/ollama) valide le parcours
+complet : question métier → exploration du lakehouse → SQL exécuté → réponse restituée.
 
 **Règles :**
 
