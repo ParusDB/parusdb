@@ -45,6 +45,25 @@ Prérequis : stack Supabase démarrée avec l'override RustFS
 `default-base-location` sous `s3://parus-lakehouse/<catalogue>`. Les catalogues
 supplémentaires seront créés par l'application via l'API Management.
 
+## Pièges d'intégration Polaris 1.8.0 (leçons de la mise en place)
+
+Consignés ici pour ne pas les redécouvrir ; les correctifs sont dans les scripts
+et fichiers concernés.
+
+- **DDL Postgres en `supabase_admin`, pas `postgres`** : l'image Supabase ne
+  donne pas le rôle SUPERUSER à `postgres` (ALTER de rôle refusé). Voir
+  `sql/01-init-cluster.sql` et `setup.sh`.
+- **Le schéma `polaris_schema` doit exister avant le premier démarrage** : les
+  scripts de bootstrap 1.8.0 (schema-v5/v6) ne font plus `CREATE SCHEMA` ni
+  `SET search_path` — sans pré-création, l'initialisation échoue (SQLSTATE
+  3F000). Voir `sql/02-init-database.sql`.
+- **Le grant `CATALOG_MANAGE_CONTENT` sur `catalog_admin` est obligatoire** :
+  sans lui, même le principal root se voit refuser `CREATE TABLE` (403, manque
+  `TABLE_WRITE_DATA`). Appliqué par `setup.sh` à chaque exécution.
+- **Nommage S3** : pas de tiret bas dans les noms de buckets (convention
+  `snake_case` du dépôt adaptée en `kebab-case` pour le S3 — cf.
+  `POLARIS_S3_BUCKET=parus-lakehouse`).
+
 ## Notes opérationnelles
 
 - Versions épinglées dans `docker-compose.yml` : mettre à jour = changer le tag,

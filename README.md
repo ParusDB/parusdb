@@ -86,14 +86,36 @@ cd apps/supabase
 cp .env.example .env
 sh utils/generate-keys.sh --update-env        # mots de passe + clés API
 sh utils/add-new-auth-keys.sh --update-env    # clés publishable/secret
-sh run.sh start                              # docker compose up -d --wait
+sh run.sh config add rustfs                   # backend S3 (RustFS) du storage
+sh run.sh config add rustfs-restart            # override ParusDB : RustFS redémarre après un reboot
+sh run.sh start                               # docker compose up -d --wait
 ```
 
 Les URLs et ports des services (Studio, API, Auth…) sont définis dans
 `apps/supabase/.env`. Guide complet : [`apps/supabase/README.md`](apps/supabase/README.md)
 et la [documentation self-hosting Supabase](https://supabase.com/docs/guides/self-hosting/docker).
 
-### 2. Frontend Next.js
+> L'override `docker-compose.rustfs-restart.yml` (fichier ParusDB) est indispensable :
+> le service `rustfs` du vendor n'a pas de politique de redémarrage, et sans lui tout le
+> lakehouse — ainsi que le storage Supabase — reste silencieusement cassé après un reboot
+> de la machine. À enregistrer sur chaque installation via `sh run.sh config add rustfs-restart`.
+
+### 2. Data Lakehouse (Apache Polaris + Trino)
+
+```bash
+cd apps/polaris
+sh setup.sh        # base `polaris` dans le Postgres Supabase, bucket RustFS, stack, catalogue `dev`
+cd ../trino
+sh setup.sh        # catalogue Trino `polaris` (Iceberg REST), test de bout en bout
+```
+
+Polaris persiste ses métadonnées dans le **Postgres de la stack Supabase** (base dédiée
+`polaris`) et stocke les fichiers Iceberg dans son **RustFS** — aucun service de données
+supplémentaire n'est démarré. Détails et pièges d'intégration :
+[`apps/polaris/README.md`](apps/polaris/README.md) ·
+[`apps/trino/README.md`](apps/trino/README.md).
+
+### 3. Frontend Next.js
 
 ```bash
 cd apps/nextjs
@@ -130,7 +152,9 @@ parusdb/
 ├── README.md             # Ce fichier
 ├── docs/functional/      # Fiche produit, spécifications fonctionnelles, charte graphique
 ├── apps/nextjs/          # Application Next.js 16 (App Router) — frontend + BFF
-└── apps/supabase/        # Stack Supabase self-hosted (Docker Compose)
+├── apps/polaris/         # Apache Polaris — catalogue Iceberg (Postgres + RustFS Supabase)
+├── apps/supabase/        # Stack Supabase self-hosted (Docker Compose)
+└── apps/trino/           # Trino — moteur SQL du lakehouse (Iceberg REST → Polaris)
 ```
 
 ## Documentation
@@ -142,6 +166,8 @@ parusdb/
   typographie, composants, conformité
 - [`apps/nextjs/README.md`](apps/nextjs/README.md) · [`apps/supabase/README.md`](apps/supabase/README.md)
   · [`apps/supabase/CONFIG.md`](apps/supabase/CONFIG.md) — guides techniques des apps
+- [`apps/polaris/README.md`](apps/polaris/README.md) · [`apps/trino/README.md`](apps/trino/README.md) —
+  guides et pièges d'intégration du Data Lakehouse
 
 ## Contribuer
 

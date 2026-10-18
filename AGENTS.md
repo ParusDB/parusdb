@@ -243,9 +243,17 @@ remplacer
 ## 9. Backend — Supabase (PostgreSQL) self-hosted
 
 Stack self-hosted `self-hosted/v0.8.2` (Envoy par défaut, Kong en override
-`sh run.sh config add kong`, backend S3 via `docker-compose.s3.yml` — cible **RustFS**).
+`sh run.sh config add kong`, backend S3 via `docker-compose.rustfs.yml` — cible **RustFS**).
 
 **Règles :**
+
+- **Overrides S3 à enregistrer sur chaque installation** : `sh run.sh config add rustfs`
+  (backend S3 du storage) **et** `sh run.sh config add rustfs-restart` — l'override ParusDB
+  `docker-compose.rustfs-restart.yml` ajoute `restart: unless-stopped` au service `rustfs`,
+  que le vendor ne définit pas : sans lui, RustFS ne revient pas après un reboot machine et
+  le storage Supabase + tout le lakehouse restent silencieusement cassés. Ne jamais éditer
+  les fichiers vendor (ils sont 3-way mergés par `update.sh`) : les correctifs locaux se
+  posent en fichiers d'override ParusDB enregistrés dans `COMPOSE_FILE`.
 
 - **Skills obligatoires** : charger `.agents/skills/supabase/SKILL.md` (checklist sécurité :
   JWT, clés, RLS, vues) **et** `supabase-postgres-best-practices/SKILL.md` (règles préfixées
@@ -290,6 +298,12 @@ Stack self-hosted `self-hosted/v0.8.2` (Envoy par défaut, Kong en override
 - **Catalogue vide** : proposer la création d'un premier connecteur avec redirection vers
   « Connecteurs ».
 - Credentials S3/Polaris : jamais en dur ; chiffrés au repos côté serveur.
+- **Documentation opérationnelle** : cycle de vie, architecture et pièges d'intégration
+  Polaris 1.8.0 (rôle `supabase_admin` pour le DDL, schéma `polaris_schema` pré-créé,
+  grant `CATALOG_MANAGE_CONTENT` sur `catalog_admin`, purge au DROP, clés RSA du token
+  broker persistées) sont consignés dans `apps/polaris/README.md` et
+  `apps/trino/README.md` — les lire avant de modifier `setup.sh`, `docker-compose.yml`
+  ou le SQL d'init d'une des deux apps.
 
 ## 11. Chat IA — Ollama + mcp-trino
 
