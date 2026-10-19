@@ -69,3 +69,14 @@ sh reset.sh   # tout réinitialiser (conteneurs + modèles + .env)
 - `sh reset.sh` supprime les modèles téléchargés (plusieurs Go à
   re-télécharger ensuite). Ce script est le seul de l'app à ne pas avoir été
   validé par exécution : le vérifier au premier usage.
+- **L'application (apps/nextjs) consomme `/api/chat` avec `tools`**
+  (function calling, `lib/ollama.ts`) et `/api/tags` pour la liste des
+  modèles proposés à la création d'agents ; la boucle agentique
+  (`lib/agent-runner.ts`) plafonne les allers-retours Ollama ↔ mcp-trino à
+  `PARUSDB_AGENT_MAX_STEPS` (8 par défaut) et le titre de conversation est
+  généré par une seconde requête au même modèle.
+- **Le LLM est non déterministe** : `gemma4:e2b` peut échouer sur une syntaxe
+  Trino invalide d'une exécution à l'autre. Le prompt socle de l'app documente
+  la syntaxe des dates relatives Trino (`date_add('month', -3, current_date)`)
+  et impose de corriger et rejouer en cas d'erreur SQL — toujours rejouer un
+  test e2e avant de conclure à un succès ou un échec.

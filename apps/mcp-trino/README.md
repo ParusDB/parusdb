@@ -47,7 +47,14 @@ run.sh start` ; `cd apps/trino && sh run.sh start`).
   entre versions majeures (relire les release notes amont).
 - `TRINO_ALLOWED_SCHEMAS` borne ce que le LLM voit et interroge : ajuster
   quand de nouveaux domaines (schémas) sont ajoutés au lakehouse. Le RBAC
-  applicatif (rôle actif, sources par agent) affinera cette liste côté
-  administration.
+  applicatif (rôle actif, sources par agent) est implémenté côté application
+  (apps/nextjs) mais n'affine pas encore `TRINO_ALLOWED_SCHEMAS`, qui reste
+  le garde-fou serveur.
 - Sans Trino démarré, le serveur s'arrête immédiatement (connexion testée au
   démarrage) : `sh run.sh start` le vérifie avant de lancer le conteneur.
+- **L'application (apps/nextjs) est un consommateur de cet endpoint** via
+  `lib/mcp.ts` : client Streamable HTTP porté du script e2e — handshake
+  `initialize` → `notifications/initialized` → `tools/list` → `tools/call`,
+  `Mcp-Session-Id` par message (une session MCP par message utilisateur),
+  réponses `text/event-stream` à parser ligne à ligne (`data:`). La boucle
+  Ollama ↔ outils vit dans `lib/agent-runner.ts`.

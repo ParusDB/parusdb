@@ -96,13 +96,13 @@ parusdb/
 ├── apps/mcp-trino/               # mcp-trino — serveur MCP exposant Trino aux LLM
 │   ├── docker-compose.yml        # mcp-trino (réseau externe supabase_default, lecture seule)
 │   └── run.sh / setup.sh / reset.sh / update.sh  # Cycle de vie (cf. §5)
-├── apps/nextjs/                  # Application Next.js 16 (App Router) — frontend + BFF
-│   ├── app/                      # Routes uniquement (App Router)
-│   ├── components/               # Composants applicatifs
-│   │   └── ui/                   # Composants shadcn/ui générés par CLI (ne pas éditer à la main)
-│   ├── lib/supabase/             # Clients Supabase SSR : client.ts, server.ts, proxy.ts
+├── apps/nextjs/                  # Application Next.js 16 (App Router) — frontend + BFF (voir son README.md)
+│   ├── app/                      # Routes : auth/ (public) + (app)/ (protégé : chat, agents, data-lakehouse, connectors, admin, support)
+│   ├── components/               # Composants applicatifs (un dossier par feature) + ui/ (shadcn, ne pas éditer à la main)
+│   ├── lib/                      # Clients : supabase/ (SSR + admin service_role), session.ts, trino.ts (trino-js-client), polaris.ts, ollama.ts, mcp.ts, agent-runner.ts, crypto.ts, lakehouse.ts, sources.ts
+│   ├── types/db.ts               # Types des lignes métier (frontières typées)
 │   ├── proxy.ts                  # Proxy Next 16 (ex-middleware) : refresh de session
-│   └── app/globals.css           # Tokens de design (cible : charte §3)
+│   └── app/globals.css           # Tokens de design (charte §3, copiés à l'identique)
 ├── apps/ollama/                  # Ollama — serveur d'inférence LLM local (GPU NVIDIA)
 │   ├── docker-compose.yml        # ollama (runtime nvidia, modèles dans volumes/ollama)
 │   ├── scripts/test-mcp-trino.mjs # Test e2e Chat IA : question → LLM → mcp-trino → Trino
@@ -113,15 +113,17 @@ parusdb/
 │   ├── sql/02-init-database.sql  # Schéma applicatif + search_path de la base `polaris`
 │   └── run.sh / setup.sh / reset.sh / update.sh  # Cycle de vie (cf. §5)
 ├── apps/supabase/                # Stack Supabase self-hosted (dépôt officiel supabase/docker)
-│   ├── docker-compose.yml         # Stack de base (Envoy = gateway par défaut ; Kong en option)
+│   ├── docker-compose.yml         # Stack de base (Envoy = gateway par défaut ; Kong en override)
 │   ├── docker-compose.*.yml      # Overrides : kong, nginx, caddy, pgbouncer, pg17, s3...
 │   ├── run.sh                    # Cycle de vie du stack (start/stop/logs/secrets/config)
 │   ├── setup.sh                  # Bootstrap première installation (génère .env + clés)
+│   ├── sql/01-parusdb-app.sql    # Schémas métier + RLS + seed ParusDB (idempotent, cf. §9)
 │   ├── volumes/db/               # Données + SQL d'initialisation
 │   └── CONFIG.md                 # Référence des variables d'environnement self-hosted
 └── apps/trino/                   # Trino — moteur SQL du lakehouse (Iceberg REST → Polaris)
     ├── docker-compose.yml        # trino (réseau externe supabase_default)
     ├── catalog/polaris.properties # Catalogue iceberg : Polaris + credentials vendus
+    │                              # (les bindings des autres catalogues sont générés par l'app, cf. §10)
     └── run.sh / setup.sh / reset.sh / update.sh  # Cycle de vie (cf. §5)
 ```
 
@@ -148,6 +150,7 @@ NVIDIA Container Toolkit (runtime `nvidia`) — voir `apps/ollama/README.md`.
 | Démarrer mcp-trino (serveur MCP) | `cd apps/mcp-trino && sh setup.sh` (première fois), puis `sh run.sh start` — Trino doit être démarré |
 | Démarrer Ollama (LLM local GPU) | `cd apps/ollama && sh setup.sh` (première fois : GPU vérifié + modèles), puis `sh run.sh start` |
 | Test e2e Chat IA | `cd apps/ollama && sh run.sh test` — question → LLM → mcp-trino → Trino → réponse |
+| Appliquer le schéma applicatif (idempotent) | `docker exec -i supabase-db psql -U supabase_admin -d postgres < apps/supabase/sql/01-parusdb-app.sql` |
 | Réinitialiser Polaris / Trino / mcp-trino | `sh reset.sh` dans le dossier correspondant (destructif : métadonnées Polaris + `.env`) |
 | Réinitialiser Ollama | `sh reset.sh` (destructif : conteneurs + modèles téléchargés + `.env`) |
 
@@ -159,6 +162,13 @@ lockfiles à la main.
 - Le frontend lit `NEXT_PUBLIC_SUPABASE_URL` et `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
   (voir `apps/nextjs/.env.example`). Tout préfixe `NEXT_PUBLIC_` est exposé au navigateur :
   n'y mettre **jamais** de secret.
+- Le frontend lit aussi des variables **serveur uniquement** :
+  `SUPABASE_SERVICE_ROLE_KEY`, `PARUSDB_ENCRYPTION_KEY`, `TRINO_URL`,
+  `TRINO_USER`, `TRINO_CATALOG_DIR`, `POLARIS_API_URL`,
+  `POLARIS_ROOT_CLIENT_ID/SECRET`, `OLLAMA_URL`, `MCP_TRINO_URL`… — la liste
+  commentée vit dans `apps/nextjs/.env.example`. Les secrets s'importent des
+  `.env` des stacks **sans jamais les afficher** (une commande `sed`/`grep`
+  qui copie la valeur aveuglément, pas un copier-coller dans un terminal).
 - Ajouter toute nouvelle variable aux `.env.example` **et** aux `.env` locaux ; les `.env` sont
   gitignorés — **ne jamais commiter de secret, de clé, de mot de passe** (y compris dans
   l'historique, les commentaires, les captures).
@@ -220,6 +230,32 @@ l'app.
 - `metadata` en français, titre de référence : « ParusDB — Plateforme Data Analytique
   IAgentique Open Source » ; `lang="fr"` sur `<html>`.
 
+**Conventions de l'implémentation actuelle (leçons de la mise en place) :**
+
+- **Pages à session = dynamiques** : avec `cacheComponents`, toute page lisant les
+  cookies doit exporter `export const instant = false` (layout `(app)` **et** chaque
+  page) — sinon le build échoue en « uncached or runtime data during
+  prerendering » et le dev affiche l'erreur à chaque navigation.
+- **Multi-schémas PostgREST** : les accès passent par `supabase.schema('<schéma>')`
+  (en-têtes `Accept-Profile`/`Content-Profile`) ; les schémas doivent être listés
+  dans `PGRST_DB_SCHEMAS` (cf. §9), sinon PGRST205 « Could not find the table ».
+- **Session et RBAC** : helpers de `lib/session.ts` (`requireSession`,
+  `requirePermission` → redirection serveur) ; les Server Actions sont colocalisées
+  par feature (`actions.ts`), valident les entrées et `revalidate` explicitement.
+  Le client administrateur (`lib/supabase/admin.ts`, service_role) reste serveur
+  uniquement.
+- **eslint react-hooks v6 (incluse dans eslint-config-next 16)** : `setState`
+  synchrone dans un `useEffect` est une **erreur** — hydratation via
+  `useSyncExternalStore` (pattern `useIsHydrated`), restaurations de stockage
+  externe (sessionStorage) via `requestAnimationFrame` dans l'effet. Idem pour
+  `Date.now()` dans le rendu : l'extraire dans une fonction hors composant.
+- **eslint-config-next ≥ 16** expose des flat configs natives
+  (`eslint-config-next/core-web-vitals`, `/typescript`) — ne plus utiliser
+  `FlatCompat` (erreur « circular structure »).
+- **shadcn actuel** : les composants générés importent `cn` via un alias tsconfig
+  (`"cn": ["./lib/utils.ts"]`) ; composants ajoutés uniquement via
+  `npx shadcn@latest add`, jamais édités à la main.
+
 ## 8. Design system — Tailwind CSS + shadcn/ui + charte « Mésange Charbonnière »
 
 > **Obligatoire avant tout écran** : lire `docs/functional/brand_guidelines.md` en entier.
@@ -270,6 +306,10 @@ remplacer
 
 Stack self-hosted `self-hosted/v0.8.2` (Envoy par défaut, Kong en override
 `sh run.sh config add kong`, backend S3 via `docker-compose.rustfs.yml` — cible **RustFS**).
+L'installation ParusDB tourne avec l'override **Kong activé** (gateway `supabase-kong`
+sur le port 8000, même port qu'Envoy) : après un `reset.sh` qui régénère `apps/supabase/.env`,
+le réactiver (`sh run.sh config add kong` puis `sh run.sh start`), sinon la gateway
+revient en Envoy.
 
 **Règles :**
 
@@ -288,19 +328,38 @@ Stack self-hosted `self-hosted/v0.8.2` (Envoy par défaut, Kong en override
   Supabase évolue vite, vérifier le changelog.
 - **Schéma versionné** : toute modification DDL passe par un fichier SQL versionné et
   idempotent (init du stack dans `apps/supabase/volumes/db/` ou migration dédiée). Jamais de
-  modification manuelle via Studio sans fichier SQL commité.
+  modification manuelle via Studio sans fichier SQL commité. Le schéma applicatif ParusDB
+  vit dans `apps/supabase/sql/01-parusdb-app.sql` (schémas `iam`, `agents`, `chat`,
+  `lakehouse`, `connectors`, `admin`, `support`) : à appliquer sur une base déjà
+  initialisée avec la commande du §5, relançable sans risque.
+- **Exposition PostgREST des schémas métier** : chaque schéma consulté par le frontend
+  doit être ajouté à `PGRST_DB_SCHEMAS` dans `apps/supabase/.env` puis le conteneur
+  recréé (`docker compose up -d rest`) — sinon PostgREST répond PGRST205 « Could not
+  find the table » même si la table existe (une modification du `.env` exige une
+  recréation, pas un simple restart). Ajouter aussi la ligne au `.env` après tout
+  `reset.sh`.
+- **Supabase Realtime** : une table ne peut être diffusée que si elle appartient à la
+  publication `supabase_realtime` (voir le bloc idempotent de `01-parusdb-app.sql`
+  pour `chat.stream_events`) ; les abonnés passent par la RLS de la table avec leur
+  JWT — les politiques doivent couvrir le `SELECT`.
 - **RLS partout** : chaque table d'un schéma exposé (dont `public`) active RLS + politiques
   réelles. `TO authenticated` seul ne suffit pas (BOLA) : toujours combiner avec un prédicat
   d'appartenance. `UPDATE` requiert une politique `SELECT` + `WITH CHECK`. `auth.role()` est
-  déprécié → clause `TO`. Vues : `security_invoker = true`.
+  déprécié → clause `TO`. Vues : `security_invoker = true`. Les permissions applicatives
+  s'évaluent via `iam.has_permission(auth.uid(), '<permission>')` (SECURITY DEFINER, dans un
+  schéma non exposé à l'anonyme) ; les fonctions SQL standard sont validées **à la
+  création** — les définir après les tables qu'elles lisent.
 - **Autorisation** : jamais `raw_user_meta_data` (éditable par l'utilisateur) pour des décisions
   d'autorisation → `raw_app_meta_data`. Les rôles applicatifs ParusDB (admin/technique/métier,
-  rôles multiples, rôle actif) vivent dans des tables applicatives, pas dans les JWT claims
-  éditables.
+  rôles multiples, rôle actif) vivent dans des tables applicatives (`iam.roles`,
+  `iam.user_roles`, `iam.user_active_role`), pas dans les JWT claims éditables. Le trigger
+  `iam.on_auth_user_created` attribue `admin` au premier compte créé, `metier` aux suivants.
 - **Clés** : côté client uniquement la **publishable key**. La clé `service_role` (et tout
   secret) ne sort jamais du serveur. Jetons d'accès scopés pour scripts/CI.
 - **Vérifier après correction** : une modification SQL se vérifie par une requête de test ;
-  un fix non vérifié est incomplet.
+  un fix non vérifié est incomplet. Pattern de test RLS : `SET ROLE authenticated` +
+  `select set_config('request.jwt.claims', '{"sub":"<uuid>","role":"authenticated"}', false)`
+  puis les requêtes à vérifier, `RESET ROLE`.
 
 ## 10. Data Lakehouse — Apache Polaris + Trino + RustFS S3
 
@@ -331,6 +390,32 @@ Stack self-hosted `self-hosted/v0.8.2` (Envoy par défaut, Kong en override
   `apps/trino/README.md` — les lire avant de modifier `setup.sh`, `docker-compose.yml`
   ou le SQL d'init d'une des deux apps.
 
+**Implémentation actuelle (leçons de la mise en place) :**
+
+- **Client Trino** : l'app consomme Trino via le client officiel **trino-js-client**
+  (`lib/trino.ts`, npm `trino-client` ; `@trinodb/trino-js-client@1.0.0` exige Node ≥ 24,
+  la machine tourne en Node 22 — renommer la dépendance lors de la montée). Itérer les
+  pages du résultat et remonter `QueryResult.error` en erreur applicative.
+- **Catalogues via l'API Management Polaris** (`lib/polaris.ts`, spec 1.8.0) : jeton OAuth2
+  client credentials (scope `PRINCIPAL_ROLE:ALL`, endpoint `/api/catalog/v1/oauth/tokens`),
+  `createCatalog` au format `CreateCatalogRequest` + grant `CATALOG_MANAGE_CONTENT` au
+  format `AddGrantRequest {grant: GrantResource}`, `listCatalogs` **sans** paramètre de
+  pagination (absent de la spec). **La suppression n'a pas de paramètre `purgeRequested`
+  en 1.8.0** : purger le contenu par `DROP TABLE`/`DROP SCHEMA` Trino (la propriété
+  `polaris.config.drop-with-purge.enabled` est posée à la création) puis `DELETE`
+  du catalogue.
+- **Bindinds Trino** : un catalogue Polaris = un fichier `catalog/<nom>.properties`
+  (`polaris.properties` pour le catalogue par défaut). L'app génère le fichier des
+  nouveaux catalogues (`TRINO_CATALOG_DIR`) mais **Trino ne le charge qu'au
+  redémarrage** (`cd apps/trino && sh run.sh restart`) — l'UI doit l'indiquer.
+- **Métriques disque** : tailles et nombres de fichiers via les tables metadata Iceberg
+  `"<catalog>"."<schéma>"."<table>$files"` (identifiants à quoter).
+- **RBAC applicatif par catalogue** : `lakehouse.catalog_access` (rôles ↔ catalogues,
+  alimenté à la création pour les rôles ayant la permission `lakehouse`). L'éditeur SQL
+  s'exécute sous l'utilisateur Trino unique : le RBAC porte sur la visibilité des
+  catalogues et l'accès aux pages, pas sur des rôles Trino distincts (limitation
+  assumée, à documenter dans les PR concernées).
+
 ## 11. Chat IA — Ollama + mcp-trino
 
 **Déploiement en place** : `apps/ollama` (serveur d'inférence GPU, modèle par défaut
@@ -359,6 +444,29 @@ complet : question métier → exploration du lakehouse → SQL exécuté → r�
   jamais les secrets ; les prompts des utilisateurs sont des données personnelles (RGPD) —
   pas de transmission à des tiers hormis le LLM configuré.
 
+**Implémentation actuelle (leçons de la mise en place) :**
+
+- **Transport Realtime concret** : le BFF (`app/(app)/chat/[id]/stream/route.ts`) insère
+  une ligne `chat.stream_events` par évènement (`status`, `tool`, `tool_result`,
+  `token`, `done`, `error`) ; le navigateur s'abonne via `postgres_changes` filtré par
+  conversation et **attend `SUBSCRIBED` avant d'envoyer** (aucun replay : un abonnement
+  tardif perd les évènements) ; la réponse HTTP porte le texte final en filet de
+  sécurité. Les évènements sont purgés au message suivant (transitoires).
+- **Client MCP dans le BFF** (`lib/mcp.ts`) : Streamable HTTP porté du script e2e —
+  handshake `initialize` → `notifications/initialized` → `tools/list` → `tools/call`,
+  `Mcp-Session-Id` par message, réponses SSE à parser ligne à ligne.
+- **Boucle agentique** (`lib/agent-runner.ts`) : Ollama `/api/chat` avec `tools`,
+  max 8 allers-retours (`PARUSDB_AGENT_MAX_STEPS`). Le prompt socle impose le français,
+  l'exploration avant exécution, et documente la syntaxe Trino des dates relatives
+  (`date_add('month', -3, current_date)`) : sans cet indice, `gemma4:e2b` tente des
+  syntaxes inexistantes — un LLM peut échouer de façon non déterministe, toujours
+  rejouer un test e2e chat avant de conclure.
+- **Modèles propriétaires** : clés configurées et chiffrées en administration, mais
+  l'exécution des conversations n'est pas encore implémentée — les agents doivent
+  pointer un modèle Ollama (message d'erreur explicite sinon).
+- **Le premier message** transite par `sessionStorage` depuis « Nouveau chat »
+  (`parus:pending-message:<id>`) : l'agent est scellé avant l'envoi.
+
 ## 12. ELT — dlt (data load tool)
 
 **Règles :**
@@ -377,6 +485,14 @@ complet : question métier → exploration du lakehouse → SQL exécuté → r�
   exécution visibles ; actions Modifier / Supprimer / Lancer / Désactiver.
 - Credentials des sources : chiffrés au repos, jamais exposés au client ni dans les logs
   d'exécution.
+
+**Implémentation actuelle** : les **interfaces** sont livrées (wizard 4 étapes de la spec,
+liste des pipelines avec actions Modifier/Supprimer/Lancer/Désactiver, runs historisés dans
+`connectors.pipeline_runs`), mais **mockées** — dlt n'est pas encore intégré : le test de
+connexion valide la saisie, l'exécution enregistre un run simulé (message explicite dans
+l'UI). Le catalogue des sources disponibles vit dans `lib/sources.ts` (sous-ensemble Core +
+Verified, ajoutable) ; les credentials sont chiffrés AES-256-GCM (`lib/crypto.ts`) et jamais
+renvoyés au navigateur (en édition, champs vides = conserver les valeurs existantes).
 
 ## 13. Qualité — definition of done
 

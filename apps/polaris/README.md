@@ -43,7 +43,11 @@ Prérequis : stack Supabase démarrée avec l'override RustFS
 `setup.sh` crée le catalogue d'environnement défini par `POLARIS_DEFAULT_CATALOG`
 (`dev` par défaut, cf. AGENTS.md §10 : un catalogue par environnement), avec
 `default-base-location` sous `s3://parus-lakehouse/<catalogue>`. Les catalogues
-supplémentaires seront créés par l'application via l'API Management.
+supplémentaires sont créés par l'application (apps/nextjs, `lib/polaris.ts`) via
+l'API Management : même payload que `setup.sh` (base location dédiée sous le
+bucket, `polaris.config.drop-with-purge.enabled=true`), suivi du grant
+`CATALOG_MANAGE_CONTENT` sur `catalog_admin` et de l'écriture du binding Trino
+(`../trino/catalog/<catalogue>.properties`, à activer par un redémarrage Trino).
 
 ## Pièges d'intégration Polaris 1.8.0 (leçons de la mise en place)
 
@@ -59,10 +63,27 @@ et fichiers concernés.
   3F000). Voir `sql/02-init-database.sql`.
 - **Le grant `CATALOG_MANAGE_CONTENT` sur `catalog_admin` est obligatoire** :
   sans lui, même le principal root se voit refuser `CREATE TABLE` (403, manque
-  `TABLE_WRITE_DATA`). Appliqué par `setup.sh` à chaque exécution.
+  `TABLE_WRITE_DATA`). Appliqué par `setup.sh` à chaque exécution. Le corps du
+  grant suit la spec (`AddGrantRequest` : `{"grant": {"type": "catalog",
+  "privilege": "CATALOG_MANAGE_CONTENT"}}`) ; le corps « à plat » utilisé
+  historiquement par `setup.sh` reste accepté par l'implémentation, mais ne pas
+  l'étendre aux nouveaux appels.
 - **Nommage S3** : pas de tiret bas dans les noms de buckets (convention
   `snake_case` du dépôt adaptée en `kebab-case` pour le S3 — cf.
   `POLARIS_S3_BUCKET=parus-lakehouse`).
+- **`deleteCatalog` n'a pas de paramètre de purge en 1.8.0** (spec : « The
+  catalog must be empty ») — le `?purgeRequested=true` vu dans d'autres
+  versions n'existe pas ici. La purge applicative passe donc par les
+  `DROP TABLE`/`DROP SCHEMA` Trino (validés par
+  `polaris.config.drop-with-purge.enabled`), puis `DELETE
+  /management/v1/catalogs/<nom>`.
+- **`listCatalogs` n'a pas de paramètre de pagination** en 1.8.0 (pas de
+  `pageSize`/`pageToken` dans la spec) : ne pas en envoyer, la réponse est
+  `{ "catalogs": [...] }`.
+- **L'endpoint OAuth2 `/api/catalog/v1/oauth/tokens`** est marqué déprécié dans
+  la spec Iceberg REST, mais c'est l'endpoint effectivement servi et utilisé par
+  Trino comme par l'app (client credentials, scope `PRINCIPAL_ROLE:ALL`,
+  realm via l'en-tête `Polaris-Realm`). Ne pas chercher d'autre endpoint.
 
 ## Notes opérationnelles
 
