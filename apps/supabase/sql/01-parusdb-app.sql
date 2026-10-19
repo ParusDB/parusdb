@@ -371,6 +371,53 @@ drop trigger if exists touch_conversations on chat.conversations;
 create trigger touch_conversations before update on chat.conversations
   for each row execute function iam.touch_updated_at();
 
+-- Évènements de diffusion d'une réponse d'agent : transport **Supabase
+-- Realtime** (spec §Chat / §Notes). Le BFF insère une ligne par évènement
+-- (statut, outil, fragment de réponse, fin) ; le navigateur s'abonne aux
+-- INSERT via postgres_changes, filtrés par conversation et protégés par RLS.
+create table if not exists chat.stream_events (
+  id bigint generated always as identity primary key,
+  conversation_id uuid not null references chat.conversations (id) on delete cascade,
+  kind text not null check (kind in ('status', 'tool', 'tool_result', 'token', 'done', 'error')),
+  payload jsonb not null default '{}',
+  created_at timestamptz not null default now()
+);
+create index if not exists stream_events_conversation_idx
+  on chat.stream_events (conversation_id, id);
+
+alter table chat.stream_events enable row level security;
+
+drop policy if exists stream_events_owner_all on chat.stream_events;
+create policy stream_events_owner_all on chat.stream_events
+  for all to authenticated
+  using (
+    exists (
+      select 1 from chat.conversations c
+       where c.id = stream_events.conversation_id and c.owner_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1 from chat.conversations c
+       where c.id = stream_events.conversation_id and c.owner_id = auth.uid()
+    )
+  );
+
+grant select, insert, delete on chat.stream_events to authenticated;
+
+-- Publication Realtime (WAL) — idempotent.
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+     where pubname = 'supabase_realtime'
+       and schemaname = 'chat'
+       and tablename = 'stream_events'
+  ) then
+    execute 'alter publication supabase_realtime add table chat.stream_events';
+  end if;
+end $$;
+
 -- ---------------------------------------------------------------------------
 -- 6. lakehouse — registre des catalogues, accès par rôle, historique SQL
 -- ---------------------------------------------------------------------------

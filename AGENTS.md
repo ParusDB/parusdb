@@ -56,7 +56,8 @@ et **techniques** (RBAC, catalogues, pipelines).
 Data Lakehouse (Apache Polaris + Trino) et infrastructure du Chat IA (Ollama GPU +
 mcp-trino, test e2e « question → SQL → réponse » validé). **L'interface produit est
 implémentée** (charte « Mésange Charbonnière » : Tailwind v4, tokens, polices) : auth,
-shell + RBAC (rôles applicatifs, rôle actif), Chat IA fonctionnel (streaming SSE,
+shell + RBAC (rôles applicatifs, rôle actif), Chat IA fonctionnel (diffusion temps
+réel via Supabase Realtime,
 Ollama + mcp-trino), Agents IA, Data Lakehouse (catalogues Polaris + éditeur SQL
 Trino), Administration (utilisateurs, rôles, serveurs locaux, facturation), Support
 (tickets) ; les Connecteurs ELT sont **mockés** (dlt non intégré). Les tables

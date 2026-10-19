@@ -27,7 +27,7 @@ jamais commités).
 | Section | Route | État |
 |---|---|---|
 | Connexion / inscription / réinitialisation | `/auth/*` | Fonctionnel (charte : charbon + grille + halo jaune) |
-| Chat IA (Ollama + mcp-trino, streaming SSE) | `/chat` | Fonctionnel — question → exploration lakehouse → SQL → réponse |
+| Chat IA (Ollama + mcp-trino, diffusion Supabase Realtime) | `/chat` | Fonctionnel — question → exploration lakehouse → SQL → réponse |
 | Agents IA (CRUD, modèles, sources) | `/agents` | Fonctionnel |
 | Data Lakehouse (catalogues Polaris, éditeur SQL Trino) | `/data-lakehouse` | Fonctionnel |
 | Connecteurs ELT (dlt) | `/connectors` | Interfaces mockées — exécution simulée, moteur non intégré |
@@ -51,15 +51,22 @@ jamais commités).
   `apps/supabase/sql/01-parusdb-app.sql` (RLS partout, TO authenticated +
   prédicat d'appartenance). PostgREST les expose via `PGRST_DB_SCHEMAS` ;
   côté client, `supabase.schema('<schéma>')` envoie `Accept-Profile`.
-- **Chat IA** : route SSE `app/(app)/chat/[id]/stream/route.ts` — boucle
+- **Chat IA** : route `app/(app)/chat/[id]/stream/route.ts` — boucle
   Ollama (function calling) ↔ mcp-trino (lecture seule), messages persistés
   dans `chat.messages`, titre généré par l'IA, requêtes SQL journalisées dans
   `lakehouse.query_history`. Le modèle ne reçoit aucune chaîne de connexion.
+  La diffusion temps réel passe par **Supabase Realtime** : le BFF insère
+  les évènements dans `chat.stream_events` (publication `supabase_realtime`,
+  RLS par propriétaire), le navigateur s'abonne via `postgres_changes`.
 - **Lakehouse** : CRUD des catalogues via l'API Management Polaris
-  (`lib/polaris.ts`), requêtage via Trino (`lib/trino.ts`), exploration des
+  (`lib/polaris.ts`, spec 1.8.0), requêtage via le client officiel
+  **trino-js-client** (`lib/trino.ts`, npm `trino-client` — renommer vers
+  `@trinodb/trino-js-client` lors d'une montée à Node 24), exploration des
   schémas/tables/colonnes via `information_schema`, métriques disque via les
-  tables metadata `$files`. La création d'un catalogue génère le binding Trino
-  (`TRINO_CATALOG_DIR`) — redémarrage Trino requis pour l'activer.
+  tables metadata `$files`. La suppression purge le contenu par DROP Trino
+  (`polaris.config.drop-with-purge.enabled`) puis supprime le catalogue.
+  La création d'un catalogue génère le binding Trino (`TRINO_CATALOG_DIR`) —
+  redémarrage Trino requis pour l'activer.
 - **Secrets** : credentials des connecteurs et clés API LLM chiffrés
   AES-256-GCM (`lib/crypto.ts`, clé `PARUSDB_ENCRYPTION_KEY`), jamais
   renvoyés au client.

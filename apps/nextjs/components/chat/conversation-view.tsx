@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Bot, Pencil, Send, Terminal, Trash2 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -28,14 +29,18 @@ import {
 } from "@/app/(app)/chat/actions";
 import type { Message } from "@/types/db";
 
-interface StreamEvent {
-  type: "status" | "tool" | "tool_result" | "token" | "error" | "done";
-  label?: string;
-  tool?: string;
-  query?: string;
+// Diffusion temps réel via **Supabase Realtime** (spec §Chat / §Notes) : le
+// BFF insère les évènements dans chat.stream_events, le navigateur s'y
+// abonne (postgres_changes filtrés par conversation, protégés par RLS).
+interface StreamEventPayload {
+  label?: string | null;
+  tool?: string | null;
+  query?: string | null;
   ok?: boolean;
-  text?: string;
-  message?: string;
+  text?: string | null;
+  message?: string | null;
+  error?: string | null;
+  messageId?: string | null;
   title?: string | null;
 }
 
@@ -58,12 +63,17 @@ export function ConversationView({
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
-  const [toolTrace, setToolTrace] = useState<{ tool: string; query?: string; ok?: boolean }[]>([]);
+  const [toolTrace, setToolTrace] = useState<
+    { tool: string; query?: string; ok?: boolean }[]
+  >([]);
   const [streamText, setStreamText] = useState("");
   const [renaming, setRenaming] = useState(false);
   const [newTitle, setNewTitle] = useState(conversation.title ?? "");
   const bottomRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const [supabase] = useState(() => createClient());
+  const readyRef = useRef<Promise<void> | null>(null);
+  const streamingRef = useRef(false);
 
   const scrollToBottom = useCallback(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -73,10 +83,103 @@ export function ConversationView({
     scrollToBottom();
   }, [messages.length, streamText, scrollToBottom]);
 
+  const finalize = useCallback(
+    (text: string) => {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `assistant-${Date.now()}`,
+          conversation_id: conversation.id,
+          role: "assistant",
+          content: text,
+          metadata: {},
+          created_at: new Date().toISOString(),
+        },
+      ]);
+      setStreamText("");
+      setStatus(null);
+      setToolTrace([]);
+      streamingRef.current = false;
+      setStreaming(false);
+      router.refresh();
+    },
+    [conversation.id, router],
+  );
+
+  const handleStreamEvent = useCallback(
+    (kind: string, payload: StreamEventPayload) => {
+      if (kind === "status") {
+        setStatus(payload.label ?? null);
+      } else if (kind === "tool") {
+        setToolTrace((prev) => [
+          ...prev,
+          { tool: payload.tool ?? "", query: payload.query ?? undefined },
+        ]);
+        setStatus(`Outil ${payload.tool}…`);
+      } else if (kind === "tool_result") {
+        setToolTrace((prev) =>
+          prev.map((t, i) =>
+            i === prev.length - 1 ? { ...t, ok: payload.ok ?? true } : t,
+          ),
+        );
+      } else if (kind === "token") {
+        setStatus(null);
+        setStreamText((prev) => prev + (payload.text ?? ""));
+      } else if (kind === "error") {
+        toast.error(payload.message ?? "L'agent n'a pas pu répondre.");
+      } else if (kind === "done") {
+        finalize(payload.text ?? "");
+      }
+    },
+    [finalize],
+  );
+
+  // Abonnement Realtime aux évènements de la conversation.
+  useEffect(() => {
+    let resolveReady: () => void = () => {};
+    readyRef.current = new Promise<void>((resolve) => {
+      resolveReady = resolve;
+    });
+    const channel = supabase
+      .channel(`chat-stream-${conversation.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "chat",
+          table: "stream_events",
+          filter: `conversation_id=eq.${conversation.id}`,
+        },
+        (payload) => {
+          const row = payload.new as {
+            kind: string;
+            payload: StreamEventPayload;
+          };
+          handleStreamEvent(row.kind, row.payload ?? {});
+        },
+      )
+      .subscribe((status_) => {
+        if (status_ === "SUBSCRIBED") {
+          resolveReady();
+        } else if (status_ === "CHANNEL_ERROR" || status_ === "TIMED_OUT") {
+          toast.error(
+            "La connexion temps réel (Realtime) a échoué : la réponse peut ne pas s'afficher en direct.",
+          );
+          resolveReady();
+        }
+      });
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [conversation.id, handleStreamEvent, supabase]);
+
   const send = useCallback(
     async (content: string) => {
       const trimmed = content.trim();
-      if (!trimmed || streaming) return;
+      if (!trimmed || streamingRef.current) return;
+      // Attend l'abonnement Realtime pour ne pas manquer le début du flux.
+      await (readyRef.current ?? Promise.resolve());
+      streamingRef.current = true;
       setStreaming(true);
       setStatus("Connexion au lakehouse…");
       setToolTrace([]);
@@ -84,7 +187,7 @@ export function ConversationView({
       setMessages((prev) => [
         ...prev,
         {
-          id: `local-user-${Date.now()}`,
+          id: `user-${Date.now()}`,
           conversation_id: conversation.id,
           role: "user",
           content: trimmed,
@@ -94,97 +197,40 @@ export function ConversationView({
       ]);
 
       try {
-        const res = await fetch(
-          `/chat/${conversation.id}/stream`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ content: trimmed }),
-          },
-        );
-        if (!res.ok || !res.body) {
+        const res = await fetch(`/chat/${conversation.id}/stream`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: trimmed }),
+        });
+        if (!res.ok) {
           const text = await res.text().catch(() => "");
           throw new Error(
-            `L’envoi a échoué (HTTP ${res.status}) ${text.slice(0, 200)}`,
+            `L'envoi a échoué (HTTP ${res.status}) ${text.slice(0, 200)}`,
           );
         }
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-        let currentEvent = "";
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const frames = buffer.split("\n\n");
-          buffer = frames.pop() ?? "";
-          for (const frame of frames) {
-            const lines = frame.split("\n");
-            let eventName = "";
-            let data = "";
-            for (const line of lines) {
-              if (line.startsWith("event: ")) eventName = line.slice(7).trim();
-              else if (line.startsWith("data: ")) data += line.slice(6);
-            }
-            if (!data) continue;
-            currentEvent = eventName;
-            let event: StreamEvent;
-            try {
-              event = JSON.parse(data) as StreamEvent;
-            } catch {
-              continue;
-            }
-            if (event.type === "status") setStatus(event.label ?? null);
-            else if (event.type === "tool") {
-              setToolTrace((prev) => [
-                ...prev,
-                { tool: event.tool ?? "", query: event.query },
-              ]);
-              setStatus(`Outil ${event.tool}…`);
-            } else if (event.type === "tool_result") {
-              setToolTrace((prev) =>
-                prev.map((t, i) =>
-                  i === prev.length - 1
-                    ? { ...t, ok: event.ok ?? true }
-                    : t,
-                ),
-              );
-            } else if (event.type === "token") {
-              setStatus(null);
-              setStreamText((prev) => prev + (event.text ?? ""));
-            } else if (event.type === "error") {
-              toast.error(event.message ?? "L’agent n’a pas pu répondre.");
-            } else if (event.type === "done") {
-              setMessages((prev) => [
-                ...prev,
-                {
-                  id: `local-assistant-${Date.now()}`,
-                  conversation_id: conversation.id,
-                  role: "assistant",
-                  content: event.text ?? "",
-                  metadata: {},
-                  created_at: new Date().toISOString(),
-                },
-              ]);
-              setStreamText("");
-              setStatus(null);
-              router.refresh();
-            }
-          }
+        // Filet de sécurité : si l'évènement « done » Realtime a été manqué,
+        // la réponse HTTP porte le texte final.
+        const result = (await res.json()) as {
+          ok?: boolean;
+          text?: string;
+        };
+        if (streamingRef.current) {
+          finalize(result.text ?? "");
         }
-        void currentEvent;
       } catch (error) {
+        if (streamingRef.current) {
+          finalize(
+            `La réponse a échoué : ${error instanceof Error ? error.message : "erreur inattendue"}`,
+          );
+        }
         toast.error(
           error instanceof Error
             ? error.message
-            : "L’agent n’a pas pu répondre : erreur inattendue.",
+            : "L'agent n'a pas pu répondre : erreur inattendue.",
         );
-      } finally {
-        setStreaming(false);
-        setStatus(null);
       }
     },
-    [conversation.id, router, streaming],
+    [conversation.id, finalize],
   );
 
   // Premier message transmis depuis « Nouveau chat » (agent déjà scellé).
@@ -334,7 +380,7 @@ export function ConversationView({
           </Button>
         </div>
         <p className="mono mt-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-          Réponses générées localement · SQL exécuté en lecture seule
+          Réponses générées localement · Diffusion Supabase Realtime · SQL en lecture seule
         </p>
       </div>
 
