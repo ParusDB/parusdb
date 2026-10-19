@@ -7,8 +7,12 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePermission } from "@/lib/session";
 import { revalidatePath } from "next/cache";
 import { createCatalog, deleteCatalog } from "@/lib/polaris";
-import { trinoBindingFileContent, trinoBindingFor } from "@/lib/lakehouse";
-import { trinoQuery } from "@/lib/trino";
+import {
+  loadCatalogTree,
+  trinoBindingFileContent,
+  trinoBindingFor,
+} from "@/lib/lakehouse";
+import { quoteIdent, trinoQuery } from "@/lib/trino";
 
 const NAME_PATTERN = /^[a-z][a-z0-9_]*$/;
 
@@ -152,7 +156,10 @@ export async function createCatalogAction(
 }
 
 // Suppression d'un catalogue : confirmation admin + ressaisie du nom côté UI
-// (action irréversible, purge des fichiers Iceberg).
+// (action irréversible). Spec Polaris 1.8.0 : le catalogue doit être vide —
+// la purge des fichiers Iceberg passe par les DROP Trino (la propriété
+// polaris.config.drop-with-purge.enabled est posée à la création), puis le
+// catalogue est supprimé via l'API Management.
 export async function deleteCatalogAction(
   name: string,
 ): Promise<{ ok: boolean; error?: string }> {
@@ -162,6 +169,29 @@ export async function deleteCatalogAction(
       ok: false,
       error: "La suppression d'un catalogue est réservée aux administrateurs.",
     };
+  }
+  const binding = trinoBindingFor(name);
+  if (binding) {
+    try {
+      const tree = await loadCatalogTree(binding);
+      for (const schema of tree.schemas) {
+        for (const table of schema.tables) {
+          await trinoQuery(
+            `DROP TABLE IF EXISTS ${quoteIdent(binding)}.${quoteIdent(schema.name)}.${quoteIdent(table.name)}`,
+          );
+        }
+      }
+      for (const schema of tree.schemas) {
+        await trinoQuery(
+          `DROP SCHEMA IF EXISTS ${quoteIdent(binding)}.${quoteIdent(schema.name)}`,
+        );
+      }
+    } catch (error) {
+      return {
+        ok: false,
+        error: `La purge des tables du catalogue a échoué : ${error instanceof Error ? error.message : "erreur inattendue"}. Supprimez le contenu manuellement puis réessayez.`,
+      };
+    }
   }
   const deleted = await deleteCatalog(name);
   if (!deleted.ok) {

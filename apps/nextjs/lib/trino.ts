@@ -1,6 +1,12 @@
-// Client Trino (moteur SQL unique du lakehouse, AGENTS.md §10) via l'API HTTP
-// /v1/statement. Aucune chaîne de connexion côté navigateur : tout passe par
-// le serveur Next.js.
+// Client Trino (moteur SQL unique du lakehouse, AGENTS.md §10) — basé sur le
+// client officiel trino-js-client (npm `trino-client`, même dépôt que
+// @trinodb/trino-js-client ; le nom scopé exige Node 24, la machine tourne
+// en Node 22 — à renommer lors d'une montée de version de Node).
+// Aucune chaîne de connexion côté navigateur : tout passe par le serveur
+// Next.js, sans credentials (Trino local sans auth), avec un utilisateur
+// Trino applicatif tracé dans les logs du moteur.
+
+import { Trino, type Columns } from "trino-client";
 
 export interface TrinoColumn {
   name: string;
@@ -18,74 +24,40 @@ const TRINO_URL = process.env.TRINO_URL ?? "http://localhost:8080";
 const TRINO_USER = process.env.TRINO_USER ?? "parus-app";
 const MAX_ROWS = 1000;
 
-interface TrinoStatementResponse {
-  id: string;
-  columns?: { name: string; type: string }[];
-  data?: unknown[][];
-  nextUri?: string;
-  error?: { message: string; errorCode?: { name: string } };
-  stats?: { state: string; elapsedTimeMillis: number };
-}
-
-async function trinoFetch(
-  url: string,
-  body?: string,
-): Promise<TrinoStatementResponse> {
-  const res = await fetch(url, {
-    method: body ? "POST" : "GET",
-    headers: {
-      "X-Trino-User": TRINO_USER,
-      "X-Trino-Source": "parusdb-app",
-      "Content-Type": "text/plain",
-    },
-    body,
-    cache: "no-store",
+function createTrino(): Trino {
+  return Trino.create({
+    server: TRINO_URL,
+    source: "parusdb-app",
   });
-  const text = await res.text();
-  let json: TrinoStatementResponse | null = null;
-  try {
-    json = text ? (JSON.parse(text) as TrinoStatementResponse) : null;
-  } catch {
-    // réponse non JSON (ex. erreur du serveur)
-  }
-  if (!res.ok) {
-    const message =
-      json?.error?.message ??
-      (text ? text.slice(0, 400) : `Trino a répondu HTTP ${res.status}`);
-    throw new Error(`Trino : ${message}`);
-  }
-  if (!json) {
-    throw new Error("Trino : réponse illisible (corps non JSON).");
-  }
-  if (json.error) {
-    throw new Error(
-      `Trino : ${json.error.message}${
-        json.error.errorCode?.name ? ` (${json.error.errorCode.name})` : ""
-      }`,
-    );
-  }
-  return json;
 }
 
 // Exécute une requête et agrège les pages de résultats (max MAX_ROWS lignes).
 export async function trinoQuery(sql: string): Promise<TrinoQueryResult> {
   const started = Date.now();
-  let current = await trinoFetch(`${TRINO_URL}/v1/statement`, sql);
-  const columns: TrinoColumn[] = (current.columns ?? []).map((c) => ({
-    name: c.name,
-    type: c.type,
-  }));
+  const iter = await createTrino().query({ query: sql, user: TRINO_USER });
+  let columns: Columns = [];
   const rows: unknown[][] = [];
-  let nextUri = current.nextUri;
-  let guard = 0;
-  while (nextUri && rows.length < MAX_ROWS && guard < 200) {
-    current = await trinoFetch(nextUri);
-    if (current.data) rows.push(...current.data);
-    nextUri = current.nextUri;
-    guard += 1;
+  for await (const page of iter) {
+    if (page.error) {
+      throw new Error(
+        `Trino : ${page.error.message}${
+          page.error.errorName ? ` (${page.error.errorName})` : ""
+        }`,
+      );
+    }
+    if (page.columns && columns.length === 0) {
+      columns = page.columns;
+    }
+    if (page.data && page.data.length > 0) {
+      rows.push(...page.data);
+      if (rows.length >= MAX_ROWS) {
+        rows.length = MAX_ROWS;
+        break;
+      }
+    }
   }
   return {
-    columns,
+    columns: columns.map((c) => ({ name: c.name, type: c.type })),
     rows,
     rowCount: rows.length,
     durationMs: Date.now() - started,
@@ -95,8 +67,8 @@ export async function trinoQuery(sql: string): Promise<TrinoQueryResult> {
 // Vérifie que Trino répond (bouton « Test » des serveurs locaux).
 export async function trinoPing(): Promise<boolean> {
   try {
-    const res = await fetch(`${TRINO_URL}/v1/info`, { cache: "no-store" });
-    return res.ok;
+    await createTrino().query({ query: "SELECT 1", user: TRINO_USER });
+    return true;
   } catch {
     return false;
   }

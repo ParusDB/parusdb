@@ -87,9 +87,8 @@ async function management<T>(
 }
 
 export async function listCatalogs(): Promise<PolarisCatalog[]> {
-  const res = await management<{ catalogs?: PolarisCatalog[] }>(
-    "/catalogs?pageSize=100",
-  );
+  // Spec 1.8.0 : GET /management/v1/catalogs, réponse {catalogs: [...]}.
+  const res = await management<{ catalogs?: PolarisCatalog[] }>("/catalogs");
   if (!res.ok) {
     throw new Error(
       `Polaris : impossible de lister les catalogues (HTTP ${res.status}).`,
@@ -137,12 +136,15 @@ export async function createCatalog(
     };
   }
   // Grant d'administration au rôle catalog_admin du catalogue (piège
-  // d'intégration documenté dans apps/polaris/README.md).
+  // d'intégration documenté dans apps/polaris/README.md) — corps au format
+  // AddGrantRequest {grant: GrantResource} de la spec Management.
   const grant = await management(
     `/catalogs/${encodeURIComponent(name)}/catalog-roles/catalog_admin/grants`,
     {
       method: "PUT",
-      body: { type: "catalog", privilege: "CATALOG_MANAGE_CONTENT" },
+      body: {
+        grant: { type: "catalog", privilege: "CATALOG_MANAGE_CONTENT" },
+      },
     },
   );
   if (!grant.ok) {
@@ -154,15 +156,16 @@ export async function createCatalog(
   return { ok: true };
 }
 
-// Suppression avec purge (fichiers Iceberg inclus) — action irréversible,
-// réservée à la confirmation admin avec ressaisie du nom.
+// Suppression d'un catalogue — spec 1.8.0 : DELETE /management/v1/catalogs/{name},
+// le catalogue doit être vide. La purge des fichiers Iceberg est réalisée en
+// amont via les DROP Trino (propriété polaris.config.drop-with-purge.enabled
+// posée à la création) — voir deleteCatalogAction.
 export async function deleteCatalog(
   name: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const res = await management(
-    `/catalogs/${encodeURIComponent(name)}?purgeRequested=true`,
-    { method: "DELETE" },
-  );
+  const res = await management(`/catalogs/${encodeURIComponent(name)}`, {
+    method: "DELETE",
+  });
   if (!res.ok) {
     return {
       ok: false,
