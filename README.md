@@ -128,6 +128,22 @@ npm run dev   # http://localhost:3000
 La clé publishable est générée à l'étape précédente (`SUPABASE_PUBLISHABLE_KEY` dans
 `apps/supabase/.env`).
 
+### 4. Moteur ELT (dlt) — optionnel, pour le menu « Connecteurs »
+
+```bash
+cd apps/dlt
+sh setup.sh       # rôle parus_dlt, image du runner (45 sources), ordonnanceur
+sh run.sh verify  # runner + Postgres applicatif + catalogue Polaris
+```
+
+Prérequis : stacks Supabase et Polaris démarrées. Un **conteneur jetable par
+exécution** charge les sources (SQL, REST, object store, 29 sources verified)
+vers le lakehouse en table format Iceberg ; CRON inclus. Pour une validation
+rapide avec une source PostgreSQL bidon :
+`docker compose -f demo/docker-compose.yml up -d --wait` puis créez un
+pipeline de type PostgreSQL dans l'interface. Détails :
+[`apps/dlt/README.md`](apps/dlt/README.md).
+
 > **Note** : le parcours produit complet (« clonez, `docker compose up -d`, instance prête
 > en 5 minutes ») sera livré avec la première release. En attendant, le dépôt s'adresse aux
 > contributeurs : chaque brique se développe ici.
@@ -138,10 +154,10 @@ Le projet est en **développement actif**. Le socle Next.js + Supabase (authenti
 complète, clients SSR) est fonctionnel ; les briques produit arrivent dans cet ordre :
 
 - [x] **Socle** — Next.js (App Router) + Supabase self-hosted, auth fonctionnelle
-- [ ] **Data Lakehouse** — catalogues, schémas, explorateur, éditeur SQL
-- [ ] **Chat IA** — agents, Ollama, mcp-trino, conversations, streaming
-- [ ] **Interface frontend** — menus, RBAC, administration
-- [ ] **Flux ELT** — dlt, 40+ connecteurs, pipelines, CRON
+- [x] **Data Lakehouse** — catalogues, schémas, explorateur, éditeur SQL
+- [x] **Chat IA** — agents, Ollama, mcp-trino, conversations, streaming
+- [x] **Interface frontend** — menus, RBAC, administration
+- [x] **Flux ELT** — dlt, 40+ connecteurs, pipelines, CRON
 - [ ] **Release open source** — déploiement `docker compose up -d` prêt à l'emploi
 
 ## Structure du dépôt
@@ -152,6 +168,9 @@ parusdb/
 ├── README.md             # Ce fichier
 ├── docs/functional/      # Fiche produit, spécifications fonctionnelles, charte graphique
 ├── apps/nextjs/          # Application Next.js 16 (App Router) — frontend + BFF
+├── apps/dlt/             # dlt — moteur ELT (pipelines → lakehouse, conteneur jetable par run)
+├── apps/mcp-trino/       # mcp-trino — serveur MCP exposant Trino aux LLM (lecture seule)
+├── apps/ollama/          # Ollama — serveur d'inférence LLM local (GPU)
 ├── apps/polaris/         # Apache Polaris — catalogue Iceberg (Postgres + RustFS Supabase)
 ├── apps/supabase/        # Stack Supabase self-hosted (Docker Compose)
 └── apps/trino/           # Trino — moteur SQL du lakehouse (Iceberg REST → Polaris)
@@ -168,6 +187,8 @@ parusdb/
   · [`apps/supabase/CONFIG.md`](apps/supabase/CONFIG.md) — guides techniques des apps
 - [`apps/polaris/README.md`](apps/polaris/README.md) · [`apps/trino/README.md`](apps/trino/README.md) —
   guides et pièges d'intégration du Data Lakehouse
+- [`apps/dlt/README.md`](apps/dlt/README.md) — architecture, sources et modèle d'exécution
+  du moteur ELT (validation e2e incluse)
 
 ## Contribuer
 

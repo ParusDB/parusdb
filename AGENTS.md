@@ -60,7 +60,9 @@ shell + RBAC (rôles applicatifs, rôle actif), Chat IA fonctionnel (diffusion t
 réel via Supabase Realtime,
 Ollama + mcp-trino), Agents IA, Data Lakehouse (catalogues Polaris + éditeur SQL
 Trino), Administration (utilisateurs, rôles, serveurs locaux, facturation), Support
-(tickets) ; les Connecteurs ELT sont **mockés** (dlt non intégré). Les tables
+(tickets). **Les pipelines ELT sont fonctionnels** (apps/dlt : dlt + destination
+Iceberg/Polaris + conteneur jetable par run, validation e2e source PostgreSQL →
+lakehouse → Trino/LLM, §12). Les tables
 applicatives vivent dans les schémas métier PostgreSQL (`iam`, `agents`, `chat`,
 `lakehouse`, `connectors`, `admin`, `support` — `apps/supabase/sql/01-parusdb-app.sql`,
 RLS partout).
@@ -96,6 +98,12 @@ parusdb/
 ├── apps/mcp-trino/               # mcp-trino — serveur MCP exposant Trino aux LLM
 │   ├── docker-compose.yml        # mcp-trino (réseau externe supabase_default, lecture seule)
 │   └── run.sh / setup.sh / reset.sh / update.sh  # Cycle de vie (cf. §5)
+├── apps/dlt/                    # dlt — moteur ELT (pipelines → lakehouse, cf. §12)
+│   ├── Dockerfile               # Image runner : dlt[pyiceberg] + pilotes SQL + sources verified vendées
+│   ├── docker-compose.yml       # Ordonnanceur (service long-lived, socket Docker) + volume d'état
+│   ├── runner/                  # main.py (run/introspect/catalog) + scheduler.py + sources.py + destination.py
+│   ├── sql/01-dlt-role.sql      # Rôle PostgreSQL parus_dlt (moindre privilège)
+│   └── demo/                    # Source PostgreSQL bidon + seed (validation e2e)
 ├── apps/nextjs/                  # Application Next.js 16 (App Router) — frontend + BFF (voir son README.md)
 │   ├── app/                      # Routes : auth/ (public) + (app)/ (protégé : chat, agents, data-lakehouse, connectors, admin, support)
 │   ├── components/               # Composants applicatifs (un dossier par feature) + ui/ (shadcn, ne pas éditer à la main)
@@ -149,6 +157,9 @@ NVIDIA Container Toolkit (runtime `nvidia`) — voir `apps/ollama/README.md`.
 | Démarrer Trino (moteur SQL) | `cd apps/trino && sh setup.sh` (première fois), puis `sh run.sh start` — Polaris doit être démarré |
 | Démarrer mcp-trino (serveur MCP) | `cd apps/mcp-trino && sh setup.sh` (première fois), puis `sh run.sh start` — Trino doit être démarré |
 | Démarrer Ollama (LLM local GPU) | `cd apps/ollama && sh setup.sh` (première fois : GPU vérifié + modèles), puis `sh run.sh start` |
+| Démarrer dlt (moteur ELT) | `cd apps/dlt && sh setup.sh` (première fois), puis `sh run.sh start` — Supabase et Polaris doivent être démarrés |
+| Vérifier dlt (runner, Postgres, Polaris) | `cd apps/dlt && sh run.sh verify` |
+| Source de démo (validation e2e ELT) | `cd apps/dlt/demo && docker compose up -d --wait` — PostgreSQL bidon (seed inclus) |
 | Test e2e Chat IA | `cd apps/ollama && sh run.sh test` — question → LLM → mcp-trino → Trino → réponse |
 | Appliquer le schéma applicatif (idempotent) | `docker exec -i supabase-db psql -U supabase_admin -d postgres < apps/supabase/sql/01-parusdb-app.sql` |
 | Réinitialiser Polaris / Trino / mcp-trino | `sh reset.sh` dans le dossier correspondant (destructif : métadonnées Polaris + `.env`) |
@@ -486,13 +497,36 @@ complet : question métier → exploration du lakehouse → SQL exécuté → r�
 - Credentials des sources : chiffrés au repos, jamais exposés au client ni dans les logs
   d'exécution.
 
-**Implémentation actuelle** : les **interfaces** sont livrées (wizard 4 étapes de la spec,
-liste des pipelines avec actions Modifier/Supprimer/Lancer/Désactiver, runs historisés dans
-`connectors.pipeline_runs`), mais **mockées** — dlt n'est pas encore intégré : le test de
-connexion valide la saisie, l'exécution enregistre un run simulé (message explicite dans
-l'UI). Le catalogue des sources disponibles vit dans `lib/sources.ts` (sous-ensemble Core +
-Verified, ajoutable) ; les credentials sont chiffrés AES-256-GCM (`lib/crypto.ts`) et jamais
-renvoyés au navigateur (en édition, champs vides = conserver les valeurs existantes).
+**Implémentation actuelle (leçons de la mise en place) :**
+
+- **Le moteur dlt est intégré** (`apps/dlt`, architecture dans son README) :
+  destination unique = table format **Iceberg** via pyiceberg → catalogue REST
+  Polaris, données dans RustFS avec **credentials vendus** (aucune clé S3 de
+  données dans le runner) ; un **conteneur jetable par exécution**, démarré
+  par l'ordonnanceur `parus-dlt-scheduler` (runs `queued` + CRON croniter en
+  UTC) ; état dlt persisté dans le volume `parus-dlt-state` (cursors).
+- **Sources** : core `sql_database` (14 dialectes SQLAlchemy, pilotes
+  psycopg2/pymysql/pymssql dans l'image), `rest_api` (endpoints),
+  `filesystem`/readers (CSV/Parquet/JSONL) ; 29 sources verified vendues du
+  dépôt officiel à un commit épinglé (pas de package PyPI) — 2 sources
+  pilotées par code (scraping, unstructured_data) restent non exposées. Le
+  registre machine (`sh run.sh catalog`) alimente `lib/sources.ts`.
+- **Parcours réel** : « Test connexion » = introspection réelle dans un
+  conteneur jetable (tables + colonnes + curseur suggéré, credentials par
+  stdin, jamais persistés) ; « Enregistrer » / « Lancer » insèrent un run
+  `queued` (statuts `queued/running/success/error`, origine
+  `creation/manual/schedule`, journal d'erreur dans `pipeline_runs.log`).
+- **Modes d'insertion** : `replace` = recréation complète ; `incremental` =
+  curseur par table (colonne optionnelle suggérée par l'introspection) +
+  **merge sur clé primaire** (upsert) quand la source en expose, sinon append.
+- **Credentials** : chiffrés AES-256-GCM par le BFF, déchiffrés en mémoire par
+  le runner (même `PARUSDB_ENCRYPTION_KEY` importée dans `apps/dlt/.env`),
+  jamais stockés en clair (`source_config` ne porte que les curseurs) ;
+  en édition, champs vides = conserver les valeurs chiffrées existantes.
+- **Accès base du runner** : rôle PostgreSQL dédié `parus_dlt` (moindre
+  privilège, politiques RLS `TO parus_dlt` dans `01-parusdb-app.sql`) — jamais
+  service_role ; l'ordonnanceur démarre les conteneurs via le socket Docker
+  de l'hôte (docker-py).
 
 ## 13. Qualité — definition of done
 

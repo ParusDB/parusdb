@@ -1,62 +1,159 @@
 "use server";
 
+import { spawn } from "node:child_process";
 import { createClient } from "@/lib/supabase/server";
 import { requirePermission } from "@/lib/session";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { encryptSecret } from "@/lib/crypto";
-import { findSource } from "@/lib/sources";
+import { decryptSecret, encryptSecret } from "@/lib/crypto";
 
-// Pipelines ELT (dlt). NB : le moteur d'exécution n'est pas encore intégré —
-// les interfaces sont mockées : le test de connexion valide la saisie et
-// l'exécution est simulée (statut + run enregistrés). Les credentials sont
-// chiffrés au repos et jamais renvoyés au client (AGENTS.md §12).
+// Pipelines ELT exécutés par le moteur dlt (apps/dlt). Les credentials sont
+// chiffrés au repos (AES-256-GCM) et jamais renvoyés au client ni stockés en
+// clair : source_config ne porte que les métadonnées (colonnes de curseur).
+// L'exécution est asynchrone : l'interface insère un run `queued`, l'ordon-
+// nanceur dlt démarre un conteneur jetable qui écrit le résultat
+// (connectors.pipeline_runs, AGENTS.md §12).
 
 export interface PipelineInput {
   name: string;
   sourceType: string;
   sourceConfig: Record<string, string>;
+  // Colonne de curseur incrémental par table (sources SQL uniquement).
+  cursors: Record<string, string>;
   selectedTables: string[];
   writeMode: "incremental" | "replace";
   cron: string;
   destinationCatalog: string;
+  destinationSchema: string;
 }
 
-// Test de connexion (mock) : valide que les champs requis sont renseignés.
+export interface IntrospectTable {
+  name: string;
+  columns: { name: string; type: string }[];
+  cursor: string | null;
+}
+
+export interface TestConnectionResult {
+  ok: boolean;
+  error?: string;
+  note?: string;
+  tables: IntrospectTable[];
+}
+
+const DLT_IMAGE = process.env.PARUSDB_DLT_IMAGE ?? "parus-dlt-runner:1.0.0";
+const DLT_NETWORK = process.env.PARUSDB_DLT_NETWORK ?? "supabase_default";
+const INTROSPECT_TIMEOUT_MS = 90_000;
+
+// Test de connexion + introspection réels : conteneur jetable du runner dlt
+// (job JSON sur stdin, réponse JSON sur stdout — les credentials transitent
+// par stdin, jamais par l'environnement ni le disque).
 export async function testConnection(
   sourceType: string,
   config: Record<string, string>,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<TestConnectionResult> {
   await requirePermission("connectors");
-  await new Promise((r) => setTimeout(r, 700));
-  const source = findSource(sourceType);
-  if (!source) {
-    return { ok: false, error: "Source inconnue." };
-  }
-  const missing = source.fields
-    .filter((f) => f.required !== false)
-    .filter((f) => !config[f.key]?.trim());
-  if (missing.length > 0) {
+  const job = JSON.stringify({
+    source_type: sourceType,
+    credentials: config,
+    tables: [],
+    cursors: {},
+  });
+  try {
+    const { stdout, stderr, code } = await new Promise<{
+      stdout: string;
+      stderr: string;
+      code: number | null;
+    }>((resolve, reject) => {
+      const child = spawn(
+        "docker",
+        [
+          "run",
+          "--rm",
+          "-i",
+          "--network",
+          DLT_NETWORK,
+          DLT_IMAGE,
+          "python",
+          "-m",
+          "runner.main",
+          "introspect",
+        ],
+        { stdio: ["pipe", "pipe", "pipe"] },
+      );
+      let out = "";
+      let err = "";
+      const timer = setTimeout(() => {
+        child.kill("SIGKILL");
+        reject(new Error("timeout"));
+      }, INTROSPECT_TIMEOUT_MS);
+      child.stdout.on("data", (chunk) => (out += chunk.toString()));
+      child.stderr.on("data", (chunk) => (err += chunk.toString()));
+      child.on("error", (error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+      child.on("close", (exitCode) => {
+        clearTimeout(timer);
+        resolve({ stdout: out, stderr: err, code: exitCode });
+      });
+      child.stdin.write(job);
+      child.stdin.end();
+    });
+    // Le runner répond en JSON sur stdout ; les logs dlt vont sur stderr.
+    let payload: {
+      ok?: boolean;
+      error?: string;
+      note?: string;
+      tables?: IntrospectTable[];
+    } | null = null;
+    try {
+      payload = JSON.parse(stdout.trim().split("\n").at(-1) ?? "");
+    } catch {
+      payload = null;
+    }
+    if (payload && typeof payload.ok === "boolean") {
+      return {
+        ok: payload.ok,
+        error: payload.error,
+        note: payload.note,
+        tables: payload.tables ?? [],
+      };
+    }
+    const detail = (stderr.trim().split("\n").findLast(Boolean) ?? "").slice(0, 300);
     return {
       ok: false,
-      error: `Champs manquants : ${missing.map((f) => f.label).join(", ")}.`,
+      error:
+        code === null
+          ? "La connexion a échoué : délai dépassé."
+          : `La connexion a échoué : ${detail || `le runner dlt a quitté (code ${code}).`}`,
+      tables: [],
+    };
+  } catch (error) {
+    if (error instanceof Error && error.message === "timeout") {
+      return {
+        ok: false,
+        error: "La connexion a échoué : délai dépassé (90 s).",
+        tables: [],
+      };
+    }
+    return {
+      ok: false,
+      error:
+        "La connexion a échoué : docker est-il installé et l'image du runner dlt construite (cd apps/dlt && sh run.sh build) ?",
+      tables: [],
     };
   }
-  return { ok: true };
 }
 
-async function insertPipelineRow(
-  input: PipelineInput,
-): Promise<string> {
+// Credentials chiffrés AES-256-GCM (lib/crypto.ts, clé hors base) — le
+// runner dlt déchiffre avec la même clé (apps/dlt/runner/crypto.py).
+function pipelineCredentials(sourceConfig: Record<string, string>) {
+  return encryptSecret(JSON.stringify(sourceConfig));
+}
+
+async function insertPipelineRow(input: PipelineInput): Promise<string> {
   const session = await requirePermission("connectors");
   const supabase = await createClient();
-  const credentials: Record<string, string> = {};
-  const source = findSource(input.sourceType);
-  for (const field of source?.fields ?? []) {
-    if (input.sourceConfig[field.key]) {
-      credentials[field.key] = input.sourceConfig[field.key];
-    }
-  }
   const { data, error } = await supabase
     .schema("connectors")
     .from("pipelines")
@@ -64,14 +161,13 @@ async function insertPipelineRow(
       owner_id: session.userId,
       name: input.name,
       source_type: input.sourceType,
-      source_config: { fields: input.sourceConfig },
-      credentials_encrypted: Object.keys(credentials).length
-        ? encryptSecret(JSON.stringify(credentials))
-        : null,
+      source_config: { cursors: input.cursors },
+      credentials_encrypted: pipelineCredentials(input.sourceConfig),
       selected_tables: input.selectedTables,
       write_mode: input.writeMode,
       cron: input.cron,
       destination_catalog: input.destinationCatalog,
+      destination_schema: input.destinationSchema,
       status: "active",
     })
     .select("id")
@@ -84,8 +180,41 @@ async function insertPipelineRow(
   return data.id;
 }
 
+async function queueRun(
+  pipelineId: string,
+  trigger: "creation" | "manual",
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .schema("connectors")
+    .from("pipeline_runs")
+    .insert({ pipeline_id: pipelineId, status: "queued", trigger });
+  if (error) {
+    return {
+      ok: false,
+      error: `La mise en file d'exécution a échoué : ${error.message}`,
+    };
+  }
+  const { error: updateError } = await supabase
+    .schema("connectors")
+    .from("pipelines")
+    .update({ last_run_at: new Date().toISOString() })
+    .eq("id", pipelineId);
+  if (updateError) {
+    return {
+      ok: false,
+      error: `La mise à jour du pipeline a échoué : ${updateError.message}`,
+    };
+  }
+  return { ok: true };
+}
+
 export async function createPipeline(input: PipelineInput) {
+  await requirePermission("connectors");
   const id = await insertPipelineRow(input);
+  // « Enregistrer » = sauvegarde + lancement immédiat (spec §Connecteurs) :
+  // le run part dès que l'ordonnanceur dlt le réclame (quelques secondes).
+  await queueRun(id, "creation");
   revalidatePath("/connectors");
   redirect(`/connectors?created=${id}`);
 }
@@ -93,26 +222,44 @@ export async function createPipeline(input: PipelineInput) {
 export async function updatePipeline(id: string, input: PipelineInput) {
   await requirePermission("connectors");
   const supabase = await createClient();
-  const source = findSource(input.sourceType);
-  const credentials: Record<string, string> = {};
-  for (const field of source?.fields ?? []) {
-    if (input.sourceConfig[field.key]) {
-      credentials[field.key] = input.sourceConfig[field.key];
+
+  // Credentials laissés vides en édition : conserver les valeurs chiffrées
+  // existantes (jamais renvoyées au client). Champs renseignés : fusion par-
+  // dessus les valeurs existantes puis re-chiffrement.
+  const { data: existing } = await supabase
+    .schema("connectors")
+    .from("pipelines")
+    .select("credentials_encrypted")
+    .eq("id", id)
+    .maybeSingle();
+  let credentials = null;
+  if (existing?.credentials_encrypted) {
+    try {
+      const stored = JSON.parse(
+        decryptSecret(existing.credentials_encrypted),
+      ) as Record<string, string>;
+      Object.assign(stored, input.sourceConfig);
+      credentials = pipelineCredentials(stored);
+    } catch {
+      // Clé de chiffrement pivotée : remplacer intégralement.
+      credentials = pipelineCredentials(input.sourceConfig);
     }
+  } else if (Object.keys(input.sourceConfig).length > 0) {
+    credentials = pipelineCredentials(input.sourceConfig);
   }
-  // Champs credentials laissés vides en édition : on conserve les valeurs
-  // chiffrées existantes (jamais renvoyées au client).
+
   const payload: Record<string, unknown> = {
     name: input.name,
     source_type: input.sourceType,
-    source_config: { fields: input.sourceConfig },
+    source_config: { cursors: input.cursors },
     selected_tables: input.selectedTables,
     write_mode: input.writeMode,
     cron: input.cron,
     destination_catalog: input.destinationCatalog,
+    destination_schema: input.destinationSchema,
   };
-  if (Object.keys(credentials).length > 0) {
-    payload.credentials_encrypted = encryptSecret(JSON.stringify(credentials));
+  if (credentials) {
+    payload.credentials_encrypted = credentials;
   }
   const { error } = await supabase
     .schema("connectors")
@@ -143,49 +290,25 @@ export async function deletePipeline(
   return { ok: true };
 }
 
-// Exécution manuelle (mock) : enregistre un run simulé.
+// Exécution manuelle : run mis en file (queued), l'ordonnanceur dlt démarre
+// le conteneur jetable (quelques secondes de latence d'ordonnancement).
 export async function runPipeline(
   id: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const session = await requirePermission("connectors");
+  await requirePermission("connectors");
   const supabase = await createClient();
   const { data: pipeline } = await supabase
     .schema("connectors")
     .from("pipelines")
-    .select("id, selected_tables")
+    .select("id")
     .eq("id", id)
     .maybeSingle();
   if (!pipeline) {
     return { ok: false, error: "Pipeline introuvable." };
   }
-  const tables = (pipeline.selected_tables ?? []) as string[];
-  const { error: runError } = await supabase
-    .schema("connectors")
-    .from("pipeline_runs")
-    .insert({
-      pipeline_id: id,
-      status: "success",
-      message: `Exécution simulée : le moteur dlt n'est pas encore intégré (${tables.length} table(s) sélectionnée(s)).`,
-      rows_loaded: tables.length * 100,
-      finished_at: new Date().toISOString(),
-    });
-  if (runError) {
-    return {
-      ok: false,
-      error: `L'exécution a échoué : ${runError.message}`,
-    };
-  }
-  const { error: updateError } = await supabase
-    .schema("connectors")
-    .from("pipelines")
-    .update({ last_run_at: new Date().toISOString() })
-    .eq("id", id);
-  if (updateError) {
-    return { ok: false, error: `La mise à jour a échoué : ${updateError.message}` };
-  }
+  const result = await queueRun(id, "manual");
   revalidatePath("/connectors");
-  void session;
-  return { ok: true };
+  return result;
 }
 
 // Activation / désactivation de l'ordonnancement.

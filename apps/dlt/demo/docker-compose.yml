@@ -1,0 +1,47 @@
+#
+# Source PostgreSQL de démonstration — validation e2e du moteur ELT.
+#
+# Reproduit une « vraie » source SQL pour tester le parcours complet :
+# pipeline dlt (source sql_database) -> Iceberg (Polaris + RustFS) -> Trino ->
+# Chat IA (mcp-trino). Fictif, données bidon, aucune donnée réelle.
+#
+# Réseau : supabase_default pour être joignable par les conteneurs de run.
+# Port hôte 55432 pour inspection manuelle (psql).
+#
+# Démarrage : docker compose -f demo/docker-compose.yml up -d --wait
+# Données : seed.sql appliqué automatiquement à la première initialisation.
+#
+
+name: parus-dlt-demo-source
+
+networks:
+  supabase:
+    name: supabase_default
+    external: true
+
+services:
+
+  demo-postgres:
+    image: postgres:17
+    container_name: parus-dlt-demo-postgres
+    restart: unless-stopped
+    networks:
+      - supabase
+    environment:
+      POSTGRES_USER: demo
+      POSTGRES_PASSWORD: demo
+      POSTGRES_DB: demo_sales
+    ports:
+      - "55432:5432"
+    volumes:
+      - ./seed.sql:/docker-entrypoint-initdb.d/seed.sql:ro
+      - demo-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U demo -d demo_sales"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  demo-pgdata:
+    name: parus-dlt-demo-pgdata

@@ -525,23 +525,46 @@ create table if not exists connectors.pipelines (
     check (write_mode in ('incremental', 'replace')),
   cron text not null default '',
   destination_catalog text not null,
+  -- Schéma (namespace) de destination dans le catalogue lakehouse.
+  destination_schema text,
   status text not null default 'active' check (status in ('active', 'inactive', 'error')),
   last_run_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 create index if not exists pipelines_owner_idx on connectors.pipelines (owner_id);
+-- Colonne ajoutée après la première version du schéma (idempotent).
+alter table connectors.pipelines
+  add column if not exists destination_schema text;
 
 create table if not exists connectors.pipeline_runs (
   id uuid primary key default gen_random_uuid(),
   pipeline_id uuid not null references connectors.pipelines (id) on delete cascade,
-  status text not null check (status in ('success', 'error', 'running')),
+  status text not null check (status in ('queued', 'running', 'success', 'error')),
+  -- Origine du run : 'creation' (première exécution à l'enregistrement),
+  -- 'manual' (bouton Lancer), 'schedule' (CRON ordonnanceur dlt).
+  trigger text not null default 'manual'
+    check (trigger in ('creation', 'manual', 'schedule')),
   message text,
+  -- Queue du journal d'exécution en cas d'erreur (jamais de secret dedans).
+  log text,
   rows_loaded integer,
   started_at timestamptz not null default now(),
   finished_at timestamptz
 );
 create index if not exists pipeline_runs_pipeline_idx on connectors.pipeline_runs (pipeline_id, started_at desc);
+-- Évolution idempotente des installations existantes : statut 'queued'
+-- (file d'attente de l'ordonnanceur dlt) + colonnes trigger/log.
+alter table connectors.pipeline_runs
+  drop constraint if exists pipeline_runs_status_check;
+alter table connectors.pipeline_runs
+  add constraint pipeline_runs_status_check
+  check (status in ('queued', 'running', 'success', 'error'));
+alter table connectors.pipeline_runs
+  add column if not exists trigger text not null default 'manual'
+    check (trigger in ('creation', 'manual', 'schedule'));
+alter table connectors.pipeline_runs
+  add column if not exists log text;
 
 alter table connectors.pipelines enable row level security;
 alter table connectors.pipeline_runs enable row level security;
@@ -599,6 +622,39 @@ create policy pipeline_runs_insert_own on connectors.pipeline_runs
 drop trigger if exists touch_pipelines on connectors.pipelines;
 create trigger touch_pipelines before update on connectors.pipelines
   for each row execute function iam.touch_updated_at();
+
+-- Rôle applicatif du moteur ELT (apps/dlt) : l'ordonnanceur et les conteneurs
+-- de run lisent les pipelines, insèrent les runs ordonnancés (CRON) et
+-- écrivent leurs résultats. Rôle créé par apps/dlt/sql/01-dlt-role.sql (mot
+-- de passe dans le .env local, jamais commité) ; les politiques ne sont
+-- posées que si le rôle existe (le schéma reste applicable sans apps/dlt).
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'parus_dlt') then
+    drop policy if exists pipelines_select_dlt on connectors.pipelines;
+    create policy pipelines_select_dlt on connectors.pipelines
+      for select to parus_dlt using (true);
+
+    drop policy if exists pipelines_update_dlt on connectors.pipelines;
+    create policy pipelines_update_dlt on connectors.pipelines
+      for update to parus_dlt using (true) with check (true);
+
+    drop policy if exists pipeline_runs_select_dlt on connectors.pipeline_runs;
+    create policy pipeline_runs_select_dlt on connectors.pipeline_runs
+      for select to parus_dlt using (true);
+
+    drop policy if exists pipeline_runs_insert_dlt on connectors.pipeline_runs;
+    create policy pipeline_runs_insert_dlt on connectors.pipeline_runs
+      for insert to parus_dlt with check (true);
+
+    drop policy if exists pipeline_runs_update_dlt on connectors.pipeline_runs;
+    create policy pipeline_runs_update_dlt on connectors.pipeline_runs
+      for update to parus_dlt using (true) with check (true);
+  else
+    raise notice 'rôle parus_dlt absent : politiques dlt non posées (lancer apps/dlt/setup.sh puis réappliquer ce script)';
+  end if;
+end
+$$;
 
 -- ---------------------------------------------------------------------------
 -- 8. admin — modèles LLM propriétaires et serveurs locaux

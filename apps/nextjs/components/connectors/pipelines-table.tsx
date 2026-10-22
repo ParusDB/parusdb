@@ -30,6 +30,7 @@ export interface PipelineRow {
   source_type: string;
   sourceLabel: string;
   destination_catalog: string;
+  destination_schema: string | null;
   status: "active" | "inactive" | "error";
   cron: string;
   last_run_at: string | null;
@@ -55,7 +56,9 @@ export function PipelinesTable({
   async function handleRun(id: string) {
     const result = await runPipeline(id);
     if (result.ok) {
-      toast.success("Exécution lancée (simulation).");
+      toast.success(
+        "Exécution mise en file — l'ordonnanceur dlt la démarre dans quelques secondes.",
+      );
       router.refresh();
     } else {
       toast.error(result.error ?? "L’exécution a échoué.");
@@ -75,12 +78,6 @@ export function PipelinesTable({
 
   return (
     <div className="space-y-4">
-      <p className="rounded-lg border border-border bg-muted px-4 py-3 text-sm text-muted-foreground">
-        Mode démonstration : le moteur ELT (dlt) n’est pas encore intégré. Les
-        tests de connexion et les exécutions sont simulés, la configuration est
-        enregistrée dans PostgreSQL.
-      </p>
-
       {pipelines.length === 0 ? (
         <CharbonPanel className="text-center">
           <div className="flex justify-center">
@@ -127,6 +124,7 @@ export function PipelinesTable({
                   </TableCell>
                   <TableCell className="mono text-xs">
                     {row.destination_catalog}
+                    {row.destination_schema ? `.${row.destination_schema}` : ""}
                   </TableCell>
                   <TableCell>
                     <StatusBadge {...STATUS_LABEL[row.status]} />

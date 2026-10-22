@@ -1,15 +1,16 @@
 import { cn } from "@/lib/utils";
 
 // Point de statut — « feu jaune » pour l’actif (charte §10), cendre pour
-// l’inactif, framboise pour l’erreur.
+// l’inactif, framboise pour l’erreur. Les runs ELT ajoutent « en file »
+// (cendre) et « en cours » (jaune).
 export function StatusDot({
   tone,
   className,
 }: {
-  tone: "active" | "inactive" | "error";
+  tone: "active" | "inactive" | "error" | "queued" | "running";
   className?: string;
 }) {
-  if (tone === "active") {
+  if (tone === "active" || tone === "running") {
     return (
       <span
         className={cn(
@@ -37,7 +38,7 @@ export function StatusBadge({
   tone,
   label,
 }: {
-  tone: "active" | "inactive" | "error";
+  tone: "active" | "inactive" | "error" | "queued" | "running";
   label: string;
 }) {
   return (

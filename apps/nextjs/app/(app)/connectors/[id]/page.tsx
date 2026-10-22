@@ -7,7 +7,7 @@ import { PipelineWizard } from "@/components/connectors/pipeline-wizard";
 import { requirePermission } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 import { loadCatalogViews } from "@/lib/lakehouse";
-import type { CatalogEntry, Pipeline } from "@/types/db";
+import type { CatalogEntry } from "@/types/db";
 
 export default async function EditPipelinePage({
   params,
@@ -21,7 +21,9 @@ export default async function EditPipelinePage({
   const { data: pipeline } = await supabase
     .schema("connectors")
     .from("pipelines")
-    .select("id, name, source_type, source_config, selected_tables, write_mode, cron, destination_catalog")
+    .select(
+      "id, name, source_type, source_config, selected_tables, write_mode, cron, destination_catalog, destination_schema",
+    )
     .eq("id", id)
     .maybeSingle();
   if (!pipeline) notFound();
@@ -38,8 +40,16 @@ export default async function EditPipelinePage({
     catalogs = registry.map((r) => r.catalog_name);
   }
 
-  const row = pipeline as unknown as Pipeline & {
-    source_config: { fields?: Record<string, string> };
+  const row = pipeline as {
+    id: string;
+    name: string;
+    source_type: string;
+    source_config: { cursors?: Record<string, string> } | Record<string, unknown>;
+    selected_tables: string[];
+    write_mode: "incremental" | "replace";
+    cron: string;
+    destination_catalog: string;
+    destination_schema: string | null;
   };
 
   return (
@@ -47,7 +57,7 @@ export default async function EditPipelinePage({
       <PageHeader
         eyebrow="Connecteurs ELT"
         title={`Modifier « ${row.name} »`}
-        description="Credentials laissés vides : les valeurs chiffrées existantes sont conservées."
+        description="Credentials laissés vides : les valeurs chiffrées existantes sont conservées. Renseignez de nouveau pour les remplacer."
       />
       <PipelineWizard
         pipelineId={row.id}
@@ -55,11 +65,15 @@ export default async function EditPipelinePage({
         initial={{
           name: row.name,
           sourceType: row.source_type,
-          sourceConfig: row.source_config?.fields ?? {},
+          // Credentials volontairement absents : jamais renvoyés au client.
           selectedTables: row.selected_tables ?? [],
+          cursors:
+            (row.source_config as { cursors?: Record<string, string> })?.cursors ??
+            {},
           writeMode: row.write_mode,
           cron: row.cron,
           destinationCatalog: row.destination_catalog,
+          destinationSchema: row.destination_schema ?? "",
         }}
       />
     </div>

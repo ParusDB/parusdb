@@ -1,0 +1,58 @@
+#
+# dlt — moteur ELT de ParusDB (AGENTS.md §12).
+#
+# Un seul service long-lived : l'ordonnanceur. Les exécutions de pipelines sont
+# des conteneurs jetables démarrés par l'ordonnanceur via le socket Docker de
+# l'hôte (docker-py) — modèle « un conteneur par run », état dlt persisté dans
+# le volume nommé parus-dlt-state (cursors incrémentaux).
+#
+# Dépendances assumées :
+#   - réseau externe `supabase_default` (stack Supabase démarrée) ;
+#   - Postgres Supabase (rôle `parus_dlt`, créé par setup.sh) ;
+#   - Polaris (apps/polaris) : catalogue Iceberg REST ;
+#   - RustFS (stack Supabase) : object storage, credentials vendus par Polaris.
+#
+# L'ordonnanceur doit joindre le démon Docker de l'hôte : montage du socket
+# (nécessaire pour démarrer les conteneurs jetables des runs).
+#
+# Démarrage : `sh setup.sh` (première fois), puis `sh run.sh start`.
+#
+
+name: parus-dlt
+
+networks:
+  supabase:
+    name: supabase_default
+    external: true
+
+services:
+
+  scheduler:
+    # L'image est construite localement (parus-dlt-runner:<tag>, jamais
+    # publiée) : `docker compose build` via setup.sh / run.sh build.
+    build:
+      context: .
+    image: ${PARUSDB_DLT_IMAGE:-parus-dlt-runner:1.0.0}
+    container_name: parus-dlt-scheduler
+    restart: unless-stopped
+    networks:
+      - supabase
+    command: ["python", "-m", "runner.main", "schedule"]
+    env_file:
+      - .env
+    volumes:
+      # Démarrage des conteneurs jetables des runs (docker-py).
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket, os; socket.create_connection((os.environ.get('PARUSDB_DB_HOST', 'db'), int(os.environ.get('PARUSDB_DB_PORT', '5432'))), timeout=5)"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 15s
+
+volumes:
+  # État dlt persistant (cursors incrémentaux, schémas de pipelines).
+  # Le nom est explicite : les conteneurs jetables le montent depuis
+  # l'ordonnanceur (docker-py) sans préfixe projet compose.
+  dlt-state:
+    name: parus-dlt-state

@@ -7,6 +7,8 @@ import { ArrowLeft, ArrowRight, Check, Save, X } from "lucide-react";
 import {
   SOURCES,
   SOURCE_CATEGORIES,
+  CORE_GROUPS,
+  VERIFIED_GROUPS,
   findSource,
 } from "@/lib/sources";
 import { cn } from "@/lib/utils";
@@ -24,17 +26,19 @@ import {
   createPipeline,
   testConnection,
   updatePipeline,
+  type IntrospectTable,
   type PipelineInput,
 } from "@/app/(app)/connectors/actions";
 
 export interface WizardInitial {
   name: string;
   sourceType: string;
-  sourceConfig: Record<string, string>;
   selectedTables: string[];
+  cursors: Record<string, string>;
   writeMode: "incremental" | "replace";
   cron: string;
   destinationCatalog: string;
+  destinationSchema: string;
 }
 
 const CRON_PRESETS = [
@@ -44,8 +48,19 @@ const CRON_PRESETS = [
   { label: "Mensuel — 1er du mois", value: "0 0 1 * *" },
 ];
 
+const NO_CURSOR = "__none__";
+
+function suggestSchema(name: string): string {
+  const schema = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return schema || "pipeline";
+}
+
 // Parcours de création d’un pipeline (spec §Connecteurs) : source ->
-// credentials avec test -> tables + mode + CRON + destination -> enregistrement.
+// credentials avec test réel -> tables (introspection) + mode + CRON +
+// destination -> enregistrement (lancement immédiat via run queued).
 export function PipelineWizard({
   catalogs,
   pipelineId,
@@ -56,17 +71,25 @@ export function PipelineWizard({
   initial?: WizardInitial;
 }) {
   const isEdit = Boolean(initial);
+  const router = useRouter();
   const [step, setStep] = useState(1);
+  const [search, setSearch] = useState("");
   const [sourceKey, setSourceKey] = useState(initial?.sourceType ?? "");
+  // Credentials : vides à l'édition — les valeurs chiffrées existantes sont
+  // conservées côté serveur (jamais renvoyées au navigateur).
+  const [config, setConfig] = useState<Record<string, string>>({});
   const [name, setName] = useState(initial?.name ?? "");
-  const [config, setConfig] = useState<Record<string, string>>(
-    initial?.sourceConfig ?? {},
-  );
   const [validated, setValidated] = useState(isEdit);
   const [testing, setTesting] = useState(false);
+  const [introspected, setIntrospected] = useState<IntrospectTable[]>([]);
+  const [introspectNote, setIntrospectNote] = useState<string | null>(null);
   const [selectedTables, setSelectedTables] = useState<string[]>(
     initial?.selectedTables ?? [],
   );
+  const [cursors, setCursors] = useState<Record<string, string>>(
+    initial?.cursors ?? {},
+  );
+  const [manualTable, setManualTable] = useState("");
   const [writeMode, setWriteMode] = useState<"incremental" | "replace">(
     initial?.writeMode ?? "incremental",
   );
@@ -74,19 +97,44 @@ export function PipelineWizard({
   const [destination, setDestination] = useState(
     initial?.destinationCatalog ?? catalogs[0] ?? "",
   );
+  const [destinationSchema, setDestinationSchema] = useState(
+    initial?.destinationSchema ?? "",
+  );
+  const [schemaTouched, setSchemaTouched] = useState(false);
   const [saving, setSaving] = useState(false);
-  const router = useRouter();
 
   const source = useMemo(() => findSource(sourceKey), [sourceKey]);
+
+  const filteredSources = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    if (!needle) return SOURCES;
+    return SOURCES.filter(
+      (s) =>
+        s.label.toLowerCase().includes(needle) ||
+        s.key.includes(needle) ||
+        s.description.toLowerCase().includes(needle),
+    );
+  }, [search]);
+
+  const effectiveSchema = schemaTouched || destinationSchema
+    ? destinationSchema
+    : suggestSchema(name);
 
   async function handleTest() {
     if (!source) return;
     setTesting(true);
+    setIntrospectNote(null);
     try {
       const result = await testConnection(sourceKey, config);
       if (result.ok) {
         setValidated(true);
-        toast.success("Connexion validée (simulation — dlt non intégré).");
+        setIntrospected(result.tables);
+        setIntrospectNote(result.note ?? null);
+        toast.success(
+          result.tables.length > 0
+            ? `Connexion validée : ${result.tables.length} table(s) détectée(s).`
+            : "Connexion validée.",
+        );
       } else {
         setValidated(false);
         toast.error(result.error ?? "La connexion a échoué.");
@@ -94,6 +142,40 @@ export function PipelineWizard({
     } finally {
       setTesting(false);
     }
+  }
+
+  function toggleTable(table: string, cursor: string | null) {
+    const selected = selectedTables.includes(table);
+    if (selected) {
+      setSelectedTables((prev) => prev.filter((t) => t !== table));
+      setCursors((prev) => {
+        const next = { ...prev };
+        delete next[table];
+        return next;
+      });
+    } else {
+      setSelectedTables((prev) =>
+        source?.tablesHint && !source.tablesHint.multiple
+          ? [table]
+          : [...prev, table],
+      );
+      if (source?.kind === "sql" && cursor) {
+        setCursors((prev) => ({ ...prev, [table]: cursor }));
+      }
+    }
+  }
+
+  function addManualTable() {
+    const value = manualTable.trim().replace(/^\/+/, "");
+    if (!value || !source?.tablesHint) return;
+    if (source.tablesHint.multiple) {
+      setSelectedTables((prev) =>
+        prev.includes(value) ? prev : [...prev, value],
+      );
+    } else {
+      setSelectedTables([value]);
+    }
+    setManualTable("");
   }
 
   async function handleSave() {
@@ -106,8 +188,8 @@ export function PipelineWizard({
       toast.error("Sélectionnez une source.");
       return;
     }
-    if (selectedTables.length === 0) {
-      toast.error("Sélectionnez au moins une table.");
+    if (!effectiveSchema.trim()) {
+      toast.error("Le schéma de destination est obligatoire.");
       return;
     }
     if (!destination) {
@@ -119,10 +201,12 @@ export function PipelineWizard({
       name,
       sourceType: sourceKey,
       sourceConfig: config,
+      cursors: source.kind === "sql" ? cursors : {},
       selectedTables,
       writeMode,
       cron,
       destinationCatalog: destination,
+      destinationSchema: effectiveSchema,
     };
     try {
       if (pipelineId) {
@@ -139,14 +223,34 @@ export function PipelineWizard({
     }
   }
 
+  // Sources SQL/verified : au moins une table. Sources à saisie manuelle :
+  // au moins une entrée (kinesis : exactement une). postgres_replication :
+  // aucune table requise.
+  const needsTables = Boolean(source?.tablesHint) || introspected.length > 0;
+  const tablesSatisfied =
+    !needsTables ||
+    (source?.tablesHint && !source.tablesHint.multiple
+      ? selectedTables.length === 1
+      : selectedTables.length > 0);
+
   const canNext =
     step === 1
       ? Boolean(sourceKey)
       : step === 2
         ? validated
         : step === 3
-          ? selectedTables.length > 0 && Boolean(destination)
+          ? tablesSatisfied && Boolean(destination) && Boolean(effectiveSchema.trim())
           : true;
+
+  const grouped = (category: (typeof SOURCE_CATEGORIES)[number]) =>
+    (category === "Core Sources" ? CORE_GROUPS : VERIFIED_GROUPS)
+      .map((group) => ({
+        group,
+        items: filteredSources.filter(
+          (s) => s.category === category && s.group === group,
+        ),
+      }))
+      .filter((entry) => entry.items.length > 0);
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -177,38 +281,59 @@ export function PipelineWizard({
         {/* Étape 1 : source */}
         {step === 1 ? (
           <div className="space-y-6">
-            <div>
-              <h2 className="font-display text-xl">Sélectionnez la source</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Sources dlt disponibles (sous-ensemble Core et Verified).
-              </p>
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="font-display text-xl">Sélectionnez la source</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Sources dlt disponibles : Core (REST, SQL, object store) et
+                  Verified (API tierces maintenues par dltHub).
+                </p>
+              </div>
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Rechercher une source…"
+                className="w-full sm:w-56"
+              />
             </div>
             {SOURCE_CATEGORIES.map((category) => (
               <div key={category}>
                 <p className="mono mb-2 text-[10px] uppercase tracking-[0.2em] text-olive">
                   {category}
                 </p>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-                  {SOURCES.filter((s) => s.category === category).map((s) => (
-                    <button
-                      key={s.key}
-                      type="button"
-                      onClick={() => {
-                        setSourceKey(s.key);
-                        setConfig({});
-                        setValidated(isEdit);
-                        setSelectedTables([]);
-                      }}
-                      className={cn(
-                        "flex flex-col items-center gap-2 rounded-2xl border p-4 text-center transition-all hover:-translate-y-0.5",
-                        sourceKey === s.key
-                          ? "border-jaune bg-jaune/10"
-                          : "border-border bg-card hover:border-charbon",
-                      )}
-                    >
-                      <s.icon className="h-6 w-6 text-olive" strokeWidth={1.6} />
-                      <span className="text-xs font-medium">{s.label}</span>
-                    </button>
+                <div className="space-y-4">
+                  {grouped(category).map(({ group, items }) => (
+                    <div key={group}>
+                      <p className="mb-2 text-xs text-muted-foreground">
+                        {group}
+                      </p>
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                        {items.map((s) => (
+                          <button
+                            key={s.key}
+                            type="button"
+                            onClick={() => {
+                              setSourceKey(s.key);
+                              setConfig({});
+                              setValidated(false);
+                              setSelectedTables([]);
+                              setCursors({});
+                              setIntrospected([]);
+                              setIntrospectNote(null);
+                            }}
+                            className={cn(
+                              "flex flex-col items-center gap-2 rounded-2xl border p-4 text-center transition-all hover:-translate-y-0.5",
+                              sourceKey === s.key
+                                ? "border-jaune bg-jaune/10"
+                                : "border-border bg-card hover:border-charbon",
+                            )}
+                          >
+                            <s.icon className="h-6 w-6 text-olive" strokeWidth={1.6} />
+                            <span className="text-xs font-medium">{s.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -216,7 +341,7 @@ export function PipelineWizard({
           </div>
         ) : null}
 
-        {/* Étape 2 : credentials + test */}
+        {/* Étape 2 : credentials + test réel */}
         {step === 2 && source ? (
           <div className="space-y-5">
             <div>
@@ -224,7 +349,9 @@ export function PipelineWizard({
               <p className="mt-1 text-sm text-muted-foreground">
                 Les credentials sont chiffrés au repos et jamais renvoyés au
                 navigateur.
-                {isEdit ? " Laissez vides pour conserver ceux déjà enregistrés." : ""}
+                {isEdit
+                  ? " Laissez vides pour conserver ceux déjà enregistrés ; renseignez de nouveau pour les remplacer."
+                  : ""}
               </p>
             </div>
             <div className="grid gap-2 sm:max-w-md">
@@ -233,7 +360,7 @@ export function PipelineWizard({
                 id="pipeline-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Ventes Stripe vers prod"
+                placeholder="Ventes CRM vers prod"
               />
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -245,7 +372,13 @@ export function PipelineWizard({
                   </Label>
                   <Input
                     id={`field-${field.key}`}
-                    type={field.type === "password" ? "password" : field.type === "number" ? "number" : "text"}
+                    type={
+                      field.type === "password"
+                        ? "password"
+                        : field.type === "number"
+                          ? "number"
+                          : "text"
+                    }
                     value={config[field.key] ?? ""}
                     placeholder={field.placeholder}
                     onChange={(e) => {
@@ -282,7 +415,7 @@ export function PipelineWizard({
           </div>
         ) : null}
 
-        {/* Étape 3 : tables + mode + CRON + destination */}
+        {/* Étape 3 : tables + curseurs + mode + CRON + destination */}
         {step === 3 && source ? (
           <div className="space-y-6">
             <div>
@@ -292,35 +425,144 @@ export function PipelineWizard({
                 ordonnancement.
               </p>
             </div>
-            <div>
-              <Label className="mb-2">Tables (simulation — métadonnées de la source)</Label>
-              <div className="flex flex-wrap gap-2">
-                {source.sampleTables.map((table) => {
-                  const selected = selectedTables.includes(table);
-                  return (
-                    <button
-                      key={table}
+
+            {introspected.length > 0 || source.tablesHint ? (
+              <div>
+                <Label className="mb-2">
+                  {source.kind === "endpoints"
+                    ? "Endpoints à charger"
+                    : source.kind === "globs"
+                      ? "Fichiers à charger (globs)"
+                      : source.kind === "resource"
+                        ? source.tablesHint?.label
+                        : "Tables détectées"}
+                </Label>
+                {introspected.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {introspected.map((table) => {
+                      const selected = selectedTables.includes(table.name);
+                      return (
+                        <button
+                          key={table.name}
+                          type="button"
+                          onClick={() => void toggleTable(table.name, table.cursor)}
+                          className={cn(
+                            "mono rounded-full border px-3 py-1.5 text-xs transition-colors",
+                            selected
+                              ? "border-jaune bg-jaune text-charbon"
+                              : "border-border bg-card text-muted-foreground hover:border-charbon hover:text-foreground",
+                          )}
+                        >
+                          {table.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Input
+                      value={manualTable}
+                      onChange={(e) => setManualTable(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addManualTable();
+                        }
+                      }}
+                      placeholder={source.tablesHint?.placeholder}
+                      className="w-64"
+                    />
+                    <Button
                       type="button"
-                      onClick={() =>
-                        setSelectedTables((prev) =>
-                          selected
-                            ? prev.filter((t) => t !== table)
-                            : [...prev, table],
-                        )
-                      }
-                      className={cn(
-                        "mono rounded-full border px-3 py-1.5 text-xs transition-colors",
-                        selected
-                          ? "border-jaune bg-jaune text-charbon"
-                          : "border-border bg-card text-muted-foreground hover:border-charbon hover:text-foreground",
-                      )}
+                      variant="outline"
+                      size="sm"
+                      onClick={() => addManualTable()}
                     >
-                      {table}
-                    </button>
-                  );
-                })}
+                      Ajouter
+                    </Button>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedTables.map((table) => (
+                        <span
+                          key={table}
+                          className="mono inline-flex items-center gap-1.5 rounded-full border border-jaune bg-jaune px-3 py-1.5 text-xs text-charbon"
+                        >
+                          {table}
+                          <button
+                            type="button"
+                            aria-label={`Retirer ${table}`}
+                            onClick={() => void toggleTable(table, null)}
+                          >
+                            <X className="h-3 w-3" strokeWidth={2} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {introspectNote ? (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {introspectNote}
+                  </p>
+                ) : null}
               </div>
-            </div>
+            ) : (
+              <p className="rounded-lg border border-border bg-muted px-4 py-3 text-sm text-muted-foreground">
+                Source à ressource unique : aucune sélection de table requise.
+              </p>
+            )}
+
+            {/* Curseurs incrémentaux (sources SQL) */}
+            {source.kind === "sql" && selectedTables.length > 0 ? (
+              <div>
+                <Label className="mb-2">Curseur incrémental (optionnel)</Label>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {selectedTables.map((table) => {
+                    const introspectedTable = introspected.find(
+                      (t) => t.name === table,
+                    );
+                    const cursorValue =
+                      cursors[table] ?? introspectedTable?.cursor ?? NO_CURSOR;
+                    return (
+                      <div key={table} className="grid gap-1.5">
+                        <p className="mono text-xs text-muted-foreground">
+                          {table}
+                        </p>
+                        <Select
+                          value={cursorValue}
+                          onValueChange={(value) =>
+                            setCursors((prev) => ({
+                              ...prev,
+                              [table]: value === NO_CURSOR ? "" : value,
+                            }))
+                          }
+                          disabled={!introspectedTable}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={NO_CURSOR}>
+                              Toutes les lignes à chaque exécution
+                            </SelectItem>
+                            {(introspectedTable?.columns ?? []).map((column) => (
+                              <SelectItem key={column.name} value={column.name}>
+                                {column.name} ({column.type})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Le curseur ne charge que les lignes modifiées depuis la
+                  dernière exécution (cursor dlt). Sans curseur, toutes les
+                  lignes sont rechargées à chaque exécution.
+                </p>
+              </div>
+            ) : null}
+
             <div>
               <Label className="mb-2">Mode d’insertion</Label>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -357,7 +599,7 @@ export function PipelineWizard({
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="grid gap-2">
-                <Label htmlFor="cron">Ordonnancement (CRON)</Label>
+                <Label htmlFor="cron">Ordonnancement (CRON, UTC)</Label>
                 <Input
                   id="cron"
                   value={cron}
@@ -392,8 +634,22 @@ export function PipelineWizard({
                     ))}
                   </SelectContent>
                 </Select>
+                <Label htmlFor="destination-schema" className="mt-2">
+                  Schéma de destination
+                </Label>
+                <Input
+                  id="destination-schema"
+                  value={effectiveSchema}
+                  onChange={(e) => {
+                    setSchemaTouched(true);
+                    setDestinationSchema(e.target.value);
+                  }}
+                  placeholder="customers"
+                  className="mono"
+                />
                 <p className="text-xs text-muted-foreground">
-                  Destination unique : le Data Lakehouse.
+                  Destination unique : le Data Lakehouse. Les tables du
+                  pipeline arrivent dans le schéma indiqué du catalogue.
                 </p>
               </div>
             </div>
@@ -407,7 +663,7 @@ export function PipelineWizard({
               <h2 className="font-display text-xl">Vérifiez et enregistrez</h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 À l’enregistrement, le pipeline est créé et une première
-                exécution est lancée (simulée).
+                exécution démarre automatiquement (conteneur dlt).
               </p>
             </div>
             <dl className="divide-y divide-border rounded-2xl border border-border">
@@ -416,11 +672,18 @@ export function PipelineWizard({
                 ["Source", `${source.label} (${source.category})`],
                 ["Tables", selectedTables.join(", ") || "—"],
                 [
+                  "Curseurs",
+                  Object.entries(cursors)
+                    .filter(([, column]) => column)
+                    .map(([table, column]) => `${table} → ${column}`)
+                    .join(", ") || "—",
+                ],
+                [
                   "Mode",
                   writeMode === "incremental" ? "Incrémental" : "Toutes les données",
                 ],
-                ["Ordonnancement", cron || "—"],
-                ["Destination", destination],
+                ["Ordonnancement", cron ? `${cron} (UTC)` : "—"],
+                ["Destination", `${destination}.${effectiveSchema}`],
               ].map(([label, value]) => (
                 <div key={label} className="grid grid-cols-3 gap-3 px-4 py-2.5 text-sm">
                   <dt className="text-muted-foreground">{label}</dt>

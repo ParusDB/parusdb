@@ -90,6 +90,7 @@ export interface Pipeline {
   write_mode: "incremental" | "replace";
   cron: string;
   destination_catalog: string;
+  destination_schema: string | null;
   status: "active" | "inactive" | "error";
   last_run_at: string | null;
   created_at: string;
@@ -100,7 +101,8 @@ export interface Pipeline {
 export interface PipelineRun {
   id: string;
   pipeline_id: string;
-  status: "success" | "error" | "running";
+  status: "queued" | "running" | "success" | "error";
+  trigger: "creation" | "manual" | "schedule";
   message: string | null;
   rows_loaded: number | null;
   started_at: string;
