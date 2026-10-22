@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePermission } from "@/lib/session";
 import { revalidatePath } from "next/cache";
-import { createCatalog, deleteCatalog } from "@/lib/polaris";
+import { createCatalog, deleteCatalog, ensureDefaultCatalogIsolated, DEFAULT_CATALOG } from "@/lib/polaris";
 import {
   loadCatalogTree,
   trinoBindingFileContent,
@@ -90,6 +90,20 @@ export async function createCatalogAction(
     };
   }
   const supabase = await createClient();
+
+  // Corrige le catalogue par défaut si ses allowedLocations couvrent le
+  // bucket entier (install antérieure) — sinon tout nouveau catalogue
+  // serait rejeté par Polaris (chevauchement de locations, HTTP 400).
+  // Le flag POLARIS_FEATURES_ALLOW_OVERLAPPING_CATALOG_URLS=true dans le
+  // docker-compose Polaris sert de filet de sécurité pour les installations
+  // existantes ; cette correction automatique restaure l'isolation par
+  // sous-répertoire quand l'API PUT est disponible.
+  const isolation = await ensureDefaultCatalogIsolated();
+  if (!isolation.fixed && isolation.error) {
+    console.warn(
+      `[parusdb] Correction du catalogue par défaut « ${DEFAULT_CATALOG} » échouée : ${isolation.error}`,
+    );
+  }
 
   // 1. Catalogue Polaris (métadonnées Iceberg).
   const created = await createCatalog(trimmed);

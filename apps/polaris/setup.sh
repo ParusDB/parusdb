@@ -236,7 +236,7 @@ else
         # leurs DROP avec purgeRequested=true ; sans cette propriété catalogue,
         # Polaris les refuse (HTTP 403) et les fichiers Iceberg restent orphelins.
         PAYLOAD=$(cat <<JSON
-{"catalog": {"name": "$POLARIS_DEFAULT_CATALOG", "type": "INTERNAL", "readOnly": false, "properties": {"default-base-location": "s3://$POLARIS_S3_BUCKET/$POLARIS_DEFAULT_CATALOG", "polaris.config.drop-with-purge.enabled": "true"}, "storageConfigInfo": {"storageType": "S3", "allowedLocations": ["s3://$POLARIS_S3_BUCKET"], "endpoint": "$S3_ENDPOINT", "endpointInternal": "$S3_ENDPOINT_INTERNAL", "pathStyleAccess": true, "region": "$S3_REGION"}}}
+{"catalog": {"name": "$POLARIS_DEFAULT_CATALOG", "type": "INTERNAL", "readOnly": false, "properties": {"default-base-location": "s3://$POLARIS_S3_BUCKET/$POLARIS_DEFAULT_CATALOG", "polaris.config.drop-with-purge.enabled": "true"}, "storageConfigInfo": {"storageType": "S3", "allowedLocations": ["s3://$POLARIS_S3_BUCKET/$POLARIS_DEFAULT_CATALOG"], "endpoint": "$S3_ENDPOINT", "endpointInternal": "$S3_ENDPOINT_INTERNAL", "pathStyleAccess": true, "region": "$S3_REGION"}}}
 JSON
 )
         RESP=$(curl -s --max-time 30 -w '\n%{http_code}' \

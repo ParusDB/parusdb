@@ -53,11 +53,14 @@ export interface ConversationViewProps {
     model: string;
   };
   initialMessages: Message[];
+  /** Premier message passé par /chat/new via ?pending= — envoyé au montage. */
+  pendingMessage?: string | null;
 }
 
 export function ConversationView({
   conversation,
   initialMessages,
+  pendingMessage,
 }: ConversationViewProps) {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState("");
@@ -85,6 +88,11 @@ export function ConversationView({
 
   const finalize = useCallback(
     (text: string) => {
+      // Garde anti-double : le message final peut arriver par deux canaux
+      // (évènement Realtime « done » + filet de sécurité HTTP). Un seul
+      // les deux ne doivent pas ajouter deux messages identiques.
+      if (!streamingRef.current) return;
+      streamingRef.current = false;
       setMessages((prev) => [
         ...prev,
         {
@@ -99,7 +107,6 @@ export function ConversationView({
       setStreamText("");
       setStatus(null);
       setToolTrace([]);
-      streamingRef.current = false;
       setStreaming(false);
       router.refresh();
     },
@@ -233,16 +240,14 @@ export function ConversationView({
     [conversation.id, finalize],
   );
 
-  // Premier message transmis depuis « Nouveau chat » (agent déjà scellé).
+  // Premier message transmis depuis « Nouveau chat » via ?pending= (prop
+  // lue côté serveur). Déclenchement au montage, hors du corps de l'effet.
   useEffect(() => {
-    const key = `parus:pending-message:${conversation.id}`;
-    const pending = sessionStorage.getItem(key);
-    if (!pending) return;
-    sessionStorage.removeItem(key);
-    // Déclenchement hors du corps de l'effet (pas de setState synchrone).
-    const frame = requestAnimationFrame(() => void send(pending));
+    if (!pendingMessage) return;
+    const frame = requestAnimationFrame(() => void send(pendingMessage));
     return () => cancelAnimationFrame(frame);
-  }, [conversation.id, send]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleRename() {
     try {

@@ -84,6 +84,25 @@ et fichiers concernés.
   la spec Iceberg REST, mais c'est l'endpoint effectivement servi et utilisé par
   Trino comme par l'app (client credentials, scope `PRINCIPAL_ROLE:ALL`,
   realm via l'en-tête `Polaris-Realm`). Ne pas chercher d'autre endpoint.
+- **Chevauchement des `allowedLocations` entre catalogues** : Polaris rejette la
+  création d'un catalogue (HTTP 400 `ValidationException`) si l'une de ses
+  `allowedLocations` est préfixe d'une location d'un catalogue existant (ou
+  inversement). Le catalogue `dev` créé par une installation antérieure à
+  l'isolation avait `allowedLocations: ["s3://parus-lakehouse"]` (bucket
+  entier) — tout nouveau catalogue sous ce bucket était donc rejeté. Correctifs :
+  - `setup.sh` crée désormais le catalogue par défaut avec
+    `allowedLocations: ["s3://<bucket>/<catalogue>"]` (sous-répertoire isolé) ;
+  - l'application (`lib/polaris.ts`) crée les nouveaux catalogues avec
+    `allowedLocations` restreint au sous-répertoire ;
+  - `ensureDefaultCatalogIsolated()` corrige automatiquement le catalogue
+    par défaut existant via l'API Management (`PUT /catalogs/dev`) au premier
+    appel de création — **le body PUT doit contenir `currentEntityVersion`**
+    (champ `entityVersion` de la réponse GET), sinon Polaris rejette la mise
+    à jour silencieusement ;
+  - le flag `POLARIS_FEATURES_ALLOW_OVERLAPPING_CATALOG_URLS=true` dans
+    `docker-compose.yml` sert de filet de sécurité le temps de la correction
+    (désactive la vérification de chevauchement pour tous les catalogues —
+    à retirer une fois tous les catalogues isolés).
 
 ## Notes opérationnelles
 

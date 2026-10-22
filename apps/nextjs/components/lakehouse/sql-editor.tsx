@@ -1,9 +1,11 @@
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useSyncExternalStore } from "react";
+import { useTheme } from "next-themes";
 
-// Éditeur SQL avec coloration syntaxique (charte : code sur fond charbon,
-// mots-clés en jaune), numérotation des lignes et onglets gérés par le parent.
+// Éditeur SQL avec coloration syntaxique (charte : code sur fond charbon en
+// thème sombre, fond clair en thème clair), numérotation des lignes et onglets
+// gérés par le parent.
 
 const KEYWORDS = new Set([
   "select", "from", "where", "group", "by", "order", "having", "limit",
@@ -47,14 +49,38 @@ function tokenize(sql: string): Token[] {
   return tokens;
 }
 
-const KIND_CLASS: Record<Token["kind"], string> = {
-  kw: "text-jaune",
-  str: "text-olive",
-  num: "text-bleu",
-  com: "text-blanc/40",
-  id: "text-blanc/90",
-  op: "text-blanc/70",
-};
+// Hydratation : résolu côté client uniquement (next-themes lit le DOM).
+function useIsHydrated(): boolean {
+  return useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
+}
+
+// Classes de tokens selon le thème effectif (clair/sombre).
+function kindClass(kind: Token["kind"], dark: boolean): string {
+  if (dark) {
+    const darkMap: Record<Token["kind"], string> = {
+      kw: "text-jaune",
+      str: "text-olive",
+      num: "text-bleu",
+      com: "text-blanc/40",
+      id: "text-blanc/90",
+      op: "text-blanc/70",
+    };
+    return darkMap[kind];
+  }
+  const lightMap: Record<Token["kind"], string> = {
+    kw: "text-bleu",
+    str: "text-olive",
+    num: "text-[#B23A48]",
+    com: "text-muted-foreground",
+    id: "text-foreground",
+    op: "text-cendre",
+  };
+  return lightMap[kind];
+}
 
 export function SqlEditor({
   value,
@@ -71,12 +97,26 @@ export function SqlEditor({
   const lineCount = value.split("\n").length;
   const preRef = useRef<HTMLPreElement>(null);
   const gutterRef = useRef<HTMLDivElement>(null);
+  const { resolvedTheme } = useTheme();
+  const mounted = useIsHydrated();
+  // Thème sombre par défaut côté serveur (évite le flash), ajusté après hydratation.
+  const dark = mounted ? resolvedTheme !== "light" : true;
 
   return (
-    <div className="relative flex h-72 overflow-hidden rounded-2xl border border-white/10 bg-charbon font-mono text-sm shadow-[0_30px_60px_-20px_rgba(26,26,26,0.5)]">
+    <div
+      className={
+        dark
+          ? "relative flex h-72 overflow-hidden rounded-2xl border border-white/10 bg-charbon font-mono text-sm shadow-[0_30px_60px_-20px_rgba(26,26,26,0.5)]"
+          : "relative flex h-72 overflow-hidden rounded-2xl border border-border bg-[#fafafa] font-mono text-sm shadow-[0_30px_60px_-20px_rgba(26,26,26,0.15)]"
+      }
+    >
       {/* Gutter numérotation des lignes */}
       <div
-        className="w-12 shrink-0 select-none overflow-hidden border-r border-white/10 bg-black/30 py-4 text-right text-blanc/40"
+        className={
+          dark
+            ? "w-12 shrink-0 select-none overflow-hidden border-r border-white/10 bg-black/30 py-4 text-right text-blanc/40"
+            : "w-12 shrink-0 select-none overflow-hidden border-r border-border bg-muted/50 py-4 text-right text-muted-foreground"
+        }
         aria-hidden
       >
         <div ref={gutterRef} className="px-2 leading-6">
@@ -93,7 +133,7 @@ export function SqlEditor({
         >
           <code>
             {tokens.map((token, i) => (
-              <span key={i} className={KIND_CLASS[token.kind]}>
+              <span key={i} className={kindClass(token.kind, dark)}>
                 {token.text}
               </span>
             ))}
@@ -122,7 +162,11 @@ export function SqlEditor({
           spellCheck={false}
           disabled={disabled}
           aria-label="Éditeur SQL"
-          className="absolute inset-0 h-full w-full resize-none overflow-auto bg-transparent p-4 leading-6 whitespace-pre-wrap text-transparent caret-jaune outline-none selection:bg-jaune/30"
+          className={
+            dark
+              ? "absolute inset-0 h-full w-full resize-none overflow-auto bg-transparent p-4 leading-6 whitespace-pre-wrap text-transparent caret-jaune outline-none selection:bg-jaune/30"
+              : "absolute inset-0 h-full w-full resize-none overflow-auto bg-transparent p-4 leading-6 whitespace-pre-wrap text-transparent caret-charbon outline-none selection:bg-jaune/40"
+          }
           onScroll={(e) => {
             const { scrollTop, scrollLeft } = e.currentTarget;
             if (preRef.current) {

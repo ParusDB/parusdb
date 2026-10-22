@@ -250,7 +250,7 @@ export function SidebarContent({ session }: { session: SidebarProps }) {
                       key={c.id}
                       href={`/chat/${c.id}`}
                       icon={<MessageSquare className="h-4 w-4" strokeWidth={1.6} />}
-                      label={c.title ?? "Conversation"}
+                      label={c.title ?? `Chat ${c.id.slice(0, 8)}`}
                       exact
                       className="py-1.5 text-[13px]"
                     />

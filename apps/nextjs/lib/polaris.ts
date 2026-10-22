@@ -18,6 +18,8 @@ export interface PolarisCatalog {
   type?: string;
   properties?: Record<string, string>;
   storageConfigInfo?: Record<string, unknown>;
+  /** Version de l'entité (persistance) — requise pour le PUT (currentEntityVersion). */
+  entityVersion?: number;
 }
 
 let cachedToken: { token: string; expiresAt: number } | null = null;
@@ -100,27 +102,34 @@ export async function listCatalogs(): Promise<PolarisCatalog[]> {
 export async function getCatalog(
   name: string,
 ): Promise<PolarisCatalog | null> {
-  const res = await management<PolarisCatalog>(`/catalogs/${encodeURIComponent(name)}`);
-  return res.ok ? res.data : null;
+  // Spec 1.8.0 : GET /catalogs/{name} retourne {catalog: {...}} (enveloppe).
+  const res = await management<{ catalog?: PolarisCatalog }>(
+    `/catalogs/${encodeURIComponent(name)}`,
+  );
+  return res.ok ? (res.data?.catalog ?? null) : null;
 }
 
 // Crée un catalogue interne (même payload que apps/polaris/setup.sh :
 // base location dédiée sous le bucket lakehouse, purge au DROP autorisée).
+// allowedLocations est restreint au sous-répertoire du catalogue pour éviter
+// tout chevauchement avec les autres catalogues (Polaris rejette la création
+// si une location est préfixe d'une autre).
 export async function createCatalog(
   name: string,
 ): Promise<{ ok: boolean; error?: string }> {
+  const baseLocation = `s3://${S3_BUCKET}/${name}`;
   const payload = {
     catalog: {
       name,
       type: "INTERNAL",
       readOnly: false,
       properties: {
-        "default-base-location": `s3://${S3_BUCKET}/${name}`,
+        "default-base-location": baseLocation,
         "polaris.config.drop-with-purge.enabled": "true",
       },
       storageConfigInfo: {
         storageType: "S3",
-        allowedLocations: [`s3://${S3_BUCKET}`],
+        allowedLocations: [baseLocation],
         endpoint: S3_ENDPOINT,
         endpointInternal: S3_ENDPOINT,
         pathStyleAccess: true,
@@ -154,6 +163,97 @@ export async function createCatalog(
     };
   }
   return { ok: true };
+}
+
+// Met à jour la configuration storage d'un catalogue existant (PUT Management
+// API). Utilisé pour corriger le catalogue par défaut créé avec
+// allowedLocations = bucket entier (chevauchement avec les nouveaux
+// catalogues isolés par sous-répertoire).
+// `entityVersion` est OBLIGATOIRE dans le body (champ currentEntityVersion)
+// : sans lui, Polaris rejette la mise à jour silencieusement.
+export async function updateCatalogStorage(
+  name: string,
+  entityVersion: number,
+  allowedLocations: string[],
+): Promise<{ ok: boolean; error?: string }> {
+  const payload = {
+    currentEntityVersion: entityVersion,
+    storageConfigInfo: {
+      storageType: "S3",
+      allowedLocations,
+      endpoint: S3_ENDPOINT,
+      endpointInternal: S3_ENDPOINT,
+      pathStyleAccess: true,
+      region: S3_REGION,
+    },
+  };
+  const res = await management(`/catalogs/${encodeURIComponent(name)}`, {
+    method: "PUT",
+    body: payload,
+  });
+  if (!res.ok) {
+    return {
+      ok: false,
+      error: `La mise à jour du catalogue « ${name} » a échoué (HTTP ${res.status}) : ${res.raw.slice(0, 300)}`,
+    };
+  }
+  return { ok: true };
+}
+
+// Vérifie que le catalogue par défaut a des allowedLocations restreints au
+// sous-répertoire (et non au bucket entier). Si ce n'est pas le cas (install
+// antérieure à l'isolation), le corrige automatiquement via l'API Management
+// (PUT) — sinon tout nouveau catalogue serait rejeté par Polaris
+// (chevauchement de locations, HTTP 400 ValidationException).
+// Le flag n'est posé qu'après succès : un échec permettra un réessai.
+// Retourne { fixed: true } si le catalogue a été corrigé (ou était déjà OK),
+// { fixed: false, error } si la correction a échoué (Polaris injoignable ou
+// API PUT rejetée).
+let defaultCatalogFixed = false;
+export async function ensureDefaultCatalogIsolated(): Promise<{
+  fixed: boolean;
+  error?: string;
+}> {
+  if (defaultCatalogFixed) return { fixed: true };
+  try {
+    const catalog = await getCatalog(DEFAULT_CATALOG);
+    if (!catalog) return { fixed: true }; // Catalogue absent : rien à corriger
+    const locations = (catalog.storageConfigInfo as Record<string, unknown> | undefined)
+      ?.allowedLocations as string[] | undefined;
+    // Si allowedLocations couvre le bucket entier (sans sous-répertoire),
+    // restreindre au sous-répertoire du catalogue par défaut.
+    const bucketRoot = `s3://${S3_BUCKET}`;
+    const needsFix = locations?.some(
+      (l) => l === bucketRoot || l === `${bucketRoot}/`,
+    );
+    if (!needsFix) {
+      defaultCatalogFixed = true;
+      return { fixed: true };
+    }
+    // entityVersion est requis par l'API PUT (currentEntityVersion) —
+    // sans lui, Polaris rejette la mise à jour.
+    if (catalog.entityVersion === undefined) {
+      return {
+        fixed: false,
+        error: `entityVersion absent de la réponse GET pour « ${DEFAULT_CATALOG} » — impossible de corriger automatiquement.`,
+      };
+    }
+    const result = await updateCatalogStorage(
+      DEFAULT_CATALOG,
+      catalog.entityVersion,
+      [`s3://${S3_BUCKET}/${DEFAULT_CATALOG}`],
+    );
+    if (!result.ok) {
+      return { fixed: false, error: result.error };
+    }
+    defaultCatalogFixed = true;
+    return { fixed: true };
+  } catch (error) {
+    return {
+      fixed: false,
+      error: error instanceof Error ? error.message : "Erreur inattendue",
+    };
+  }
 }
 
 // Suppression d'un catalogue — spec 1.8.0 : DELETE /management/v1/catalogs/{name},

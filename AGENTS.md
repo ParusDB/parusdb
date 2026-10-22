@@ -250,6 +250,9 @@ l'app.
 - **Multi-schémas PostgREST** : les accès passent par `supabase.schema('<schéma>')`
   (en-têtes `Accept-Profile`/`Content-Profile`) ; les schémas doivent être listés
   dans `PGRST_DB_SCHEMAS` (cf. §9), sinon PGRST205 « Could not find the table ».
+  **Jointures cross-schema** : la syntaxe `table(colonnes)` dans un `select()` ne
+  joint pas une table d'un autre schéma exposé — faire deux requêtes séparées
+  (ex. `chat.conversations` → `agents.agents`).
 - **Session et RBAC** : helpers de `lib/session.ts` (`requireSession`,
   `requirePermission` → redirection serveur) ; les Server Actions sont colocalisées
   par feature (`actions.ts`), valident les entrées et `revalidate` explicitement.
@@ -415,6 +418,15 @@ revient en Envoy.
   en 1.8.0** : purger le contenu par `DROP TABLE`/`DROP SCHEMA` Trino (la propriété
   `polaris.config.drop-with-purge.enabled` est posée à la création) puis `DELETE`
   du catalogue.
+- **Isolation des `allowedLocations` par catalogue** : chaque catalogue a
+  `allowedLocations: ["s3://<bucket>/<nom>"]` (sous-répertoire isolé). Polaris rejette
+  la création si une location est préfixe d'un catalogue existant (HTTP 400
+  `ValidationException`). Le catalogue par défaut d'une installation antérieure peut
+  avoir `allowedLocations` = bucket entier : l'app corrige automatiquement via
+  `ensureDefaultCatalogIsolated()` (PUT `/catalogs/<nom>` — **le body doit contenir
+  `currentEntityVersion`**, champ `entityVersion` du GET). Le flag
+  `POLARIS_FEATURES_ALLOW_OVERLAPPING_CATALOG_URLS=true` dans le docker-compose Polaris
+  sert de filet de sécurité le temps de la correction.
 - **Bindinds Trino** : un catalogue Polaris = un fichier `catalog/<nom>.properties`
   (`polaris.properties` pour le catalogue par défaut). L'app génère le fichier des
   nouveaux catalogues (`TRINO_CATALOG_DIR`) mais **Trino ne le charge qu'au
@@ -425,7 +437,10 @@ revient en Envoy.
   alimenté à la création pour les rôles ayant la permission `lakehouse`). L'éditeur SQL
   s'exécute sous l'utilisateur Trino unique : le RBAC porte sur la visibilité des
   catalogues et l'accès aux pages, pas sur des rôles Trino distincts (limitation
-  assumée, à documenter dans les PR concernées).
+  assumée, à documenter dans les PR concernées). **Fallback** : la page agent lit
+  `catalog_registry` + `catalog_access` ; si `catalog_access` est vide pour le rôle
+  actif (catalogues créés avant la mise en place de la table), tous les catalogues
+  du registre sont proposés.
 
 ## 11. Chat IA — Ollama + mcp-trino
 
@@ -475,8 +490,14 @@ complet : question métier → exploration du lakehouse → SQL exécuté → r�
 - **Modèles propriétaires** : clés configurées et chiffrées en administration, mais
   l'exécution des conversations n'est pas encore implémentée — les agents doivent
   pointer un modèle Ollama (message d'erreur explicite sinon).
-- **Le premier message** transite par `sessionStorage` depuis « Nouveau chat »
-  (`parus:pending-message:<id>`) : l'agent est scellé avant l'envoi.
+- **Le premier message** transite par **query param** (`?pending=<message>`) depuis
+  « Nouveau chat » : la page RSC `/chat/[id]` lit `searchParams.pending` côté serveur
+  et le passe en prop à `ConversationView`, qui l'envoie au montage. Plus fiable
+  qu'un store mémoire (sessionStorage ou module-level) avec la navigation Next 16
+  (`cacheComponents`). L'agent est scellé avant l'envoi.
+- **Garde anti-double** : le texte final peut arriver par deux canaux (évènement
+  Realtime `done` + filet de sécurité HTTP). `finalize()` vérifie
+  `streamingRef.current` avant d'ajouter le message — un seul canal gagne.
 
 ## 12. ELT — dlt (data load tool)
 

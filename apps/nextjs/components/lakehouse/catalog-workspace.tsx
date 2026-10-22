@@ -88,12 +88,14 @@ export function CatalogWorkspace({
       // stockage illisible : onglets par défaut
     }
     if (restore === null) {
+      const tab: QueryTab = {
+        id: crypto.randomUUID(),
+        title: "Requête 1",
+        sql: "SELECT 1",
+      };
       restore = requestAnimationFrame(() => {
-        setTabs((current) =>
-          current.length > 0
-            ? current
-            : [{ id: crypto.randomUUID(), title: "Requête 1", sql: "SELECT 1" }],
-        );
+        setTabs((current) => (current.length > 0 ? current : [tab]));
+        setActiveId(tab.id);
       });
     }
     return () => {

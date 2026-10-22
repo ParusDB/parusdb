@@ -33,13 +33,31 @@ export default async function EditAgentPage({
       })),
     ),
     session.activeRole
-      ? supabase
-          .schema("lakehouse")
-          .from("catalog_access")
-          .select("catalog_name")
-          .eq("role_id", session.activeRole.id)
-          .order("catalog_name")
-          .then(({ data }) => (data ?? []).map((c: { catalog_name: string }) => c.catalog_name))
+      ? Promise.all([
+          supabase
+            .schema("lakehouse")
+            .from("catalog_registry")
+            .select("catalog_name")
+            .order("catalog_name"),
+          supabase
+            .schema("lakehouse")
+            .from("catalog_access")
+            .select("catalog_name")
+            .eq("role_id", session.activeRole.id),
+        ]).then(([registryRes, accessRes]) => {
+          const all = (registryRes.data ?? []).map(
+            (r: { catalog_name: string }) => r.catalog_name,
+          );
+          const accessRows = accessRes.data ?? [];
+          // Si le rôle a des entrées catalog_access, filtrer ; sinon tous les
+          // catalogues du registre sont accessibles (fallback pour les
+          // catalogues créés avant la mise en place de catalog_access).
+          if (accessRows.length === 0) return all;
+          const allowed = new Set(
+            accessRows.map((r: { catalog_name: string }) => r.catalog_name),
+          );
+          return all.filter((c) => allowed.has(c));
+        })
       : Promise.resolve([]),
   ]);
 

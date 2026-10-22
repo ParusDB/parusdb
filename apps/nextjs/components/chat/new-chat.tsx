@@ -37,12 +37,12 @@ export function NewChat({ agents }: { agents: NewChatAgent[] }) {
     setPending(true);
     try {
       const conversationId = await createConversation(agentId);
-      // Le premier message partira depuis la conversation (agent immuable).
-      sessionStorage.setItem(
-        `parus:pending-message:${conversationId}`,
-        content,
+      // Le premier message transite par l'URL (?pending=) : la page
+      // /chat/[id] le lit côté serveur et le passe à ConversationView.
+      // Plus fiable qu'un store mémoire (pas de risque de module réinstancié).
+      router.push(
+        `/chat/${conversationId}?pending=${encodeURIComponent(content)}`,
       );
-      router.push(`/chat/${conversationId}`);
     } catch (error) {
       setPending(false);
       throw error;
