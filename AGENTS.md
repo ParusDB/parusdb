@@ -424,9 +424,14 @@ revient en Envoy.
   `ValidationException`). Le catalogue par défaut d'une installation antérieure peut
   avoir `allowedLocations` = bucket entier : l'app corrige automatiquement via
   `ensureDefaultCatalogIsolated()` (PUT `/catalogs/<nom>` — **le body doit contenir
-  `currentEntityVersion`**, champ `entityVersion` du GET). Le flag
+  `currentEntityVersion`**, champ `entityVersion` du GET). **`GET /catalogs/<nom>`
+  retourne l'objet catalogue directement** (pas d'enveloppe `{catalog: ...}`, seul le
+  listage enveloppe en `{catalogs: [...]}`) : lire `.catalog` dans la réponse rend la
+  correction silencieusement inopérante (bug corrigé). Le flag
   `POLARIS_FEATURES_ALLOW_OVERLAPPING_CATALOG_URLS=true` dans le docker-compose Polaris
-  sert de filet de sécurité le temps de la correction.
+  sert de filet de sécurité le temps de la correction ; un changement d'`environment`
+  du compose n'est effectif qu'après **recréation** du conteneur (`sh run.sh start`),
+  pas un simple restart.
 - **Bindinds Trino** : un catalogue Polaris = un fichier `catalog/<nom>.properties`
   (`polaris.properties` pour le catalogue par défaut). L'app génère le fichier des
   nouveaux catalogues (`TRINO_CATALOG_DIR`) mais **Trino ne le charge qu'au

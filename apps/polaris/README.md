@@ -103,6 +103,16 @@ et fichiers concernés.
     `docker-compose.yml` sert de filet de sécurité le temps de la correction
     (désactive la vérification de chevauchement pour tous les catalogues —
     à retirer une fois tous les catalogues isolés).
+  - **piège `GET /management/v1/catalogs/<nom>`** : la réponse 1.8.0 est l'objet
+    catalogue **directement**, pas une enveloppe `{catalog: ...}` (seul le listage
+    `GET /catalogs` enveloppe en `{catalogs: [...]}`). Une lecture par `.catalog`
+    renvoie `null` et rend `ensureDefaultCatalogIsolated()` silencieusement
+    inopérante — c'est ce qui a laissé le catalogue `dev` sur le bucket entier
+    (et donc toute création en échec 400) après le commit de correction ;
+  - **le flag du compose n'est effectif qu'après recréation du conteneur**
+    (`sh run.sh start`, pas un simple restart) : sur une installation dont le
+    conteneur datait d'avant l'ajout du flag, la vérification de chevauchement
+    restait active malgré le `docker-compose.yml` à jour.
 
 ## Notes opérationnelles
 

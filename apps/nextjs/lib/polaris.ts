@@ -102,11 +102,16 @@ export async function listCatalogs(): Promise<PolarisCatalog[]> {
 export async function getCatalog(
   name: string,
 ): Promise<PolarisCatalog | null> {
-  // Spec 1.8.0 : GET /catalogs/{name} retourne {catalog: {...}} (enveloppe).
-  const res = await management<{ catalog?: PolarisCatalog }>(
+  // Vérifié sur Polaris 1.8.0 : GET /catalogs/{name} retourne l'objet
+  // catalogue directement (pas d'enveloppe {catalog: ...}). Sans cette
+  // lecture, ensureDefaultCatalogIsolated() voyait « catalogue absent » et
+  // ne corrigeait jamais les allowedLocations du catalogue par défaut.
+  const res = await management<PolarisCatalog | { catalog?: PolarisCatalog }>(
     `/catalogs/${encodeURIComponent(name)}`,
   );
-  return res.ok ? (res.data?.catalog ?? null) : null;
+  if (!res.ok || !res.data) return null;
+  const data = res.data as Record<string, unknown>;
+  return (data.catalog as PolarisCatalog | undefined) ?? data;
 }
 
 // Crée un catalogue interne (même payload que apps/polaris/setup.sh :
