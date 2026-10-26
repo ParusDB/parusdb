@@ -21,7 +21,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MessageBubble } from "@/components/chat/message-bubble";
+import { MessageBubble, MessageContent } from "@/components/chat/message-bubble";
 import { ParusLogo } from "@/components/parus/logo";
 import {
   deleteConversation,
@@ -263,9 +263,12 @@ export function ConversationView({
   }
 
   return (
-    <div className="mx-auto flex h-[calc(100svh-8rem)] max-w-4xl flex-col lg:h-[calc(100svh-4rem)]">
+    // Pleine largeur du viewport : les marges négatives annulent le padding
+    // horizontal du <main> du shell, pour que la barre de défilement soit
+    // collée au bord droit de l'écran.
+    <div className="-mx-4 flex h-[calc(100svh-8rem)] flex-col sm:-mx-8 lg:h-[calc(100svh-4rem)]">
       {/* En-tête conversation */}
-      <div className="flex items-center gap-3 border-b border-border pb-4">
+      <div className="mx-auto flex w-full max-w-4xl items-center gap-3 border-b border-border pb-4">
         <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-charbon text-jaune">
           <Bot className="h-5 w-5" strokeWidth={1.6} />
         </span>
@@ -308,10 +311,13 @@ export function ConversationView({
         </DropdownMenu>
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 space-y-4 overflow-y-auto py-6 pr-1">
+      {/* Messages : zone de défilement pleine largeur — la barre verticale
+          reste au bord droit de l'écran ; seul le contenu est contraint à la
+          largeur de lecture. */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col gap-4 py-6">
         {messages.length === 0 && !streaming ? (
-          <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
+          <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
             <ParusLogo />
             <p className="text-sm text-muted-foreground">
               Posez votre première question à {conversation.agentName}.
@@ -341,7 +347,7 @@ export function ConversationView({
                 <p className="mono text-xs text-jaune">{status}</p>
               ) : null}
               {streamText ? (
-                <div className="text-sm whitespace-pre-wrap">{streamText}</div>
+                <MessageContent content={streamText} tone="assistant" />
               ) : !status ? (
                 <span className="mono text-xs text-blanc/60">…</span>
               ) : null}
@@ -349,10 +355,11 @@ export function ConversationView({
           </div>
         ) : null}
         <div ref={bottomRef} />
+        </div>
       </div>
 
       {/* Composer */}
-      <div className="border-t border-border pt-4">
+      <div className="mx-auto w-full max-w-4xl border-t border-border pt-4">
         <div className="flex items-end gap-2">
           <Textarea
             value={input}

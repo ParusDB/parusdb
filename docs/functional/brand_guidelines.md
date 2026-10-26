@@ -527,6 +527,34 @@ en `text-jaune`.
 </div>
 ```
 
+**Réponses agent en markdown** (chat) : le contenu de l'agent est rendu en markdown complet —
+titres en `font-display` à taille contenue dans une bulle (`text-lg` max), listes à puces,
+gras, code inline `mono` jaune sur `bg-white/10`, tableaux à filets `white/10`, citations à
+filet jaune. Les blocs de code passent à la ligne automatiquement (`whitespace-pre-wrap
+break-words`) : jamais de défilement horizontal dans une bulle. Chaque bloc porte le label du
+langage et un bouton « Copier ».
+
+**Coloration syntaxique** (blocs de code du chat, fond charbon) : palette highlight.js,
+définie dans `globals.css` (classes `.hljs-*`) — jamais de hex en dur dans les composants :
+
+```tsx
+<div className="overflow-hidden rounded-lg border border-white/10 bg-black/40">
+  <span className="mono text-[10px] uppercase tracking-[0.2em] text-blanc/50">python</span>
+  <code className="mono block whitespace-pre-wrap break-words text-sm leading-relaxed">…</code>
+</div>
+```
+
+| Élément | Couleur |
+|---|---|
+| Mots-clés, littéraux | `#C678DD` |
+| Chaînes de caractères | `#98C379` |
+| Nombres, métadonnées | `#D19A66` |
+| Fonctions, titres | `#61AFEF` |
+| Classes, types, built-ins | jaune `#FFD700` |
+| Attributs, variables | `#E06C75` |
+| Commentaires | `#8B9199` italique |
+| Code sans langage identifié | jaune mono (défaut charte) |
+
 **Bloc terminal / code** :
 
 ```tsx

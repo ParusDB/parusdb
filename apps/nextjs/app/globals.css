@@ -159,3 +159,62 @@
 @utility text-balance {
   text-wrap: balance;
 }
+
+/* Coloration syntaxique des blocs de code (highlight.js, branché via
+   rehype-highlight dans le rendu markdown du chat). Palette inspirée de
+   One Dark, adaptée au fond charbon des bulles agent ; les noms de classes
+   et types reprennent le jaune de marque. Ces valeurs vivent ici, dans la
+   feuille de tokens — jamais en dur dans les composants (charte §8). */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-doctag {
+  color: #c678dd;
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-addition {
+  color: #98c379;
+}
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-meta,
+.hljs-link {
+  color: #d19a66;
+}
+.hljs-title,
+.hljs-title.function_,
+.hljs-section {
+  color: #61afef;
+}
+.hljs-title.class_,
+.hljs-type,
+.hljs-built_in,
+.hljs-selector-class,
+.hljs-selector-id,
+.hljs-selector-attr {
+  color: var(--jaune);
+}
+.hljs-attr,
+.hljs-attribute,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-property,
+.hljs-name {
+  color: #e06c75;
+}
+.hljs-comment,
+.hljs-quote {
+  color: #8b9199;
+  font-style: italic;
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: 600;
+}
+.hljs-deletion {
+  color: #e06c75;
+}

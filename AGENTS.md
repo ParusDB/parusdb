@@ -503,6 +503,15 @@ complet : question métier → exploration du lakehouse → SQL exécuté → r�
 - **Garde anti-double** : le texte final peut arriver par deux canaux (évènement
   Realtime `done` + filet de sécurité HTTP). `finalize()` vérifie
   `streamingRef.current` avant d'ajouter le message — un seul canal gagne.
+- **Rendu des messages agent** (`components/chat/message-bubble.tsx`) : markdown
+  complet via `react-markdown` + `remark-gfm`, coloration syntaxique par
+  `rehype-highlight` (palette `.hljs-*` dans `globals.css`, classes/types en
+  jaune — charte §8.2), retour à la ligne automatique dans les blocs de code
+  (jamais de défilement horizontal dans une bulle), label du langage + bouton
+  « Copier ». Le même rendu s'applique au texte en cours de streaming. La liste
+  des messages défile sur toute la largeur du viewport — barre verticale au
+  bord droit de l'écran (marges négatives annulant le padding du `<main>`),
+  contenu contraint à `max-w-4xl` à l'intérieur.
 
 ## 12. ELT — dlt (data load tool)
 

@@ -326,7 +326,7 @@ L'interface propose une **barre de navigation latérale gauche** avec les sectio
     - Zone de texte descend
     - **Affichage classique** :
         - Messages utilisateur → **à droite**
-        - Messages agent → **à gauche**
+        - Messages agent → **à gauche**, rendus en **markdown** (titres, listes, tableaux, code avec coloration syntaxique)
 
 **Règles** :
 
