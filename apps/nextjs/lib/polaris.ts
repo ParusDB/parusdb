@@ -110,8 +110,10 @@ export async function getCatalog(
     `/catalogs/${encodeURIComponent(name)}`,
   );
   if (!res.ok || !res.data) return null;
-  const data = res.data as Record<string, unknown>;
-  return (data.catalog as PolarisCatalog | undefined) ?? data;
+  // Le GET direct retourne l'objet catalogue ; l'enveloppe éventuelle est
+  // portée comme propriété optionnelle pour retomber sur l'objet lui-même.
+  const data = res.data as PolarisCatalog & { catalog?: PolarisCatalog };
+  return data.catalog ?? data;
 }
 
 // Crée un catalogue interne (même payload que apps/polaris/setup.sh :
