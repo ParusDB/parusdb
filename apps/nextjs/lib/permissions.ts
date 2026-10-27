@@ -10,7 +10,6 @@ export const PERMISSIONS = [
   { key: "admin.users", label: "Administration — Utilisateurs" },
   { key: "admin.roles", label: "Administration — Rôles" },
   { key: "admin.providers", label: "Administration — Fournisseurs LLM" },
-  { key: "admin.billing", label: "Administration — Facturation" },
   { key: "support", label: "Support" },
 ] as const;
 

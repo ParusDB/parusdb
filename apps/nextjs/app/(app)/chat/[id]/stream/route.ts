@@ -187,7 +187,7 @@ export async function POST(
     .select("id")
     .single();
 
-  // Requêtes SQL exécutées via mcp-trino : journalisées pour la facturation
+  // Requêtes SQL exécutées via mcp-trino : journalisées pour la traçabilité
   // et l'audit.
   const traces = (metadata.tool_calls as
     | { name: string; query?: string; ok: boolean }[]

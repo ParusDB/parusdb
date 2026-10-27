@@ -32,7 +32,7 @@ afficher** (copie par `sed`/`grep`, pas de copier-coller dans un terminal).
 | Agents IA (CRUD, modèles, sources) | `/agents` | Fonctionnel |
 | Data Lakehouse (catalogues Polaris, éditeur SQL Trino) | `/data-lakehouse` | Fonctionnel |
 | Connecteurs ELT (dlt) | `/connectors` | Fonctionnel — introspection réelle, exécution dlt (apps/dlt), historique des runs |
-| Administration (utilisateurs, rôles, fournisseurs LLM, facturation) | `/admin/*` | Fonctionnel |
+| Administration (utilisateurs, rôles, fournisseurs LLM) | `/admin/*` | Fonctionnel |
 | Support (documentation, tickets) | `/support` | Fonctionnel |
 
 ## Variables d'environnement (`.env.local`)

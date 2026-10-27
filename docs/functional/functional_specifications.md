@@ -84,8 +84,7 @@ L'interface propose une **barre de navigation latérale gauche** avec les sectio
 │ ⚙️ Administration                   │
 │   ├── Utilisateurs                  │
 │   ├── Rôles                         │
-│   ├── Fournisseurs LLM              │
-│   └── Facturation                   │
+│   └── Fournisseurs LLM              │
 │                                     │
 │ 🆘 Support                          │
 └─────────────────────────────────────┘
@@ -504,20 +503,6 @@ formulaire d'agent.
 
 ---
 
-### Facturation
-
-**Métriques affichées** :
-
-- Utilisation du stockage (Go)
-- Nombre de requêtes Trino
-- Temps d'exécution des LLM
-- Nombre de pipelines actifs
-- ...
-
-**Note** : Section en cours de définition (modèle économique à affiner).
-
----
-
 ### 🆘 Support
 
 **Options disponibles** :
@@ -543,7 +528,6 @@ formulaire d'agent.
 
 ### Évolutions Futures
 
-- [ ]  Modèle de facturation à préciser
 - [ ]  Intégration de nouveaux connecteurs
 - [ ]  Fonctionnalités avancées de gouvernance
 

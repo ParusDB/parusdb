@@ -9,8 +9,7 @@ ParusDB est une **plateforme data analytique open source** qui **unifie ELT, Dat
 - **100% Open Source** sous **licence Apache 2.0** : dépôt public sur GitHub — forkez, contribuez, déployez où vous voulez. Aucune dépendance ferme, aucun vendor lock-in.
 - **Auto-hébergement** par défaut : un simple `docker compose up -d` et l'instance est prête **en 5 minutes**.
 - **Souveraineté totale** : vos données restent sous votre contrôle absolu, aucune donnée ne quitte votre infrastructure.
-- **Gratuite** : « Plus de forfaits, plus de limites. Juste du code, des conteneurs, et la liberté de déployer où vous voulez. »
-- Une **offre cloud managée**, **ParusDB Cloud**, est proposée pour se concentrer sur les données sans gérer l'infrastructure.
+- **Libre d'utilisation** : aucune redevance, aucune limite. Juste du code, des conteneurs, et la liberté de déployer où vous voulez.
 
 Une plateforme où l'IA agentique est au cœur de chaque interaction avec les données : **« Vos données, enfin parlantes. »**
 
@@ -97,21 +96,6 @@ Une plateforme où l'IA agentique est au cœur de chaque interaction avec les do
 
 ---
 
-## **☁️ ParusDB Cloud — La solution managée**
-
-« La simplicité du SaaS, la souveraineté en plus. » Pour bénéficier de ParusDB **sans gérer l'infrastructure**, tout en conservant le contrôle et en évitant le vendor lock-in :
-
-| **Pilier** | **Détail** |
-| --- | --- |
-| **Déploiement instantané** | Zéro configuration. Votre environnement est prêt en quelques clics. |
-| **Souveraineté préservée** | Vos données restent sous VOTRE contrôle. Toujours open source, toujours transparent. |
-| **Infrastructure optimisée** | Maintenue et optimisée par nos experts pour des performances maximales. |
-| **Support prioritaire** | Assistance dédiée et formations pour tirer le meilleur de ParusDB. |
-
-**Migration facile vers le self-hosting à tout moment.** Contact : « Demander une démo », « Discuter avec un expert ».
-
----
-
 ## **✨ Avantages Clés**
 
 | **Bénéfice** | **Détail** |
@@ -121,16 +105,7 @@ Une plateforme où l'IA agentique est au cœur de chaque interaction avec les do
 | **Déploiement en minutes** | `docker compose up -d`, instance prête en 5 minutes — « pas en mois ». |
 | **Accessibilité** | Interface utilisable sans écrire de code une fois installée ; bases Docker/serveur suffisantes pour déployer. |
 | **Sécurité & RGPD** | Chiffrement au repos et en transit, RBAC, permissions granulaires. |
-| **Zéro vendor lock-in** | « Aucune dépendance ferme » ; migration facile du cloud vers le self-hosting. |
-
----
-
-## **💰 Modèle Économique**
-
-- **Open Source (offre principale)** : **gratuit**, sans forfaits ni limites, sous **licence ELv2**, décrite sur la landing comme une licence open source permissive permettant une utilisation libre tout en protégeant contre certains brevets.
-    - *Statut indiqué sur la landing : « La version open source arrive bientôt » (prochaine release).*
-- **ParusDB Cloud** : offre **managée** (voir section dédiée) ; tarification non publiée sur la landing, contact via « Demander une démo » / « Discuter avec un expert ».
-- **Offre entreprise** : contrats de **support et d'accompagnement** — assistance dédiée, formations, fonctionnalités spécifiques.
+| **Zéro vendor lock-in** | « Aucune dépendance ferme » ; vos données restent déplacées librement. |
 
 ---
 
@@ -146,7 +121,7 @@ Une plateforme où l'IA agentique est au cœur de chaque interaction avec les do
 | Code source transparent et modifiable | Oui | — |
 | Pas de vendor lock-in | Oui | — |
 | Communauté et contributions ouvertes | Oui | — |
-| Gratuit et libre (Licence ELv2) | Oui | Payant |
+| Libre d'utilisation (Licence Apache 2.0) | Oui | Payant |
 | RBAC & rôles multi-actifs | Oui | Partiel |
 | Déploiement en minutes, pas en mois | Oui | — |
 
@@ -155,7 +130,7 @@ Une plateforme où l'IA agentique est au cœur de chaque interaction avec les do
 ## **🚀 Cas d'Usage**
 
 - **Commercial** : *« Quel est mon panier moyen par région ? »* — réponse sourcée : chiffres par région, évolutions, segment moteur.
-- **Support** : *« Quels sont les tickets récurrents ce mois-ci ? »* — clusters détectés (facturation, livraison, authentification) et évolutions.
+- **Support** : *« Quels sont les tickets récurrents ce mois-ci ? »* — clusters détectés (livraison, authentification, retour produit) et évolutions.
 - **Direction** : *« Résume-moi les tendances de mon marché. »* — synthèse stratégique : dynamiques du marché et mouvements concurrents.
 - **Développeur** : *« Comment puis-je contribuer au projet ? »* — forkez le dépôt, créez une branche, soumettez une PR. Tous les contributeurs sont les bienvenus.
 
@@ -163,8 +138,7 @@ Une plateforme où l'IA agentique est au cœur de chaque interaction avec les do
 
 ## **🔗 Liens & Ressources**
 
-- **GitHub** : https://github.com/ParusDB/parusdb (dépôt public, licence ELv2)
+- **GitHub** : https://github.com/ParusDB/parusdb (dépôt public, licence Apache 2.0)
 - **Ressources** : Documentation, Guides, Changelog (en construction)
 - **Communauté** : Contribuer, GitHub Discussions, Contacter
-- **ParusDB Cloud** : Fonctionnalités, Pricing, Demander une démo
-- **Entreprise** : À propos, Support, CGU, Mentions légales
+- **Projet** : À propos, Mentions légales

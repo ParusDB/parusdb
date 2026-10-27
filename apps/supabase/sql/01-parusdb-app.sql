@@ -891,7 +891,7 @@ insert into iam.roles (key, name, description, permissions, is_system) values
    'Accès complet à toutes les fonctionnalités de la plateforme.',
    array[
      'chat', 'agents', 'lakehouse', 'connectors',
-     'admin.users', 'admin.roles', 'admin.providers', 'admin.billing', 'support'
+     'admin.users', 'admin.roles', 'admin.providers', 'support'
    ], true),
   ('technique', 'Profil Technique',
    'Accès au chat, aux agents IA et au Data Lakehouse.',
@@ -939,38 +939,17 @@ order by ur.user_id, ur.granted_at
 on conflict (user_id) do nothing;
 
 -- ---------------------------------------------------------------------------
--- 14. Métriques d'usage (facturation)
+-- 14. Suppression de la facturation (dimension commerciale retirée)
 -- ---------------------------------------------------------------------------
 
--- Agrégats d'usage pour la section Facturation (spec §Administration). La
--- fonction vérifie la permission admin.billing ; sans elle, aucune ligne.
-create or replace function admin.usage_metrics()
-returns table (
-  llm_duration_ms bigint,
-  llm_tokens bigint,
-  trino_queries bigint,
-  active_pipelines bigint,
-  conversations bigint
-)
-language sql
-stable
-security definer
-set search_path = admin, pg_catalog
-as $$
-  select
-    (select coalesce(sum((m.metadata->>'duration_ms')::bigint), 0)
-       from chat.messages m where m.role = 'assistant'),
-    (select coalesce(sum(coalesce((m.metadata->>'prompt_tokens')::bigint, 0)
-                        + coalesce((m.metadata->>'eval_tokens')::bigint, 0)), 0)
-       from chat.messages m where m.role = 'assistant'),
-    (select count(*) from lakehouse.query_history),
-    (select count(*) from connectors.pipelines where status = 'active'),
-    (select count(*) from chat.conversations)
-  where iam.has_permission(auth.uid(), 'admin.billing');
-$$;
+-- La permission admin.billing et la fonction admin.usage_metrics servaient
+-- l'ancienne section Facturation, retirée du produit. Nettoyage idempotent
+-- des installations existantes : purge de la permission dans tous les rôles
+-- (système et personnalisés), puis suppression de la fonction.
+update iam.roles
+   set permissions = array_remove(permissions, 'admin.billing')
+ where 'admin.billing' = any(permissions);
 
-revoke all on function admin.usage_metrics() from public;
-grant execute on function admin.usage_metrics() to authenticated;
-grant execute on function admin.usage_metrics() to service_role;
+drop function if exists admin.usage_metrics();
 
 commit;

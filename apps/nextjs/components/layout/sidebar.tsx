@@ -19,7 +19,6 @@ import {
   Laptop,
   UserRound,
   KeyRound,
-  Receipt,
   PanelLeft,
 } from "lucide-react";
 import { ParusLogo } from "@/components/parus/logo";
@@ -232,7 +231,6 @@ export function SidebarContent({ session }: { session: SidebarProps }) {
     { href: "/admin/users", label: "Utilisateurs", icon: <UserRound className="h-4 w-4" strokeWidth={1.6} />, perm: "admin.users" },
     { href: "/admin/roles", label: "Rôles", icon: <Shield className="h-4 w-4" strokeWidth={1.6} />, perm: "admin.roles" },
     { href: "/admin/providers", label: "Fournisseurs LLM", icon: <KeyRound className="h-4 w-4" strokeWidth={1.6} />, perm: "admin.providers" },
-    { href: "/admin/billing", label: "Facturation", icon: <Receipt className="h-4 w-4" strokeWidth={1.6} />, perm: "admin.billing" },
   ].filter((item) => has(item.perm));
 
   return (

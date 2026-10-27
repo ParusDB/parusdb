@@ -59,7 +59,7 @@ implémentée** (charte « Mésange Charbonnière » : Tailwind v4, tokens, poli
 shell + RBAC (rôles applicatifs, rôle actif), Chat IA fonctionnel (diffusion temps
 réel via Supabase Realtime,
 Ollama + mcp-trino), Agents IA, Data Lakehouse (catalogues Polaris + éditeur SQL
-Trino), Administration (utilisateurs, rôles, fournisseurs LLM, facturation), Support
+Trino), Administration (utilisateurs, rôles, fournisseurs LLM), Support
 (tickets). **Les pipelines ELT sont fonctionnels** (apps/dlt : dlt + destination
 Iceberg/Polaris + conteneur jetable par run, validation e2e source PostgreSQL →
 lakehouse → Trino/LLM, §12). Les tables
