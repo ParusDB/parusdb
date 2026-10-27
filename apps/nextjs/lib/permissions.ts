@@ -10,7 +10,6 @@ export const PERMISSIONS = [
   { key: "admin.users", label: "Administration — Utilisateurs" },
   { key: "admin.roles", label: "Administration — Rôles" },
   { key: "admin.providers", label: "Administration — Fournisseurs LLM" },
-  { key: "support", label: "Support" },
 ] as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[number]["key"];

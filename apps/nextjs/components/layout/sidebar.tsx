@@ -8,7 +8,6 @@ import {
   Bot,
   ChevronDown,
   Database,
-  LifeBuoy,
   LogOut,
   MessageSquare,
   Plug,
@@ -332,13 +331,6 @@ export function SidebarContent({ session }: { session: SidebarProps }) {
                 />
               ))}
             </div>
-          </>
-        ) : null}
-
-        {has("support") ? (
-          <>
-            <div className="mt-auto" />
-            <NavLink href="/support" icon={<LifeBuoy className="h-4 w-4" strokeWidth={1.6} />} label="Support" exact />
           </>
         ) : null}
       </nav>

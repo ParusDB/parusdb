@@ -86,11 +86,8 @@ L'interface propose une **barre de navigation latérale gauche** avec les sectio
 │   ├── Rôles                         │
 │   └── Fournisseurs LLM              │
 │                                     │
-│ 🆘 Support                          │
 └─────────────────────────────────────┘
 ```
-
-**Note** : Le menu Support est positionné en bas du menu.
 
 **Logo** : le logo officiel occupe le haut du menu latéral (plein cadre) et sert de
 bouton « Accueil » (retour au Chat).
@@ -299,7 +296,6 @@ bouton « Accueil » (retour au Chat).
 │  │ ⚙️ Admin    │ │                                                     │
 │  │   ├─ >      │ │                                                     │
 │  │             │ │                                                     │
-│  │ 🆘 Support   │ │                                                     │
 │  └─────────────┘ │                                                     │
 │                 │                                                     │
 └─────────────────┴─────────────────────────────────────────────────────┘
@@ -500,15 +496,6 @@ bouton « Accueil » (retour au Chat).
 
 **Utilisation** : ces sources alimentent le champ « Source du modèle » du
 formulaire d'agent.
-
----
-
-### 🆘 Support
-
-**Options disponibles** :
-
-- 📖 **Documentation** : Lien vers la documentation sur la landing page
-- 🎫 **Contacter le support** : Ouverture d'un ticket
 
 ---
 

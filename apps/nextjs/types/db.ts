@@ -1,5 +1,5 @@
 // Types des lignes métier (schémas PostgreSQL iam / agents / chat /
-// lakehouse / connectors / admin / support). Typage explicite des frontières
+// lakehouse / connectors / admin). Typage explicite des frontières
 // (AGENTS.md §6) — les identifiants techniques restent en anglais.
 
 export interface Role {
@@ -120,15 +120,4 @@ export interface LlmProvider {
   base_url: string | null;
   created_at: string;
   updated_at: string;
-}
-
-export interface Ticket {
-  id: string;
-  owner_id: string;
-  subject: string;
-  message: string;
-  status: "open" | "closed";
-  created_at: string;
-  updated_at: string;
-  owner?: { first_name: string | null; last_name: string | null } | null;
 }

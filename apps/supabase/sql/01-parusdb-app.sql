@@ -11,7 +11,6 @@
 --   lakehouse  — registre des catalogues, accès par rôle, historique SQL
 --   connectors — pipelines ELT (dlt) et leurs exécutions
 --   admin      — fournisseurs LLM externes (clés API chiffrées)
---   support    — tickets support
 --
 -- PostgreSQL reste la source de vérité TRANSACTIONNELLE (config, RBAC,
 -- métadonnées) ; les données analytiques vivent dans le lakehouse (Polaris +
@@ -34,14 +33,13 @@ create schema if not exists chat;
 create schema if not exists lakehouse;
 create schema if not exists connectors;
 create schema if not exists admin;
-create schema if not exists support;
 
 -- Les schémas métier ne sont jamais exposés à l'anonyme ; les requêtes
 -- authentifiées passent par PostgREST (rôle `authenticated`) et sont filtrées
 -- par RLS ci-dessous.
-revoke all on schema iam, agents, chat, lakehouse, connectors, admin, support
+revoke all on schema iam, agents, chat, lakehouse, connectors, admin
   from anon;
-grant usage on schema iam, agents, chat, lakehouse, connectors, admin, support
+grant usage on schema iam, agents, chat, lakehouse, connectors, admin
   to authenticated;
 
 -- ---------------------------------------------------------------------------
@@ -764,43 +762,18 @@ drop table if exists admin.proprietary_models;
 drop table if exists admin.servers;
 
 -- ---------------------------------------------------------------------------
--- 9. support — tickets
+-- 9. Suppression des tickets support (brique Support retirée)
 -- ---------------------------------------------------------------------------
-create table if not exists support.tickets (
-  id uuid primary key default gen_random_uuid(),
-  owner_id uuid not null references auth.users (id) on delete cascade,
-  subject text not null,
-  message text not null,
-  status text not null default 'open' check (status in ('open', 'closed')),
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-create index if not exists tickets_owner_idx on support.tickets (owner_id, created_at desc);
 
-alter table support.tickets enable row level security;
+-- L'ancienne brique Support (page /support, tickets in-app) a été retirée du
+-- produit. Nettoyage idempotent des installations existantes : suppression du
+-- schéma (tables, index, politiques et trigger partent avec lui) et purge de
+-- la permission dans tous les rôles (système et personnalisés).
+drop schema if exists support cascade;
 
-drop policy if exists tickets_select_own_or_admin on support.tickets;
-create policy tickets_select_own_or_admin on support.tickets
-  for select to authenticated
-  using (
-    owner_id = (select auth.uid())
-    or iam.has_permission(auth.uid(), 'admin.users')
-  );
-
-drop policy if exists tickets_insert_own on support.tickets;
-create policy tickets_insert_own on support.tickets
-  for insert to authenticated
-  with check (owner_id = (select auth.uid()));
-
-drop policy if exists tickets_update_admin on support.tickets;
-create policy tickets_update_admin on support.tickets
-  for update to authenticated
-  using (iam.has_permission(auth.uid(), 'admin.users'))
-  with check (iam.has_permission(auth.uid(), 'admin.users'));
-
-drop trigger if exists touch_tickets on support.tickets;
-create trigger touch_tickets before update on support.tickets
-  for each row execute function iam.touch_updated_at();
+update iam.roles
+   set permissions = array_remove(permissions, 'support')
+ where 'support' = any(permissions);
 
 -- ---------------------------------------------------------------------------
 -- 10. Droits fins par table (principe du moindre privilège)
@@ -824,14 +797,12 @@ grant select, insert on lakehouse.query_history to authenticated;
 grant select, insert, update, delete on connectors.pipelines to authenticated;
 grant select, insert on connectors.pipeline_runs to authenticated;
 
-grant select, insert, update, delete on support.tickets to authenticated;
-
 -- Le client administrateur (clé service_role, serveur uniquement) accède à
 -- tout ; il contourne la RLS (BYPASSRLS) mais a besoin des droits.
-grant usage on schema iam, agents, chat, lakehouse, connectors, admin, support
+grant usage on schema iam, agents, chat, lakehouse, connectors, admin
   to service_role;
 grant select, insert, update, delete on all tables in schema
-  iam, agents, chat, lakehouse, connectors, admin, support
+  iam, agents, chat, lakehouse, connectors, admin
   to service_role;
 grant execute on function iam.has_permission(uuid, text) to service_role;
 grant execute on function iam.active_role_id(uuid) to service_role;
@@ -891,14 +862,14 @@ insert into iam.roles (key, name, description, permissions, is_system) values
    'Accès complet à toutes les fonctionnalités de la plateforme.',
    array[
      'chat', 'agents', 'lakehouse', 'connectors',
-     'admin.users', 'admin.roles', 'admin.providers', 'support'
+     'admin.users', 'admin.roles', 'admin.providers'
    ], true),
   ('technique', 'Profil Technique',
    'Accès au chat, aux agents IA et au Data Lakehouse.',
-   array['chat', 'agents', 'lakehouse', 'connectors', 'support'], true),
+   array['chat', 'agents', 'lakehouse', 'connectors'], true),
   ('metier', 'Profil Métier',
    'Accès au chat avec les agents IA autorisés.',
-   array['chat', 'support'], true)
+   array['chat'], true)
 on conflict (key) do update
   set name = excluded.name,
       description = excluded.description,

@@ -59,12 +59,11 @@ implémentée** (charte « Mésange Charbonnière » : Tailwind v4, tokens, poli
 shell + RBAC (rôles applicatifs, rôle actif), Chat IA fonctionnel (diffusion temps
 réel via Supabase Realtime,
 Ollama + mcp-trino), Agents IA, Data Lakehouse (catalogues Polaris + éditeur SQL
-Trino), Administration (utilisateurs, rôles, fournisseurs LLM), Support
-(tickets). **Les pipelines ELT sont fonctionnels** (apps/dlt : dlt + destination
+Trino), Administration (utilisateurs, rôles, fournisseurs LLM). **Les pipelines ELT sont fonctionnels** (apps/dlt : dlt + destination
 Iceberg/Polaris + conteneur jetable par run, validation e2e source PostgreSQL →
 lakehouse → Trino/LLM, §12). Les tables
 applicatives vivent dans les schémas métier PostgreSQL (`iam`, `agents`, `chat`,
-`lakehouse`, `connectors`, `admin`, `support` — `apps/supabase/sql/01-parusdb-app.sql`,
+`lakehouse`, `connectors`, `admin` — `apps/supabase/sql/01-parusdb-app.sql`,
 RLS partout).
 
 **Ordre de construction décidé (feuille de route) :**
@@ -105,7 +104,7 @@ parusdb/
 │   ├── sql/01-dlt-role.sql      # Rôle PostgreSQL parus_dlt (moindre privilège)
 │   └── demo/                    # Source PostgreSQL bidon + seed (validation e2e)
 ├── apps/nextjs/                  # Application Next.js 16 (App Router) — frontend + BFF (voir son README.md)
-│   ├── app/                      # Routes : auth/ (public) + (app)/ (protégé : chat, agents, data-lakehouse, connectors, admin, support)
+│   ├── app/                      # Routes : auth/ (public) + (app)/ (protégé : chat, agents, data-lakehouse, connectors, admin)
 │   ├── components/               # Composants applicatifs (un dossier par feature) + ui/ (shadcn, ne pas éditer à la main)
 │   ├── lib/                      # Clients : supabase/ (SSR + admin service_role), session.ts, trino.ts (trino-js-client), polaris.ts, ollama.ts, mcp.ts, agent-runner.ts, crypto.ts, lakehouse.ts, sources.ts
 │   ├── types/db.ts               # Types des lignes métier (frontières typées)
@@ -236,7 +235,7 @@ l'app.
 - **Server Actions** pour les mutations ; valider les entrées ; rediriger/`revalidate`
   explicitement après mutation.
 - Nouvelles routes : dossiers cohérents avec la nav de la spec (`chat`, `agents`,
-  `data-lakehouse`, `connectors`, `admin`, `support` — noms anglais dans le code, libellés
+  `data-lakehouse`, `connectors`, `admin` — noms anglais dans le code, libellés
   français dans l'UI).
 - `metadata` en français, titre de référence : « ParusDB — Plateforme Data Analytique
   IAgentique Open Source » ; `lang="fr"` sur `<html>`.
@@ -354,7 +353,7 @@ revient en Envoy.
   idempotent (init du stack dans `apps/supabase/volumes/db/` ou migration dédiée). Jamais de
   modification manuelle via Studio sans fichier SQL commité. Le schéma applicatif ParusDB
   vit dans `apps/supabase/sql/01-parusdb-app.sql` (schémas `iam`, `agents`, `chat`,
-  `lakehouse`, `connectors`, `admin`, `support`) : à appliquer sur une base déjà
+  `lakehouse`, `connectors`, `admin`) : à appliquer sur une base déjà
   initialisée avec la commande du §5, relançable sans risque.
 - **Exposition PostgREST des schémas métier** : chaque schéma consulté par le frontend
   doit être ajouté à `PGRST_DB_SCHEMAS` dans `apps/supabase/.env` puis le conteneur

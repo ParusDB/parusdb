@@ -33,7 +33,6 @@ afficher** (copie par `sed`/`grep`, pas de copier-coller dans un terminal).
 | Data Lakehouse (catalogues Polaris, éditeur SQL Trino) | `/data-lakehouse` | Fonctionnel |
 | Connecteurs ELT (dlt) | `/connectors` | Fonctionnel — introspection réelle, exécution dlt (apps/dlt), historique des runs |
 | Administration (utilisateurs, rôles, fournisseurs LLM) | `/admin/*` | Fonctionnel |
-| Support (documentation, tickets) | `/support` | Fonctionnel |
 
 ## Variables d'environnement (`.env.local`)
 
@@ -51,7 +50,6 @@ afficher** (copie par `sed`/`grep`, pas de copier-coller dans un terminal).
 | `POLARIS_API_URL` / `POLARIS_REALM` / `POLARIS_ROOT_CLIENT_ID` / `POLARIS_ROOT_CLIENT_SECRET` | API Management Polaris (secret importé de `apps/polaris/.env`) |
 | `POLARIS_DEFAULT_CATALOG` / `POLARIS_S3_BUCKET` / `POLARIS_S3_ENDPOINT` / `POLARIS_S3_REGION` | Catalogue par défaut et stockage (RustFS) |
 | `PARUSDB_DLT_IMAGE` / `PARUSDB_DLT_NETWORK` | Runner dlt pour le « Test connexion » du wizard (introspection en conteneur jetable) — image construite par `apps/dlt` |
-| `PARUSDB_DOC_URL` | Lien documentation du menu Support |
 
 ## Architecture applicative
 
@@ -66,7 +64,7 @@ afficher** (copie par `sed`/`grep`, pas de copier-coller dans un terminal).
   déconnecter. Les permissions filtrent la navigation ET l'accès serveur
   (`lib/session.ts` : `requirePermission`).
 - **Schémas métier PostgreSQL** : `iam`, `agents`, `chat`, `lakehouse`,
-  `connectors`, `admin`, `support` — DDL versionné et idempotent dans
+  `connectors`, `admin` — DDL versionné et idempotent dans
   `apps/supabase/sql/01-parusdb-app.sql` (RLS partout, TO authenticated +
   prédicat d'appartenance). PostgREST les expose via `PGRST_DB_SCHEMAS` ;
   côté client, `supabase.schema('<schéma>')` envoie `Accept-Profile`.

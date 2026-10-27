@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePermission } from "@/lib/session";
 import { encryptSecret } from "@/lib/crypto";
@@ -385,52 +384,5 @@ export async function deleteProvider(
     return { ok: false, error: `La suppression a échoué : ${error.message}` };
   }
   revalidatePath("/admin/providers");
-  return { ok: true };
-}
-
-// ---------------------------------------------------------------------------
-// Tickets support (spec §Support)
-// ---------------------------------------------------------------------------
-
-export async function createTicket(input: {
-  subject: string;
-  message: string;
-}): Promise<{ ok: boolean; error?: string }> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return { ok: false, error: "Vous devez être connecté." };
-  }
-  if (!input.subject.trim() || !input.message.trim()) {
-    return { ok: false, error: "L'objet et le message sont obligatoires." };
-  }
-  const { error } = await supabase.schema("support").from("tickets").insert({
-    owner_id: user.id,
-    subject: input.subject.trim().slice(0, 200),
-    message: input.message.trim(),
-  });
-  if (error) {
-    return { ok: false, error: `La création du ticket a échoué : ${error.message}` };
-  }
-  revalidatePath("/support");
-  return { ok: true };
-}
-
-export async function closeTicket(
-  id: string,
-): Promise<{ ok: boolean; error?: string }> {
-  await requirePermission("admin.users");
-  const admin = createAdminClient();
-  const { error } = await admin
-    .schema("support")
-    .from("tickets")
-    .update({ status: "closed" })
-    .eq("id", id);
-  if (error) {
-    return { ok: false, error: `La clôture a échoué : ${error.message}` };
-  }
-  revalidatePath("/support");
   return { ok: true };
 }
