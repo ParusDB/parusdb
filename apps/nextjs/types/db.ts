@@ -27,7 +27,9 @@ export interface Agent {
   owner_id: string;
   name: string;
   description: string | null;
-  model_provider: "ollama" | "openai" | "anthropic" | "mistral" | "custom";
+  // 'ollama' (serveur local embarqué) ou l'id d'un fournisseur externe
+  // (admin.providers, cf. LlmProvider).
+  model_provider: string;
   model_id: string;
   system_prompt: string;
   created_at: string;
@@ -109,23 +111,15 @@ export interface PipelineRun {
   finished_at: string | null;
 }
 
-export interface LocalServer {
+// Fournisseur externe de modèles LLM (clé API chiffrée, jamais renvoyée au
+// client). Ollama (local) est embarqué par ParusDB et n'a pas de ligne.
+export interface LlmProvider {
   id: string;
-  kind: "s3" | "llm";
   name: string;
-  server_type: string;
-  url: string;
-  status: "connected" | "disconnected";
-  last_tested_at: string | null;
+  api_kind: "openai" | "anthropic" | "mistral" | "openai_compatible";
+  base_url: string | null;
   created_at: string;
   updated_at: string;
-}
-
-export interface ProprietaryModel {
-  id: string;
-  provider: "openai" | "anthropic" | "mistral" | "custom";
-  model: string;
-  created_at: string;
 }
 
 export interface Ticket {

@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/parus/page-header";
 import { AgentForm } from "@/components/agents/agent-form";
 import { requirePermission } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
-import { listModels } from "@/lib/ollama";
+import { listModelSources } from "@/lib/providers";
 import type { Agent } from "@/types/db";
 
 export default async function EditAgentPage({
@@ -24,14 +24,8 @@ export default async function EditAgentPage({
   ]);
   if (!agent) notFound();
 
-  const [ollamaModels, proprietary, catalogs] = await Promise.all([
-    listModels().then((m) => m.map((x) => x.name)).catch(() => []),
-    supabase.rpc("list_proprietary_models").then(({ data }) =>
-      ((data ?? []) as { provider: string; model: string }[]).map((m) => ({
-        provider: m.provider,
-        model: m.model,
-      })),
-    ),
+  const [modelSources, catalogs] = await Promise.all([
+    listModelSources(),
     session.activeRole
       ? Promise.all([
           supabase
@@ -84,8 +78,7 @@ export default async function EditAgentPage({
             system_prompt: row.system_prompt,
             sources,
           }}
-          ollamaModels={ollamaModels}
-          proprietaryModels={proprietary}
+          modelSources={modelSources}
           catalogs={catalogs}
         />
       </div>

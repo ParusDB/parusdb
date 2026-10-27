@@ -1,15 +1,18 @@
 import { createClient } from "@/lib/supabase/server";
 import { runAgent, generateConversationTitle } from "@/lib/agent-runner";
 import { DEFAULT_MODEL } from "@/lib/ollama";
+import { createOllamaBackend, type LlmBackend } from "@/lib/llm";
+import { resolveProviderBackend } from "@/lib/providers";
 import { NextResponse } from "next/server";
 
-// Génération de la réponse d'un agent. Le BFF orchestre Ollama (function
-// calling) et mcp-trino (lecture seule), persiste les messages dans
-// PostgreSQL (schéma `chat`) et diffuse la progression en temps réel via
-// **Supabase Realtime** : une ligne `chat.stream_events` par évènement
-// (statut, outil, fragment de réponse, fin), que le navigateur reçoit par
-// abonnement postgres_changes. Le client ne dépend pas du corps de la
-// réponse HTTP : il s'abonne AVANT d'appeler cette route.
+// Génération de la réponse d'un agent. Le BFF orchestre le LLM configuré
+// (Ollama local ou fournisseur par clé API, function calling) et mcp-trino
+// (lecture seule), persiste les messages dans PostgreSQL (schéma `chat`) et
+// diffuse la progression en temps réel via **Supabase Realtime** : une ligne
+// `chat.stream_events` par évènement (statut, outil, fragment de réponse,
+// fin), que le navigateur reçoit par abonnement postgres_changes. Le client
+// ne dépend pas du corps de la réponse HTTP : il s'abonne AVANT d'appeler
+// cette route.
 
 interface StreamEventPayload {
   label?: string;
@@ -121,15 +124,29 @@ export async function POST(
   let answer = "";
   let metadata: Record<string, unknown> = {};
   let errorMessage: string | null = null;
+  let modelLabel = agent.model_id;
 
   try {
-    if (agent.model_provider !== "ollama") {
-      throw new Error(
-        "Ce dialogue requiert l'exécution d'un modèle propriétaire, non prise en charge dans cette version. Configurez un modèle Ollama pour cet agent.",
-      );
+    // Source du modèle : Ollama (local) ou fournisseur par clé API
+    // (/admin/providers) — la clé est déchiffrée côté serveur uniquement.
+    // L'API reçoit l'identifiant de modèle nu ; le nom du fournisseur ne
+    // sert qu'au libellé de traçabilité.
+    let backend: LlmBackend;
+    let model: string;
+    if (agent.model_provider === "ollama") {
+      backend = createOllamaBackend();
+      model = agent.model_id || DEFAULT_MODEL;
+      modelLabel = model;
+    } else {
+      const provider = await resolveProviderBackend(agent.model_provider);
+      backend = provider.backend;
+      model = agent.model_id;
+      modelLabel = `${provider.name}/${agent.model_id}`;
     }
     const result = await runAgent({
-      model: agent.model_id || DEFAULT_MODEL,
+      model,
+      modelLabel,
+      backend,
       agentSystemPrompt: agent.system_prompt,
       history,
       userMessage: content,
@@ -158,7 +175,7 @@ export async function POST(
       error instanceof Error ? error.message : "Erreur inattendue de l'agent.";
     await emit("error", { message: errorMessage });
     answer = `La réponse a échoué : ${errorMessage}`;
-    metadata = { model: agent.model_id, error: errorMessage };
+    metadata = { model: modelLabel, error: errorMessage };
   }
 
   // Persistance du message assistant (traçabilité sans fuite de secrets,
@@ -188,11 +205,20 @@ export async function POST(
   // Titre généré par l'IA à partir des 2 premiers échanges.
   let newTitle: string | null = conversation.title;
   if (!conversation.title) {
-    newTitle = await generateConversationTitle({
-      model: agent.model_id || DEFAULT_MODEL,
-      question: content,
-      answer,
-    });
+    try {
+      const provider =
+        agent.model_provider === "ollama"
+          ? null
+          : await resolveProviderBackend(agent.model_provider);
+      newTitle = await generateConversationTitle({
+        model: agent.model_id || DEFAULT_MODEL,
+        backend: provider ? provider.backend : createOllamaBackend(),
+        question: content,
+        answer,
+      });
+    } catch {
+      newTitle = content.replace(/\s+/g, " ").trim().slice(0, 48);
+    }
     await supabase
       .schema("chat")
       .from("conversations")

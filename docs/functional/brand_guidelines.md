@@ -676,7 +676,7 @@ Assets applicatifs (dans `apps/nextjs/`) :
 
 | Fichier | Usage |
 | --- | --- |
-| `public/parusdb-logo.jpg` | Logo officiel — JPEG à fond blanc, marges rognées (1224×398) |
+| `public/parusdb-logo.jpg` | Logo officiel — JPEG à fond blanc (1340×423), asset d'origine jamais retouché par le code |
 | `app/favicon.ico` | Favicon de l'application (convention Next.js des metadata files) |
 
 Une variante transparente (artwork clair, fond PNG alpha) pourra être ajoutée si un

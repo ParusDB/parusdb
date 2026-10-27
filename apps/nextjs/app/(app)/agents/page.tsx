@@ -4,6 +4,7 @@ export const instant = false;
 import { PageHeader } from "@/components/parus/page-header";
 import { requirePermission } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
+import { fetchProviderLabels, providerLabel } from "@/lib/providers";
 import { AgentsGrid } from "@/components/agents/agents-grid";
 import { Plus } from "lucide-react";
 import Link from "next/link";
@@ -13,13 +14,14 @@ import type { Agent } from "@/types/db";
 export default async function AgentsPage() {
   const session = await requirePermission("agents");
   const supabase = await createClient();
-  const [{ data: agents }, { data: sources }] = await Promise.all([
+  const [{ data: agents }, { data: sources }, providerLabels] = await Promise.all([
     supabase
       .schema("agents")
       .from("agents")
       .select("id, owner_id, name, description, model_provider, model_id, system_prompt, created_at, updated_at")
       .order("created_at", { ascending: false }),
     supabase.schema("agents").from("agent_sources").select("agent_id, source_name"),
+    fetchProviderLabels(supabase).catch(() => new Map<string, string>()),
   ]);
 
   const rows = (agents ?? []) as unknown as Agent[];
@@ -49,7 +51,7 @@ export default async function AgentsPage() {
           id: a.id,
           name: a.name,
           description: a.description,
-          provider: a.model_provider,
+          provider: providerLabel(a.model_provider, providerLabels),
           model: a.model_id,
           sources: sourceMap.get(a.id) ?? [],
           isOwner: a.owner_id === session.userId,

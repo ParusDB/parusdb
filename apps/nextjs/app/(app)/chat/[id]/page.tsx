@@ -4,6 +4,7 @@ export const instant = false;
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
+import { fetchProviderLabels, providerLabel } from "@/lib/providers";
 import { ConversationView } from "@/components/chat/conversation-view";
 import type { Conversation, Message } from "@/types/db";
 
@@ -46,6 +47,10 @@ export default async function ConversationPage({
     .order("created_at", { ascending: true })
     .limit(200);
 
+  const providerLabels = await fetchProviderLabels(supabase).catch(
+    () => new Map<string, string>(),
+  );
+
   const conv = conversation as unknown as Conversation;
 
   return (
@@ -55,7 +60,10 @@ export default async function ConversationPage({
         title: conv.title,
         agentId: conv.agent_id,
         agentName: (agent as { name?: string } | null)?.name ?? "Agent IA",
-        model: `${(agent as { model_provider?: string } | null)?.model_provider ?? "ollama"}/${(agent as { model_id?: string } | null)?.model_id ?? ""}`,
+        model: `${providerLabel(
+          (agent as { model_provider?: string } | null)?.model_provider,
+          providerLabels,
+        )}/${(agent as { model_id?: string } | null)?.model_id ?? ""}`,
       }}
       initialMessages={(messages ?? []) as unknown as Message[]}
       pendingMessage={pending ?? null}

@@ -5,20 +5,14 @@ import { PageHeader } from "@/components/parus/page-header";
 import { AgentForm } from "@/components/agents/agent-form";
 import { requirePermission } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
-import { listModels } from "@/lib/ollama";
+import { listModelSources } from "@/lib/providers";
 
 export default async function NewAgentPage() {
   const session = await requirePermission("agents");
   const supabase = await createClient();
 
-  const [ollamaModels, proprietary, catalogs] = await Promise.all([
-    listModels().then((m) => m.map((x) => x.name)).catch(() => []),
-    supabase.rpc("list_proprietary_models").then(({ data }) =>
-      ((data ?? []) as { provider: string; model: string }[]).map((m) => ({
-        provider: m.provider,
-        model: m.model,
-      })),
-    ),
+  const [modelSources, catalogs] = await Promise.all([
+    listModelSources(),
     session.activeRole
       ? supabase
           .schema("lakehouse")
@@ -38,11 +32,7 @@ export default async function NewAgentPage() {
         description="Nom, modèle LLM, prompt système et sources : tout est stocké côté serveur, les prompts sont des données."
       />
       <div className="rounded-3xl border border-border bg-card p-6 sm:p-8">
-        <AgentForm
-          ollamaModels={ollamaModels}
-          proprietaryModels={proprietary}
-          catalogs={catalogs}
-        />
+        <AgentForm modelSources={modelSources} catalogs={catalogs} />
       </div>
     </div>
   );

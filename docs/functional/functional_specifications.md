@@ -84,7 +84,7 @@ L'interface propose une **barre de navigation latérale gauche** avec les sectio
 │ ⚙️ Administration                   │
 │   ├── Utilisateurs                  │
 │   ├── Rôles                         │
-│   ├── Serveurs locaux               │
+│   ├── Fournisseurs LLM              │
 │   └── Facturation                   │
 │                                     │
 │ 🆘 Support                          │
@@ -244,7 +244,8 @@ bouton « Accueil » (retour au Chat).
 
 - **1 Modèle LLM** obligatoire :
     - **Open Source** : Mistral Medium 3.5, Qwen 3.5, etc. (téléchargeable via Ollama)
-    - **Propriétaire** : Modèles payants (GPT 5.3, Sonnet 4.5) avec clé API (configurée en administration)
+    - **Propriétaire** : Modèles payants (GPT 5.3, Sonnet 4.5) avec clé API (configurée en administration, §Fournisseurs LLM)
+    - La **source du modèle** (Ollama local ou fournisseur par clé API) est choisie dans le formulaire de l'agent
 - **1..N Sources** :
     - Catalogues Data Lakehouse
     - Schémas
@@ -356,7 +357,8 @@ bouton « Accueil » (retour au Chat).
 **Création/Modification** :
 
 - **Nom** : Zone de texte
-- **Modèle LLM** : Liste de sélection (modèles disponibles)
+- **Source du modèle** : Liste de sélection (sources disponibles : Ollama local, fournisseurs par clé API — cf. §Fournisseurs LLM)
+- **Modèle** : Liste de sélection (modèles découverts pour la source choisie)
 - **Description** : Zone de texte
 - **Prompt système** : Zone de texte pour les instructions
 - **Sources de connaissances** : Liste des bases disponibles (filtrée selon les droits du rôle actif)
@@ -464,56 +466,41 @@ bouton « Accueil » (retour au Chat).
 
 ---
 
-### Modèles LLM
+### Fournisseurs LLM
 
-**Deux tableaux distincts** :
+**Écran en deux colonnes** :
 
-**1. Modèles Open Source** :
+**1. Colonne gauche — Fournisseurs** :
 
-| Modèle | Source | Type | Actions |
+| Fournisseur | Type | Modèles | Actions |
 | --- | --- | --- | --- |
-| Mistral Medium 3.5 | Hugging Face | Cloud/Local | Télécharger / Supprimer |
-| Qwen 3.5 | Hugging Face | Cloud/Local | Télécharger / Supprimer |
-- **Types** :
-    - **Cloud** : Hébergé chez Scaleway
-    - **Local** : Sur serveur client (Ollama, Llama.cpp...)
+| Ollama (local) | Local | 3 modèle(s) | (embarqué par ParusDB) |
+| OpenAI | OpenAI | 12 modèle(s) | Modifier / Supprimer |
+| Mistral | Mistral | 6 modèle(s) | Modifier / Supprimer |
 
-**2. Modèles Payants** :
+- **Ollama (local)** : toujours présent (serveur d'inférence embarqué),
+  non supprimable. Le téléchargement et la suppression des modèles se
+  pilotent côté serveur Ollama.
+- **Ajouter une clé API** : bouton → saisie du **nom du fournisseur** et de la
+  **clé API**. Le type d'API (OpenAI, Anthropic, Mistral, compatible
+  OpenAI) est **déduit automatiquement du nom** ; pour un fournisseur
+  inconnu, une **URL de base** est demandée (API compatible OpenAI). La clé
+  est **validée par un appel réel au fournisseur** : aucun enregistrement si
+  elle est rejetée.
+- **Clé API** : chiffrée AES-256-GCM au repos, masquée dans l'interface,
+  jamais renvoyée au navigateur.
 
-| Fournisseur | Modèle | Clé API | Actions |
-| --- | --- | --- | --- |
-| OpenAI | GPT 5.3 | \[Masquée\] | Modifier / Supprimer |
-| Anthropic | Sonnet 4.5 | \[Masquée\] | Modifier / Supprimer |
-- **Ajout** : Bouton sur la première ligne vide → Saisie de la clé API
-- **Nouvelle ligne vide** apparaît après chaque ajout
+**2. Colonne droite — Modèles disponibles** :
 
-**Utilisation** : Ces modèles sont sélectionnables lors de la création d'un agent.
+- Liste des **modèles LLM découverts dynamiquement** pour le fournisseur
+  sélectionné à gauche (API de listing du fournisseur ; `/api/tags` pour
+  Ollama), avec taille pour les modèles locaux.
+- Sélectionner un fournisseur à gauche **filtre les modèles** à droite.
+- Erreur de découverte (clé révoquée, fournisseur injoignable) : message
+  explicite invitant à vérifier la clé via « Modifier ».
 
----
-
-### Serveurs Locaux
-
-**Deux tableaux distincts** :
-
-**1. Serveurs de Fichiers S3** :
-
-| Nom | Type | URL | Statut | Actions |
-| --- | --- | --- | --- | --- |
-| Mon S3 | RustFS | `s3://...` | ✅ Connecté | Test / Modifier / Supprimer |
-| MinIO | MinIO | `s3://...` | ❌ Déconnecté | Test / Modifier / Supprimer |
-
-**2. Serveurs d'Exécution LLM** :
-
-| Nom | Type | URL | Statut | Actions |
-| --- | --- | --- | --- | --- |
-| Mon LLM | Ollama | `http://...` | ✅ Connecté | Test / Modifier / Supprimer |
-| Llama.cpp | Llama.cpp | `http://...` | ❌ Déconnecté | Test / Modifier / Supprimer |
-
-**Création** :
-
-- Saisie des informations de connexion
-- Bouton **"Test"** → Validation de la connexion
-- Bouton **"Enregistrer"** (désactivé tant que le test n'est pas réussi)
+**Utilisation** : ces sources alimentent le champ « Source du modèle » du
+formulaire d'agent.
 
 ---
 

@@ -27,35 +27,20 @@ export interface AgentFormProps {
   initial?: {
     name: string;
     description: string;
-    model_provider: AgentInput["model_provider"];
+    model_provider: string;
     model_id: string;
     system_prompt: string;
     sources: string[];
   };
-  ollamaModels: string[];
-  proprietaryModels: { provider: string; model: string }[];
+  modelSources: { value: string; label: string; models: string[] }[];
   catalogs: string[];
 }
 
-const PROVIDERS: { value: AgentInput["model_provider"]; label: string }[] = [
-  { value: "ollama", label: "Ollama (local)" },
-  { value: "openai", label: "OpenAI (clé API)" },
-  { value: "anthropic", label: "Anthropic (clé API)" },
-  { value: "mistral", label: "Mistral (clé API)" },
-  { value: "custom", label: "Autre / personnalisé" },
-];
-
-export function AgentForm({
-  agentId,
-  initial,
-  ollamaModels,
-  proprietaryModels,
-  catalogs,
-}: AgentFormProps) {
+export function AgentForm({ agentId, initial, modelSources, catalogs }: AgentFormProps) {
   const [name, setName] = useState(initial?.name ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
-  const [provider, setProvider] = useState<AgentInput["model_provider"]>(
-    initial?.model_provider ?? "ollama",
+  const [provider, setProvider] = useState(
+    initial?.model_provider || "ollama",
   );
   const [model, setModel] = useState(initial?.model_id ?? "");
   const [systemPrompt, setSystemPrompt] = useState(initial?.system_prompt ?? "");
@@ -63,10 +48,23 @@ export function AgentForm({
   const [pending, setPending] = useState(false);
   const router = useRouter();
 
+  // Sources de modèles + la source d'un agent dont le fournisseur a été
+  // supprimé en administration (libellé explicite plutôt qu'un select vide).
+  const availableSources = [...modelSources];
+  if (
+    initial?.model_provider &&
+    initial.model_provider !== "ollama" &&
+    !availableSources.some((s) => s.value === initial.model_provider)
+  ) {
+    availableSources.push({
+      value: initial.model_provider,
+      label: "Source supprimée",
+      models: [],
+    });
+  }
+
   const providerModels =
-    provider === "ollama"
-      ? ollamaModels
-      : proprietaryModels.filter((m) => m.provider === provider).map((m) => m.model);
+    availableSources.find((s) => s.value === provider)?.models ?? [];
 
   function toggleSource(catalog: string) {
     setSources((prev) =>
@@ -137,21 +135,21 @@ export function AgentForm({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="grid gap-2">
-          <Label>Modèle LLM</Label>
+          <Label>Source du modèle</Label>
           <Select
             value={provider}
             onValueChange={(v) => {
-              setProvider(v as AgentInput["model_provider"]);
+              setProvider(v);
               setModel("");
             }}
           >
             <SelectTrigger className="w-full">
-              <SelectValue />
+              <SelectValue placeholder="Choisir une source" />
             </SelectTrigger>
             <SelectContent>
-              {PROVIDERS.map((p) => (
-                <SelectItem key={p.value} value={p.value}>
-                  {p.label}
+              {availableSources.map((s) => (
+                <SelectItem key={s.value} value={s.value}>
+                  {s.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -179,13 +177,6 @@ export function AgentForm({
               placeholder="Identifiant du modèle (ex. gpt-5.3)"
             />
           )}
-          {provider !== "ollama" ? (
-            <p className="text-xs text-muted-foreground">
-              Clé API configurée en administration (§ Serveurs locaux / Modèles).
-              L’exécution des modèles propriétaires n’est pas encore active :
-              privilégiez Ollama pour les conversations.
-            </p>
-          ) : null}
         </div>
       </div>
 

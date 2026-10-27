@@ -18,7 +18,7 @@ import {
   Moon,
   Laptop,
   UserRound,
-  Server,
+  KeyRound,
   Receipt,
   PanelLeft,
 } from "lucide-react";
@@ -231,17 +231,15 @@ export function SidebarContent({ session }: { session: SidebarProps }) {
   const adminItems = [
     { href: "/admin/users", label: "Utilisateurs", icon: <UserRound className="h-4 w-4" strokeWidth={1.6} />, perm: "admin.users" },
     { href: "/admin/roles", label: "Rôles", icon: <Shield className="h-4 w-4" strokeWidth={1.6} />, perm: "admin.roles" },
-    { href: "/admin/servers", label: "Serveurs locaux", icon: <Server className="h-4 w-4" strokeWidth={1.6} />, perm: "admin.servers" },
+    { href: "/admin/providers", label: "Fournisseurs LLM", icon: <KeyRound className="h-4 w-4" strokeWidth={1.6} />, perm: "admin.providers" },
     { href: "/admin/billing", label: "Facturation", icon: <Receipt className="h-4 w-4" strokeWidth={1.6} />, perm: "admin.billing" },
   ].filter((item) => has(item.perm));
 
   return (
     <div className="flex h-full flex-col">
-      <div>
-        <Link href="/chat" aria-label="ParusDB — accueil" className="block">
-          <ParusLogo className="h-auto w-full" />
-        </Link>
-      </div>
+      <Link href="/chat" aria-label="ParusDB — accueil" className="block">
+        <ParusLogo className="h-auto w-full" />
+      </Link>
 
       <nav className="flex-1 overflow-y-auto px-2 pb-4 pt-5">
         {has("chat") ? (

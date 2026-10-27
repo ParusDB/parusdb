@@ -59,7 +59,7 @@ implémentée** (charte « Mésange Charbonnière » : Tailwind v4, tokens, poli
 shell + RBAC (rôles applicatifs, rôle actif), Chat IA fonctionnel (diffusion temps
 réel via Supabase Realtime,
 Ollama + mcp-trino), Agents IA, Data Lakehouse (catalogues Polaris + éditeur SQL
-Trino), Administration (utilisateurs, rôles, serveurs locaux, facturation), Support
+Trino), Administration (utilisateurs, rôles, fournisseurs LLM, facturation), Support
 (tickets). **Les pipelines ELT sont fonctionnels** (apps/dlt : dlt + destination
 Iceberg/Polaris + conteneur jetable par run, validation e2e source PostgreSQL →
 lakehouse → Trino/LLM, §12). Les tables
@@ -309,7 +309,8 @@ remplacer
   charbon + `grid-bg` + halo jaune radial.
 - **Logo de marque** : `apps/nextjs/public/parusdb-logo.jpg` (JPEG fond blanc, marges
   rognées), servi par `ParusLogo` (`components/parus/logo.tsx`). Emplacement unique :
-  en-tête de la sidebar, plein cadre, lien « Accueil » vers `/chat` — jamais dans les
+  en-tête de la sidebar, pleine largeur, coins supérieurs collés au sommet du
+  menu (pas de padding au-dessus), lien « Accueil » vers `/chat` — jamais dans les
   états vides, les écrans d'authentification ni le contenu principal. Favicon :
   `app/favicon.ico`.
 - **Interactions** : hover = soulèvement `-translate-y-*` + transition douce ; pas de scale
@@ -472,9 +473,13 @@ complet : question métier → exploration du lakehouse → SQL exécuté → r�
 - **Configuration des agents** (spec §Agents IA) : nom, description, modèle LLM, prompt
   système, sources (catalogues/schémas autorisés par le rôle actif), propriétaire. Stockée
   dans PostgreSQL ; les prompts système sont des données, pas du code.
-- **Modèles** : open source (Mistral, Qwen…) via Ollama local, ou propriétaires (OpenAI,
-  Anthropic…) via clé API configurée en administration — clé **masquée** dans l'UI,
-  chiffrée au repos, jamais renvoyée au client.
+- **Modèles** : open source (Mistral, Qwen…) via Ollama local, ou fournisseurs externes
+  (OpenAI, Anthropic, Mistral, compatible OpenAI) par clé API configurée en
+  administration (`/admin/providers`) — clé **masquée** dans l'UI, chiffrée au
+  repos, jamais renvoyée au client. Les modèles ne sont pas stockés : ils sont
+  découverts dynamiquement via l'API de listing du fournisseur
+  (`lib/providers.ts`). Un agent référence une **source** (« Ollama (local) »
+  ou l'id d'un fournisseur, `agents.model_provider`) et un modèle découvert.
 - **Conversations** : propriétaire = créateur (visible par lui seul) ; agent **immuable** après
   création de la conversation ; titre généré par l'IA à partir des 2 premiers échanges ;
   messages utilisateur à droite, agent à gauche, bulles selon la charte (§8.2 : agent =
@@ -495,15 +500,30 @@ complet : question métier → exploration du lakehouse → SQL exécuté → r�
 - **Client MCP dans le BFF** (`lib/mcp.ts`) : Streamable HTTP porté du script e2e —
   handshake `initialize` → `notifications/initialized` → `tools/list` → `tools/call`,
   `Mcp-Session-Id` par message, réponses SSE à parser ligne à ligne.
-- **Boucle agentique** (`lib/agent-runner.ts`) : Ollama `/api/chat` avec `tools`,
+- **Boucle agentique** (`lib/agent-runner.ts`) : historique normalisé + `tools`,
   max 8 allers-retours (`PARUSDB_AGENT_MAX_STEPS`). Le prompt socle impose le français,
   l'exploration avant exécution, et documente la syntaxe Trino des dates relatives
   (`date_add('month', -3, current_date)`) : sans cet indice, `gemma4:e2b` tente des
   syntaxes inexistantes — un LLM peut échouer de façon non déterministe, toujours
   rejouer un test e2e chat avant de conclure.
-- **Modèles propriétaires** : clés configurées et chiffrées en administration, mais
-  l'exécution des conversations n'est pas encore implémentée — les agents doivent
-  pointer un modèle Ollama (message d'erreur explicite sinon).
+- **Backends LLM normalisés** (`lib/llm.ts`) : Ollama, compatible OpenAI
+  (OpenAI, Mistral, endpoints personnalisés) et Anthropic partagent la même
+  interface (`chat(model, messages, tools)`) ; la route de stream résout le
+  backend depuis la source de l'agent (`resolveProviderBackend`, clé
+  déchiffrée en mémoire serveur uniquement). Les ids d'appels d'outils sont
+  conservés entre les tours (`tool_call_id`) : OpenAI/Anthropic les exigent
+  sur les résultats d'outils, Ollama se contente du nom. Piège Ollama : au
+  renvoi d'un message assistant, `tool_calls[].function.arguments` doit être
+  un **objet** (une chaîne JSON est rejetée en HTTP 400 « Value looks like
+  object, but can't find closing '}' symbol »). Piège modèles de raisonnement
+  (ex. `zai-glm` via Mistral) : `message.content` arrive en **tableau de
+  blocs** `{type:"thinking"|"text"}` — ne retenir que les blocs texte
+  (`normalizeContent` dans `lib/llm.ts`), sinon la réponse n'est pas une
+  chaîne et fait planter le traitement en aval.
+- **Sources par clé API** : clés configurées et chiffrées en administration
+  (`admin.providers`), validées par un appel réel au fournisseur à l'ajout ;
+  les conversations s'exécutent sur ces sources comme sur Ollama (backends
+  `lib/llm.ts`, function calling via mcp-trino).
 - **Le premier message** transite par **query param** (`?pending=<message>`) depuis
   « Nouveau chat » : la page RSC `/chat/[id]` lit `searchParams.pending` côté serveur
   et le passe en prop à `ConversationView`, qui l'envoie au montage. Plus fiable

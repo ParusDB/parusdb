@@ -10,7 +10,7 @@
 --   chat       — conversations et messages
 --   lakehouse  — registre des catalogues, accès par rôle, historique SQL
 --   connectors — pipelines ELT (dlt) et leurs exécutions
---   admin      — modèles LLM propriétaires (clés chiffrées), serveurs locaux
+--   admin      — fournisseurs LLM externes (clés API chiffrées)
 --   support    — tickets support
 --
 -- PostgreSQL reste la source de vérité TRANSACTIONNELLE (config, RBAC,
@@ -226,8 +226,11 @@ create table if not exists agents.agents (
   owner_id uuid not null references auth.users (id) on delete cascade,
   name text not null,
   description text,
-  model_provider text not null default 'ollama'
-    check (model_provider in ('ollama', 'openai', 'anthropic', 'mistral', 'custom')),
+-- Source du modèle : 'ollama' (serveur d'inférence local embarqué, réservé)
+-- ou identifiant d'un fournisseur externe (admin.providers). Contrainte
+-- relâchée en fin de fichier (migration des anciens libellés openai/
+-- anthropic/mistral/custom vers les identifiants de fournisseurs).
+  model_provider text not null default 'ollama',
   model_id text not null,
   system_prompt text not null default '',
   created_at timestamptz not null default now(),
@@ -657,64 +660,108 @@ end
 $$;
 
 -- ---------------------------------------------------------------------------
--- 8. admin — modèles LLM propriétaires et serveurs locaux
+-- 8. admin — fournisseurs LLM (clés API chiffrées)
 -- ---------------------------------------------------------------------------
 
--- Clés API des modèles propriétaires : chiffrées côté serveur
--- (AES-256-GCM), jamais renvoyées au client (AGENTS.md §11). Aucune
--- politique SELECT : la liste passe par admin.list_proprietary_models().
-create table if not exists admin.proprietary_models (
+-- Fournisseurs externes de modèles LLM, ajoutés en administration par clé
+-- API. Ollama (local) est embarqué par ParusDB et n'a pas de ligne ici.
+-- Les modèles ne sont plus stockés : ils sont découverts dynamiquement via
+-- l'API du fournisseur (AGENTS.md §11). Clé chiffrée AES-256-GCM côté BFF,
+-- jamais renvoyée au client. Aucune politique SELECT : la liste passe par
+-- admin.list_providers().
+create table if not exists admin.providers (
   id uuid primary key default gen_random_uuid(),
-  provider text not null check (provider in ('openai', 'anthropic', 'mistral', 'custom')),
-  model text not null,
+  name text not null unique,
+  api_kind text not null
+    check (api_kind in ('openai', 'anthropic', 'mistral', 'openai_compatible')),
+  base_url text,
   api_key_encrypted text not null,
   created_by uuid references auth.users (id) on delete set null,
   created_at timestamptz not null default now(),
-  unique (provider, model)
+  updated_at timestamptz not null default now(),
+  constraint providers_base_url_required
+    check (api_kind <> 'openai_compatible' or base_url is not null)
 );
 
-create table if not exists admin.servers (
-  id uuid primary key default gen_random_uuid(),
-  kind text not null check (kind in ('s3', 'llm')),
-  name text not null,
-  server_type text not null,
-  url text not null,
-  status text not null default 'disconnected' check (status in ('connected', 'disconnected')),
-  last_tested_at timestamptz,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
+-- Migration depuis l'ancien modèle (un modèle propriétaire = une clé) :
+-- un fournisseur par provider historique, première clé rencontrée.
+do $$
+begin
+  if to_regclass('admin.proprietary_models') is not null then
+    insert into admin.providers (name, api_kind, api_key_encrypted)
+    select
+      case m.provider
+        when 'openai' then 'OpenAI'
+        when 'anthropic' then 'Anthropic'
+        when 'mistral' then 'Mistral'
+        else initcap(m.provider)
+      end,
+      case m.provider when 'custom' then 'openai_compatible' else m.provider end,
+      (array_agg(m.api_key_encrypted order by m.created_at desc))[1]
+    from admin.proprietary_models m
+    group by m.provider
+    on conflict (name) do nothing;
+  end if;
+end
+$$;
 
-alter table admin.proprietary_models enable row level security;
-alter table admin.servers enable row level security;
+-- Les agents référencent désormais un fournisseur par son identifiant
+-- ('ollama' reste réservé au serveur local). Migration best effort des
+-- anciens libellés ; idempotent (les UUID déjà migrés ne matchent plus).
+update agents.agents a
+   set model_provider = p.id::text
+  from admin.providers p
+ where a.model_provider in ('openai', 'anthropic', 'mistral')
+   and p.name = case a.model_provider
+                  when 'openai' then 'OpenAI'
+                  when 'anthropic' then 'Anthropic'
+                  when 'mistral' then 'Mistral'
+                end;
 
--- Liste publique (sans clé) des modèles propriétaires : callable par tout
--- authentifié disposant de la permission agents (formulaire de création
--- d'agent). SECURITY DEFINER dans un schéma non exposé à l'anonyme.
-create or replace function admin.list_proprietary_models()
-returns table (id uuid, provider text, model text, created_at timestamptz)
+-- Contrainte garde-fou : 'ollama' ou un UUID de fournisseur. NOT VALID car
+-- d'anciens agents peuvent référencer une source disparue ('custom').
+alter table agents.agents
+  drop constraint if exists agents_model_provider_check;
+alter table agents.agents
+  add constraint agents_model_provider_check
+  check (
+    model_provider = 'ollama'
+    or model_provider ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+  ) not valid;
+
+alter table admin.providers enable row level security;
+
+-- Liste publique (sans clé) des fournisseurs : callable par tout authentifié
+-- disposant de la permission chat ou agents (affichage du modèle d'un agent,
+-- formulaire de création d'agent). SECURITY DEFINER dans un schéma non
+-- exposé à l'anonyme.
+create or replace function admin.list_providers()
+returns table (id uuid, name text, api_kind text)
 language sql
 stable
 security definer
 set search_path = admin, pg_catalog
 as $$
-  select m.id, m.provider, m.model, m.created_at
-    from admin.proprietary_models m
-   where iam.has_permission(auth.uid(), 'agents')
-   order by m.provider, m.model;
+  select p.id, p.name, p.api_kind
+    from admin.providers p
+   where iam.has_permission(auth.uid(), 'chat')
+      or iam.has_permission(auth.uid(), 'agents')
+   order by p.name;
 $$;
 
-revoke all on function admin.list_proprietary_models() from public;
-grant execute on function admin.list_proprietary_models() to authenticated;
+revoke all on function admin.list_providers() from public;
+grant execute on function admin.list_providers() to authenticated;
 
-drop policy if exists servers_select_perm on admin.servers;
-create policy servers_select_perm on admin.servers
-  for select to authenticated
-  using (iam.has_permission(auth.uid(), 'admin.servers'));
+drop function if exists admin.list_proprietary_models();
 
-drop trigger if exists touch_servers on admin.servers;
-create trigger touch_servers before update on admin.servers
+drop trigger if exists touch_providers on admin.providers;
+create trigger touch_providers before update on admin.providers
   for each row execute function iam.touch_updated_at();
+
+-- L'ancien modèle (serveurs S3/LLM + modèles propriétaires ligne à ligne)
+-- est remplacé par les fournisseurs : suppression après migration.
+drop table if exists admin.proprietary_models;
+drop table if exists admin.servers;
 
 -- ---------------------------------------------------------------------------
 -- 9. support — tickets
@@ -777,8 +824,6 @@ grant select, insert on lakehouse.query_history to authenticated;
 grant select, insert, update, delete on connectors.pipelines to authenticated;
 grant select, insert on connectors.pipeline_runs to authenticated;
 
-grant select on admin.servers to authenticated;
-
 grant select, insert, update, delete on support.tickets to authenticated;
 
 -- Le client administrateur (clé service_role, serveur uniquement) accède à
@@ -790,7 +835,7 @@ grant select, insert, update, delete on all tables in schema
   to service_role;
 grant execute on function iam.has_permission(uuid, text) to service_role;
 grant execute on function iam.active_role_id(uuid) to service_role;
-grant execute on function admin.list_proprietary_models() to service_role;
+grant execute on function admin.list_providers() to service_role;
 
 -- ---------------------------------------------------------------------------
 -- 11. Bootstrap utilisateur (trigger sur auth.users)
@@ -846,7 +891,7 @@ insert into iam.roles (key, name, description, permissions, is_system) values
    'Accès complet à toutes les fonctionnalités de la plateforme.',
    array[
      'chat', 'agents', 'lakehouse', 'connectors',
-     'admin.users', 'admin.roles', 'admin.servers', 'admin.billing', 'support'
+     'admin.users', 'admin.roles', 'admin.providers', 'admin.billing', 'support'
    ], true),
   ('technique', 'Profil Technique',
    'Accès au chat, aux agents IA et au Data Lakehouse.',
@@ -859,6 +904,12 @@ on conflict (key) do update
       description = excluded.description,
       permissions = excluded.permissions,
       is_system = excluded.is_system;
+
+-- Renommage du menu « Serveurs locaux » → « Fournisseurs LLM » : les rôles
+-- personnalisés (hors seed ci-dessus) gardent leur accès.
+update iam.roles
+   set permissions = array_replace(permissions, 'admin.servers', 'admin.providers')
+ where 'admin.servers' = any(permissions);
 
 -- ---------------------------------------------------------------------------
 -- 13. Backfill des utilisateurs existants (premier créé = admin)
@@ -888,7 +939,7 @@ order by ur.user_id, ur.granted_at
 on conflict (user_id) do nothing;
 
 -- ---------------------------------------------------------------------------
--- 14. Métriques d'usage (facturation) et seed des serveurs locaux
+-- 14. Métriques d'usage (facturation)
 -- ---------------------------------------------------------------------------
 
 -- Agrégats d'usage pour la section Facturation (spec §Administration). La
@@ -921,21 +972,5 @@ $$;
 revoke all on function admin.usage_metrics() from public;
 grant execute on function admin.usage_metrics() to authenticated;
 grant execute on function admin.usage_metrics() to service_role;
-
--- Serveurs locaux détectés de la stack (statut initial : connectés depuis
--- les services internes ; le bouton « Test » de l'app revalide à la demande).
--- Idempotent sur le nom (pas de contrainte unique : garde NOT EXISTS).
-insert into admin.servers (kind, name, server_type, url, status)
-select x.kind, x.name, x.server_type, x.url, x.status
-from (
-  values
-    ('s3', 'RustFS (stack Supabase)', 'rustfs',
-     'http://rustfs:9000', 'connected'),
-    ('llm', 'Ollama (local)', 'ollama',
-     'http://localhost:11434', 'connected')
-) as x(kind, name, server_type, url, status)
-where not exists (
-  select 1 from admin.servers s where s.name = x.name
-);
 
 commit;

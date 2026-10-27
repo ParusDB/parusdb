@@ -28,11 +28,11 @@ afficher** (copie par `sed`/`grep`, pas de copier-coller dans un terminal).
 | Section | Route | État |
 |---|---|---|
 | Connexion / inscription / réinitialisation | `/auth/*` | Fonctionnel (charte : charbon + grille + halo jaune) |
-| Chat IA (Ollama + mcp-trino, diffusion Supabase Realtime) | `/chat` | Fonctionnel — question → exploration lakehouse → SQL → réponse |
+| Chat IA (LLM au choix — Ollama local ou fournisseur par clé API — + mcp-trino, diffusion Supabase Realtime) | `/chat` | Fonctionnel — question → exploration lakehouse → SQL → réponse |
 | Agents IA (CRUD, modèles, sources) | `/agents` | Fonctionnel |
 | Data Lakehouse (catalogues Polaris, éditeur SQL Trino) | `/data-lakehouse` | Fonctionnel |
 | Connecteurs ELT (dlt) | `/connectors` | Fonctionnel — introspection réelle, exécution dlt (apps/dlt), historique des runs |
-| Administration (utilisateurs, rôles, serveurs, facturation) | `/admin/*` | Fonctionnel |
+| Administration (utilisateurs, rôles, fournisseurs LLM, facturation) | `/admin/*` | Fonctionnel |
 | Support (documentation, tickets) | `/support` | Fonctionnel |
 
 ## Variables d'environnement (`.env.local`)
@@ -71,9 +71,14 @@ afficher** (copie par `sed`/`grep`, pas de copier-coller dans un terminal).
   prédicat d'appartenance). PostgREST les expose via `PGRST_DB_SCHEMAS` ;
   côté client, `supabase.schema('<schéma>')` envoie `Accept-Profile`.
 - **Chat IA** : route `app/(app)/chat/[id]/stream/route.ts` — boucle
-  Ollama (function calling) ↔ mcp-trino (lecture seule), messages persistés
+  LLM ↔ mcp-trino (lecture seule), messages persistés
   dans `chat.messages`, titre généré par l'IA, requêtes SQL journalisées dans
   `lakehouse.query_history`. Le modèle ne reçoit aucune chaîne de connexion.
+  La source du modèle de l'agent détermine le backend (`lib/llm.ts` :
+  Ollama local, compatible OpenAI, Anthropic — la clé d'un fournisseur
+  externe est déchiffrée en mémoire serveur, `lib/providers.ts`), les
+  modèles sont découverts dynamiquement via l'API du fournisseur
+  (`/admin/providers`).
   La diffusion temps réel passe par **Supabase Realtime** : le BFF insère
   les évènements dans `chat.stream_events` (publication `supabase_realtime`,
   RLS par propriétaire), le navigateur s'abonne via `postgres_changes`.
@@ -130,7 +135,8 @@ vérification RLS par requêtes de test et, pour le chat, un test e2e rejoué
 | Nouveau catalogue invisible dans l'éditeur SQL | Trino ne charge les catalogues qu'au démarrage | `cd apps/trino && sh run.sh restart` |
 | `Could not find the table 'public.<x>'` | Requête sans `Accept-Profile` | Passer par `supabase.schema('<schéma>')` |
 | `node` échoue avec `GLIBCXX_3.4.x not found` | `LD_LIBRARY_PATH` d'une extension VS Code qui masque le libstdc++ système | `unset LD_LIBRARY_PATH` avant toute commande node/npm |
-| Chat en erreur « modèle propriétaire non pris en charge » | L'agent pointe un fournisseur non-Ollama | Configurer un modèle Ollama pour cet agent (l'exécution propriétaire n'est pas encore implémentée) |
+| Chat en erreur « <fournisseur> a répondu HTTP … » ou « Invalid model » | Clé révoquée ou identifiant de modèle absent chez le fournisseur | Vérifier la clé (« Modifier » dans `/admin/providers`) et l'id du modèle de l'agent (sans préfixe de fournisseur) |
+| « Could not find the function public.list_providers » (PGRST202) | Appel rpc sans schéma `admin` | PostgREST ne résout pas les fonctions hors de `public` : passer par `supabase.schema("admin").rpc(...)` |
 | « Test connexion » du wizard échoue (« docker est-il installé… ») | Image du runner dlt absente | `cd apps/dlt && sh run.sh build` puis `sh run.sh verify` |
 | Run resté « En file » | Ordonnanceur dlt arrêté | `cd apps/dlt && sh run.sh status` puis `sh run.sh start` (logs : `sh run.sh logs`) |
 | Run en erreur « impossible de déchiffrer les credentials » | `PARUSDB_ENCRYPTION_KEY` divergente entre nextjs et apps/dlt | Relancer `cd apps/dlt && sh setup.sh` (réimporte la clé) puis relancer le pipeline |
@@ -138,9 +144,12 @@ vérification RLS par requêtes de test et, pour le chat, un test e2e rejoué
 
 ## Limites assumées
 
-- L'exécution des modèles propriétaires (OpenAI, Anthropic…) n'est pas encore
-  active : les clés se configurent en administration, mais les conversations
-  exigent un modèle Ollama local pour l'instant.
+- Les conversations sur un fournisseur par clé API sortent vers l'API du
+  fournisseur configuré (Internet) : pour les données sensibles, privilégier
+  Ollama local (souveraineté, AGENTS.md §11).
+- Les modèles de raisonnement renvoient parfois `content` en tableau de
+  blocs (`thinking`/`text`) : seul le texte est retenu (`normalizeContent`
+  dans `lib/llm.ts`).
 - L'éditeur SQL s'exécute sous l'utilisateur Trino unique : le RBAC porte sur
   la visibilité des catalogues par rôle, pas sur des rôles Trino distincts.
 - Connecteurs ELT : le CRON est évalué en UTC ; le mode d'insertion

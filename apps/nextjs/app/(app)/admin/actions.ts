@@ -5,7 +5,10 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePermission } from "@/lib/session";
 import { encryptSecret } from "@/lib/crypto";
-import type { ProprietaryModel } from "@/types/db";
+import {
+  discoverProviderModels,
+  type ProviderApiKind,
+} from "@/lib/providers";
 
 // ---------------------------------------------------------------------------
 // Utilisateurs (spec §Administration — Utilisateurs)
@@ -214,167 +217,174 @@ export async function deleteRole(
 }
 
 // ---------------------------------------------------------------------------
-// Serveurs locaux (spec §Administration — Serveurs locaux)
+// Fournisseurs LLM (spec §Administration — Fournisseurs LLM)
 // ---------------------------------------------------------------------------
 
-export async function upsertServer(input: {
-  id?: string;
-  kind: "s3" | "llm";
-  name: string;
-  server_type: string;
-  url: string;
-}): Promise<{ ok: boolean; error?: string }> {
-  await requirePermission("admin.servers");
-  const admin = createAdminClient();
-  const payload = {
-    kind: input.kind,
-    name: input.name.trim(),
-    server_type: input.server_type.trim().toLowerCase(),
-    url: input.url.trim(),
-    status: "disconnected" as const,
-  };
-  if (input.id) {
-    const { error } = await admin
-      .schema("admin")
-      .from("servers")
-      .update(payload)
-      .eq("id", input.id);
-    if (error) return { ok: false, error: `La mise à jour a échoué : ${error.message}` };
-  } else {
-    const { error } = await admin.schema("admin").from("servers").insert(payload);
-    if (error) return { ok: false, error: `L'enregistrement a échoué : ${error.message}` };
-  }
-  revalidatePath("/admin/servers");
-  return { ok: true };
-}
+const API_KINDS: ProviderApiKind[] = [
+  "openai",
+  "anthropic",
+  "mistral",
+  "openai_compatible",
+];
 
-export async function deleteServer(
-  id: string,
-): Promise<{ ok: boolean; error?: string }> {
-  await requirePermission("admin.servers");
-  const admin = createAdminClient();
-  const { error } = await admin.schema("admin").from("servers").delete().eq("id", id);
-  if (error) {
-    return { ok: false, error: `La suppression a échoué : ${error.message}` };
-  }
-  revalidatePath("/admin/servers");
-  return { ok: true };
-}
-
-// Test de connexion : LLM -> /api/tags, S3 -> simple requête HTTP. Les URLs
-// internes Docker (ex. http://rustfs:9000) ne sont pas joignables depuis
-// l'application hôte : le message l'explique.
-export async function testServer(
-  id: string,
-): Promise<{ ok: boolean; error?: string; status?: "connected" | "disconnected" }> {
-  await requirePermission("admin.servers");
-  const admin = createAdminClient();
-  const { data: server } = await admin
-    .schema("admin")
-    .from("servers")
-    .select("id, kind, url")
-    .eq("id", id)
-    .maybeSingle();
-  if (!server) return { ok: false, error: "Serveur introuvable." };
-
-  let connected = false;
-  let error: string | undefined;
+function normalizeBaseUrl(raw: string): string {
+  const trimmed = raw.trim().replace(/\/+$/, "");
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-    const url = server.kind === "llm" ? `${server.url}/api/tags` : server.url;
-    const res = await fetch(url, { signal: controller.signal, cache: "no-store" });
-    clearTimeout(timeout);
-    connected = res.ok;
-    if (!res.ok) error = `HTTP ${res.status}`;
-  } catch (e) {
-    connected = false;
-    error =
-      e instanceof Error
-        ? `inaccessible depuis l'application (${e.name === "TimeoutError" || e.name === "AbortError" ? "délai dépassé" : e.message}) — une URL interne Docker n'est pas joignable depuis l'hôte`
-        : "erreur inattendue";
+    const url = new URL(trimmed);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      throw new Error("protocole invalide");
+    }
+    return trimmed;
+  } catch {
+    throw new Error("L'URL de base est invalide (attendu : http(s)://…).");
   }
-
-  await admin
-    .schema("admin")
-    .from("servers")
-    .update({
-      status: connected ? "connected" : "disconnected",
-      last_tested_at: new Date().toISOString(),
-    })
-    .eq("id", id);
-  revalidatePath("/admin/servers");
-  return {
-    ok: true,
-    status: connected ? "connected" : "disconnected",
-    error: connected ? undefined : error,
-  };
 }
 
-// ---------------------------------------------------------------------------
-// Modèles LLM propriétaires (spec §Administration — Modèles LLM)
-// ---------------------------------------------------------------------------
-
-export async function addProprietaryModel(input: {
-  provider: ProprietaryModel["provider"] | "custom";
-  model: string;
+// Ajout d'un fournisseur : la clé est validée par la découverte réelle des
+// modèles — aucune sauvegarde si le fournisseur la rejette.
+export async function addProvider(input: {
+  name: string;
+  apiKind: ProviderApiKind;
+  baseUrl?: string;
   apiKey: string;
-}): Promise<{ ok: boolean; error?: string }> {
-  await requirePermission("admin.servers");
-  if (!input.apiKey.trim() || !input.model.trim()) {
-    return { ok: false, error: "Le modèle et la clé API sont obligatoires." };
+}): Promise<{ ok: boolean; error?: string; modelCount?: number }> {
+  const session = await requirePermission("admin.providers");
+  const name = input.name.trim();
+  if (!name || !input.apiKey.trim()) {
+    return { ok: false, error: "Le nom du fournisseur et la clé API sont obligatoires." };
   }
+  if (!API_KINDS.includes(input.apiKind)) {
+    return { ok: false, error: "Type d'API inconnu." };
+  }
+  let baseUrl: string | null = null;
+  if (input.apiKind === "openai_compatible") {
+    if (!input.baseUrl?.trim()) {
+      return { ok: false, error: "L'URL de base est obligatoire pour un fournisseur compatible OpenAI." };
+    }
+    try {
+      baseUrl = normalizeBaseUrl(input.baseUrl);
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "URL invalide." };
+    }
+  }
+
+  let modelCount: number;
+  try {
+    const models = await discoverProviderModels({
+      apiKind: input.apiKind,
+      apiKey: input.apiKey.trim(),
+      baseUrl,
+    });
+    modelCount = models.length;
+  } catch (e) {
+    return {
+      ok: false,
+      error: `La clé a été rejetée par le fournisseur : ${e instanceof Error ? e.message : "erreur inconnue"}`,
+    };
+  }
+
   const admin = createAdminClient();
-  const session = await requirePermission("admin.servers");
-  const { error } = await admin.schema("admin").from("proprietary_models").insert({
-    provider: input.provider,
-    model: input.model.trim(),
+  const { error } = await admin.schema("admin").from("providers").insert({
+    name,
+    api_kind: input.apiKind,
+    base_url: baseUrl,
     api_key_encrypted: encryptSecret(input.apiKey.trim()),
     created_by: session.userId,
   });
   if (error) {
+    if (error.code === "23505") {
+      return { ok: false, error: `Un fournisseur porte déjà le nom « ${name} ».` };
+    }
     return { ok: false, error: `L'ajout a échoué : ${error.message}` };
   }
-  revalidatePath("/admin/servers");
-  return { ok: true };
+  revalidatePath("/admin/providers");
+  return { ok: true, modelCount };
 }
 
-export async function updateProprietaryModel(
+// Modification : renommer, changer de type d'API ; clé vide = conserver
+// l'actuelle (elle n'est jamais renvoyée au client).
+export async function updateProvider(
   id: string,
-  input: { model: string; apiKey: string },
+  input: {
+    name: string;
+    apiKind: ProviderApiKind;
+    baseUrl?: string;
+    apiKey?: string;
+  },
 ): Promise<{ ok: boolean; error?: string }> {
-  await requirePermission("admin.servers");
+  await requirePermission("admin.providers");
+  const name = input.name.trim();
+  if (!name) {
+    return { ok: false, error: "Le nom du fournisseur est obligatoire." };
+  }
+  if (!API_KINDS.includes(input.apiKind)) {
+    return { ok: false, error: "Type d'API inconnu." };
+  }
+  let baseUrl: string | null = null;
+  if (input.apiKind === "openai_compatible") {
+    if (!input.baseUrl?.trim()) {
+      return { ok: false, error: "L'URL de base est obligatoire pour un fournisseur compatible OpenAI." };
+    }
+    try {
+      baseUrl = normalizeBaseUrl(input.baseUrl);
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "URL invalide." };
+    }
+  }
+
+  if (input.apiKey?.trim()) {
+    try {
+      await discoverProviderModels({
+        apiKind: input.apiKind,
+        apiKey: input.apiKey.trim(),
+        baseUrl,
+      });
+    } catch (e) {
+      return {
+        ok: false,
+        error: `La clé a été rejetée par le fournisseur : ${e instanceof Error ? e.message : "erreur inconnue"}`,
+      };
+    }
+  }
+
   const admin = createAdminClient();
-  const payload: Record<string, unknown> = { model: input.model.trim() };
-  if (input.apiKey.trim()) {
+  const payload: Record<string, unknown> = {
+    name,
+    api_kind: input.apiKind,
+    base_url: baseUrl,
+  };
+  if (input.apiKey?.trim()) {
     payload.api_key_encrypted = encryptSecret(input.apiKey.trim());
   }
   const { error } = await admin
     .schema("admin")
-    .from("proprietary_models")
+    .from("providers")
     .update(payload)
     .eq("id", id);
   if (error) {
+    if (error.code === "23505") {
+      return { ok: false, error: `Un fournisseur porte déjà le nom « ${name} ».` };
+    }
     return { ok: false, error: `La mise à jour a échoué : ${error.message}` };
   }
-  revalidatePath("/admin/servers");
+  revalidatePath("/admin/providers");
   return { ok: true };
 }
 
-export async function deleteProprietaryModel(
+export async function deleteProvider(
   id: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  await requirePermission("admin.servers");
+  await requirePermission("admin.providers");
   const admin = createAdminClient();
   const { error } = await admin
     .schema("admin")
-    .from("proprietary_models")
+    .from("providers")
     .delete()
     .eq("id", id);
   if (error) {
     return { ok: false, error: `La suppression a échoué : ${error.message}` };
   }
-  revalidatePath("/admin/servers");
+  revalidatePath("/admin/providers");
   return { ok: true };
 }
 

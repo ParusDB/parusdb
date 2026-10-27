@@ -8,10 +8,37 @@ import { requirePermission } from "@/lib/session";
 export interface AgentInput {
   name: string;
   description: string;
-  model_provider: "ollama" | "openai" | "anthropic" | "mistral" | "custom";
+  // 'ollama' (serveur local embarqué) ou l'id d'un fournisseur
+  // (admin.providers) — jamais un libellé libre.
+  model_provider: string;
   model_id: string;
   system_prompt: string;
   sources: string[];
+}
+
+// Validation de la source du modèle : elle doit exister au moment de
+// l'enregistrement (fournisseur supprimé entre-temps = refus explicite).
+async function assertValidProvider(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  value: string,
+) {
+  if (value === "ollama") return;
+  // Schéma `admin` explicite : PostgREST ne résout pas les fonctions non
+  // qualifiées hors de `public` (PGRST202 sinon).
+  const { data, error } = await supabase
+    .schema("admin")
+    .rpc("list_providers");
+  if (error) {
+    throw new Error(
+      `La vérification de la source du modèle a échoué : ${error.message}`,
+    );
+  }
+  const ids = ((data ?? []) as { id: string }[]).map((p) => p.id);
+  if (!ids.includes(value)) {
+    throw new Error(
+      "La source du modèle n’existe plus (fournisseur supprimé en administration). Choisissez une autre source.",
+    );
+  }
 }
 
 async function writeSources(
@@ -52,6 +79,7 @@ export async function createAgent(input: AgentInput) {
   const supabase = await createClient();
   const name = input.name.trim();
   if (!name) throw new Error("Le nom de l'agent est obligatoire.");
+  await assertValidProvider(supabase, input.model_provider);
 
   const { data, error } = await supabase
     .schema("agents")
@@ -81,6 +109,7 @@ export async function updateAgent(id: string, input: AgentInput) {
   const supabase = await createClient();
   const name = input.name.trim();
   if (!name) throw new Error("Le nom de l'agent est obligatoire.");
+  await assertValidProvider(supabase, input.model_provider);
 
   const { error } = await supabase
     .schema("agents")

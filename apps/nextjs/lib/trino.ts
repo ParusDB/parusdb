@@ -64,16 +64,6 @@ export async function trinoQuery(sql: string): Promise<TrinoQueryResult> {
   };
 }
 
-// Vérifie que Trino répond (bouton « Test » des serveurs locaux).
-export async function trinoPing(): Promise<boolean> {
-  try {
-    await createTrino().query({ query: "SELECT 1", user: TRINO_USER });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export function quoteIdent(name: string): string {
   return `"${name.replace(/"/g, '""')}"`;
 }

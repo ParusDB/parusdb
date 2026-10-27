@@ -3,6 +3,7 @@ export const instant = false;
 
 import { requirePermission } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
+import { fetchProviderLabels, providerLabel } from "@/lib/providers";
 import { NewChat } from "@/components/chat/new-chat";
 import { CharbonPanel } from "@/components/parus/charbon-panel";
 import Link from "next/link";
@@ -11,12 +12,15 @@ import { Button } from "@/components/ui/button";
 export default async function NewChatPage() {
   const session = await requirePermission("chat");
   const supabase = await createClient();
-  const { data: agents } = await supabase
-    .schema("agents")
-    .from("agents")
-    .select("id, name, description, model_provider, model_id")
-    .order("created_at", { ascending: true })
-    .limit(100);
+  const [{ data: agents }, providerLabels] = await Promise.all([
+    supabase
+      .schema("agents")
+      .from("agents")
+      .select("id, name, description, model_provider, model_id")
+      .order("created_at", { ascending: true })
+      .limit(100),
+    fetchProviderLabels(supabase).catch(() => new Map<string, string>()),
+  ]);
 
   if (!agents || agents.length === 0) {
     return (
@@ -47,7 +51,7 @@ export default async function NewChatPage() {
         id: a.id,
         name: a.name,
         description: a.description,
-        model: `${a.model_provider}/${a.model_id}`,
+        model: `${providerLabel(a.model_provider, providerLabels)}/${a.model_id}`,
       }))}
     />
   );
