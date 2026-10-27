@@ -28,7 +28,7 @@
 - **Équipes métiers** (marketing, ventes, finance...) : accès simplifié aux insights
 - **Équipes techniques** (data engineers, CTO, DPO) : contrôle total sur l'infrastructure
 
-**Accès** : Application web accessible via navigateur, après souscription à un forfait et authentification.
+**Accès** : Application web auto-hébergée, accessible via navigateur après authentification.
 
 ---
 
@@ -520,4 +520,4 @@ formulaire d'agent.
 
 ---
 
-*Dernière mise à jour : 15 octobre 2026*
+*Dernière mise à jour : 27 octobre 2026*
