@@ -90,8 +90,10 @@ export function ProvidersView({
           type="button"
           onClick={() => setSelected("ollama")}
           className={cn(
-            "flex w-full flex-col rounded-3xl border bg-card p-4 text-left transition-all hover:-translate-y-0.5 hover:border-charbon hover:shadow-[0_24px_60px_-30px_rgba(26,26,26,0.35)]",
-            selected === "ollama" ? "border-jaune" : "border-border",
+            "flex w-full flex-col rounded-3xl border bg-card p-4 text-left transition-all",
+            selected === "ollama"
+              ? "border-jaune"
+              : "border-border hover:-translate-y-0.5 hover:border-charbon hover:shadow-[0_24px_60px_-30px_rgba(26,26,26,0.35)]",
           )}
         >
           <span className="flex w-full items-start gap-3">
