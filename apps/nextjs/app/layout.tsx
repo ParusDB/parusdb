@@ -25,7 +25,7 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "ParusDB — Plateforme Data Analytique IAgentique Open Source",
   description:
-    "ParusDB unifie ELT, Data Lakehouse et agents IA dans une plateforme open source et souveraine. Licence ELv2.",
+    "ParusDB unifie ELT, Data Lakehouse et agents IA dans une plateforme open source et souveraine. Licence Apache 2.0.",
 };
 
 export default function RootLayout({

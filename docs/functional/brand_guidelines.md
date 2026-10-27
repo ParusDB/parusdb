@@ -36,8 +36,8 @@ adaptation.
 
 ## 1. Identité de marque
 
-**ParusDB** est une plateforme Data Analytique « IAgentique First », open source (licence ELv2) et
-souveraine (auto-hébergement, BYO LLM/S3/cloud, RGPD).
+**ParusDB** est une plateforme Data Analytique « IAgentique First », open source (licence
+Apache 2.0) et souveraine (auto-hébergement, BYO LLM/S3/cloud, RGPD).
 
 La charte s'appelle **« Mésange Charbonnière »** — l'oiseau (mascotte visible sur le hero) qui
 donne son nom au produit (*Parus major*). Elle inspire la palette : un contraste fort
@@ -610,7 +610,7 @@ const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], weight: ["400", "500"
 export const metadata: Metadata = {
   title: "ParusDB — Plateforme Data Analytique IAgentique Open Source",
   description:
-    "ParusDB unifie ELT, Data Lakehouse et agents IA dans une plateforme open source et souveraine. Licence ELv2.",
+    "ParusDB unifie ELT, Data Lakehouse et agents IA dans une plateforme open source et souveraine. Licence Apache 2.0.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -712,7 +712,7 @@ techniques en anglais.
     - « Gratuit. Pour de vrai. »
     - « Déployez-la vous-même, contribuez, ou utilisez-la gratuitement. »
     - « Assembler une Modern Data Stack, c'est long, cher, fragile. »
-- Dans l'UI : boutons à l'impératif (« Connecter une source », « Demander une démo »), erreurs
+- Dans l'UI : boutons à l'impératif (« Connecter une source », « Créer un agent »), erreurs
 factuelles et actionnables (« La connexion a échoué : clé API invalide »), jamais de « Oups ! ».
 - Mise en exergue : `<b>` pour les mots clés dans un paragraphe (`text-blanc` sur fond charbon,
 `text-foreground` sur fond clair).

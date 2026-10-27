@@ -11,7 +11,7 @@
 
 ## 1. Le projet en une minute
 
-**ParusDB** est une plateforme data analytique open source (licence **ELv2**) qui unifie :
+**ParusDB** est une plateforme data analytique open source (licence **Apache 2.0**) qui unifie :
 
 - **ELT** : ingestion depuis 40+ sources via **dlt** (data load tool) ;
 - **Data Lakehouse** : **Apache Polaris** (catalogue Iceberg) + **Trino** (moteur SQL) +

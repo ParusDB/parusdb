@@ -2,7 +2,7 @@
 
 > La plateforme Data Analytique IAgentique Open Source — « Vos données, enfin parlantes. »
 
-[![Licence](https://img.shields.io/badge/licence-ELv2-1A1A1A)](#licence)
+[![Licence](https://img.shields.io/badge/licence-Apache%202.0-1A1A1A)](#licence)
 [![Statut](https://img.shields.io/badge/statut-en%20d%C3%A9veloppement-FFD700)](#état-du-projet)
 [![Langue](https://img.shields.io/badge/langue-Fran%C3%A7ais-6B8E23)](https://parusdb.com/)
 
@@ -14,13 +14,14 @@ une plateforme **unifiée** où chaque équipe interroge ses données **en langa
 agents IA, où le déploiement se fait **en minutes, pas en mois**, et où vos données ne quittent
 **jamais** votre infrastructure.
 
-- **100 % Open Source** sous licence **ELv2** : forkez, contribuez, déployez où vous voulez.
+- **100 % Open Source** sous licence **Apache 2.0** : forkez, contribuez, déployez où
+  vous voulez.
 - **Auto-hébergement** par défaut : votre serveur, votre cloud, votre local — aucun vendor
   lock-in.
 - **Souveraineté totale** : chiffrement au repos et en transit, conforme RGPD, BYO tout
   (S3, LLM, infrastructure).
-- **Gratuite** : plus de forfaits, plus de limites. Juste du code, des conteneurs, et la
-  liberté de déployer où vous voulez.
+- **Libre d'utilisation** : aucune redevance, aucune limite. Juste du code, des
+  conteneurs, et la liberté de déployer où vous voulez.
 
 ## Une plateforme, cinq briques
 
@@ -32,7 +33,8 @@ agents IA, où le déploiement se fait **en minutes, pas en mois**, et où vos d
 | **40+ connecteurs ELT** | Snowflake, PostgreSQL, Salesforce, HubSpot, Notion, Stripe, Shopify, S3… Ingestion incrémentale, ordonnancement CRON, glisser-déposer. Extensibles par la communauté. |
 | **RBAC & gouvernance** | Profils métiers, techniques, admin. Permissions granulaires par catalogue, rôles multiples, rôle actif au switch. |
 
-Brique transversale : le tout est **open source, auditable et transparent** (licence ELv2).
+Brique transversale : le tout est **open source, auditable et transparent** (licence
+Apache 2.0).
 
 ## Stack technique
 
@@ -205,14 +207,11 @@ Bugs : [Issues](https://github.com/ParusDB/parusdb/issues).
 
 ## Licence
 
-Code source publié sous licence **ELv2** (Elastic License 2.0) : utilisation, modification
-et déploiement libres, sans redevance — sous les restrictions usuelles de la ELv2 (pas
-d'exploitation du logiciel en offre managée, pas de contournement des protections de licence).
-Référence : <https://elastic.co/licensing/elastic-license>.
-
-Une offre managée officielle, **ParusDB Cloud**, est proposée pour se concentrer sur les
-données sans gérer l'infrastructure — avec migration vers le self-hosting possible à tout
-moment. Contact : [parusdb.com](https://parusdb.com/).
+Code source publié sous licence **Apache 2.0** : utilisation, modification et
+déploiement libres — y compris à des fins commerciales — sous réserve des
+conditions usuelles de la licence (conservation des notices, mention des
+modifications, clause de non-contrefaçon de brevets).
+Texte intégral : [`LICENSE`](LICENSE). Mentions des composants tiers : [`NOTICE`](NOTICE).
 
 ## Liens
 

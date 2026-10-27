@@ -1,0 +1,16 @@
+ParusDB
+Copyright 2025 The ParusDB Authors
+
+This product includes software developed by third parties and distributed
+under their own licenses:
+
+- Supabase self-hosted stack (supabase/docker) — Apache License 2.0,
+  Copyright Supabase, Inc.
+- dlt (data load tool) and dlt verified sources (dlthub) — Apache License 2.0,
+  Copyright dltHub.
+- Sources verified dlt vendues dans apps/dlt (commit épinglé, cf.
+  apps/dlt/Dockerfile) — Apache License 2.0, Copyright dltHub.
+
+This product also depends on, but does not redistribute the source of:
+Apache Polaris, Trino, RustFS, Ollama, mcp-trino — deployed as containers
+via docker-compose, each under its own license.

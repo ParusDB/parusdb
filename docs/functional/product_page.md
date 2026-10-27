@@ -6,7 +6,7 @@ ParusDB est une **plateforme data analytique open source** qui **unifie ELT, Dat
 
 > « ParusDB unifie ELT, Data Lakehouse et agents IA dans une plateforme open source et souveraine. Déployez-la vous-même, contribuez, ou utilisez-la gratuitement. »
 > 
-- **100% Open Source** sous **licence ELv2** : dépôt public sur GitHub — forkez, contribuez, déployez où vous voulez. Aucune dépendance ferme, aucun vendor lock-in.
+- **100% Open Source** sous **licence Apache 2.0** : dépôt public sur GitHub — forkez, contribuez, déployez où vous voulez. Aucune dépendance ferme, aucun vendor lock-in.
 - **Auto-hébergement** par défaut : un simple `docker compose up -d` et l'instance est prête **en 5 minutes**.
 - **Souveraineté totale** : vos données restent sous votre contrôle absolu, aucune donnée ne quitte votre infrastructure.
 - **Gratuite** : « Plus de forfaits, plus de limites. Juste du code, des conteneurs, et la liberté de déployer où vous voulez. »
@@ -69,7 +69,7 @@ Une plateforme où l'IA agentique est au cœur de chaque interaction avec les do
 - **Permissions granulaires par catalogue**.
 - **Rôles multiples**, **rôle actif au switch**.
 
-### **Brique transversale : 100% Open Source — Licence ELv2**
+### **Brique transversale : 100% Open Source — Licence Apache 2.0**
 
 - **Code source complet et transparent sur GitHub** : forkez le dépôt, contribuez, déployez où vous voulez.
 - **Aucune dépendance ferme, aucun vendor lock-in.**
@@ -78,7 +78,7 @@ Une plateforme où l'IA agentique est au cœur de chaque interaction avec les do
 
 ## **🚀 Fonctionnement — « Déployez et utilisez ParusDB en quatre étapes simples »**
 
-1. **Clonez le dépôt** : code source sur GitHub, open source sous licence ELv2. Pas de restriction, pas de coût caché.
+1. **Clonez le dépôt** : code source sur GitHub, open source sous licence Apache 2.0. Pas de restriction, pas de coût caché.
 2. **Déployez avec Docker** : `git clone <https://github.com/ParusDB/parusdb.git`>, puis `docker compose up -d`. Auto-hébergée, sous votre contrôle.
 3. **Connectez vos sources** : choisissez parmi 40+ connecteurs, configurez vos connexions, sélectionnez vos tables. L'ingestion démarre immédiatement.
 4. **Discutez avec vos données** : configurez vos agents IA et posez vos questions en langage naturel. Réponses sourcées, visualisées, exportables.
@@ -93,7 +93,7 @@ Une plateforme où l'IA agentique est au cœur de chaque interaction avec les do
 - **Portable** : Docker, Kubernetes, bare metal… Vous choisissez l'environnement.
 - **BYO tout** : infrastructure, S3, LLM, cloud. Par défaut vous auto-hébergez ; l'hybride est possible avec votre propre S3 et vos propres LLM.
 - **Chiffrement au repos et en transit · Conforme RGPD** : aucune donnée ne quitte votre infrastructure.
-- **Code ouvert, auditable, transparent** (Licence ELv2).
+- **Code ouvert, auditable, transparent** (Licence Apache 2.0).
 
 ---
 
@@ -116,7 +116,7 @@ Une plateforme où l'IA agentique est au cœur de chaque interaction avec les do
 
 | **Bénéfice** | **Détail** |
 | --- | --- |
-| **100% Open Source** | Licence ELv2, gratuit « pour de vrai », code transparent sur GitHub. |
+| **100% Open Source** | Licence Apache 2.0, libre d'utilisation, code transparent sur GitHub. |
 | **Souveraineté totale** | Auto-hébergement, BYO tout (S3, LLM, infrastructure), aucune donnée ne quitte votre infrastructure. |
 | **Déploiement en minutes** | `docker compose up -d`, instance prête en 5 minutes — « pas en mois ». |
 | **Accessibilité** | Interface utilisable sans écrire de code une fois installée ; bases Docker/serveur suffisantes pour déployer. |
