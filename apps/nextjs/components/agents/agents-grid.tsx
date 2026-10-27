@@ -6,7 +6,6 @@ import { Bot, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CharbonPanel } from "@/components/parus/charbon-panel";
-import { ParusLogo } from "@/components/parus/logo";
 import { ConfirmNameDialog } from "@/components/parus/confirm-name-dialog";
 import { deleteAgent } from "@/app/(app)/agents/actions";
 
@@ -26,10 +25,7 @@ export function AgentsGrid({ agents }: { agents: AgentCardData[] }) {
   if (agents.length === 0) {
     return (
       <CharbonPanel className="text-center">
-        <div className="flex justify-center">
-          <ParusLogo />
-        </div>
-        <h2 className="mt-6 font-display text-2xl">Aucun agent pour l’instant</h2>
+        <h2 className="font-display text-2xl">Aucun agent pour l’instant</h2>
         <p className="mx-auto mt-3 max-w-md text-sm text-blanc/70">
           Un agent IA est un modèle, un prompt système et des sources. Créez-en
           un pour interroger le lakehouse en langage naturel.

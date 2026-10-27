@@ -1,4 +1,3 @@
-import { ParusLogo } from "@/components/parus/logo";
 
 // Écrans d’authentification — « moment fort » de la marque (charte §6 et
 // §9.4) : fond charbon, grille, halo jaune radial, carte en rounded-3xl.
@@ -17,9 +16,6 @@ export function AuthShell({
       <div className="pointer-events-none absolute inset-0 grid-bg opacity-40" />
       <div className="relative flex min-h-svh flex-col items-center justify-center p-6">
         <div className="w-full max-w-md">
-          <div className="mb-8 flex justify-center">
-            <ParusLogo />
-          </div>
           <div className="rounded-3xl border border-white/10 bg-card p-8 text-foreground shadow-[0_30px_60px_-20px_rgba(0,0,0,0.8)]">
             <h1 className="font-display text-2xl">{title}</h1>
             <p className="mt-2 text-sm text-muted-foreground">{description}</p>

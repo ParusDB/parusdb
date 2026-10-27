@@ -22,7 +22,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { MessageBubble, MessageContent } from "@/components/chat/message-bubble";
-import { ParusLogo } from "@/components/parus/logo";
 import {
   deleteConversation,
   renameConversation,
@@ -318,7 +317,6 @@ export function ConversationView({
         <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col gap-4 py-6">
         {messages.length === 0 && !streaming ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
-            <ParusLogo />
             <p className="text-sm text-muted-foreground">
               Posez votre première question à {conversation.agentName}.
             </p>

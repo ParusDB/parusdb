@@ -13,7 +13,6 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { CharbonPanel } from "@/components/parus/charbon-panel";
-import { ParusLogo } from "@/components/parus/logo";
 import { createConversation } from "@/app/(app)/chat/actions";
 
 export interface NewChatAgent {
@@ -53,8 +52,7 @@ export function NewChat({ agents }: { agents: NewChatAgent[] }) {
     <div className="mx-auto flex max-w-3xl flex-col items-center">
       <CharbonPanel size="lg" className="w-full">
         <div className="flex flex-col items-center text-center">
-          <ParusLogo />
-          <h1 className="mt-8 font-display text-4xl leading-tight text-balance">
+          <h1 className="font-display text-4xl leading-tight text-balance">
             Parlez à vos données.
             <br />
             Elles vous répondront.

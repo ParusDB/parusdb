@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import { PageHeader } from "@/components/parus/page-header";
 import { CharbonPanel } from "@/components/parus/charbon-panel";
-import { ParusLogo } from "@/components/parus/logo";
 import { ConfirmNameDialog } from "@/components/parus/confirm-name-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -149,10 +148,7 @@ export function CatalogsView({
       <div className="mt-8">
         {catalogs.length === 0 && !polarisError ? (
           <CharbonPanel size="lg" className="text-center">
-            <div className="flex justify-center">
-              <ParusLogo />
-            </div>
-            <h2 className="mt-6 font-display text-3xl">Aucun catalogue</h2>
+            <h2 className="font-display text-3xl">Aucun catalogue</h2>
             <p className="mx-auto mt-3 max-w-lg text-sm text-blanc/70">
               Votre lakehouse est prêt mais vide. Créez un premier catalogue,
               puis connectez une source pour le remplir via un connecteur ELT.

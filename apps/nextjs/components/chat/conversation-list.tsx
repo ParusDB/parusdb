@@ -27,7 +27,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { CharbonPanel } from "@/components/parus/charbon-panel";
-import { ParusLogo } from "@/components/parus/logo";
 import { deleteConversation, renameConversation } from "@/app/(app)/chat/actions";
 
 export interface ConversationItem {
@@ -85,10 +84,7 @@ export function ConversationList({
 
       {conversations.length === 0 ? (
         <CharbonPanel className="text-center">
-          <div className="flex justify-center">
-            <ParusLogo />
-          </div>
-          <h2 className="mt-6 font-display text-2xl">
+          <h2 className="font-display text-2xl">
             Vos données, enfin parlantes.
           </h2>
           <p className="mx-auto mt-3 max-w-md text-sm text-blanc/70">

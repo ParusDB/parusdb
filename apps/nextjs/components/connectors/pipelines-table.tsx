@@ -14,7 +14,6 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { CharbonPanel } from "@/components/parus/charbon-panel";
-import { ParusLogo } from "@/components/parus/logo";
 import { StatusBadge } from "@/components/parus/status";
 import { ConfirmNameDialog } from "@/components/parus/confirm-name-dialog";
 import { formatDate } from "@/lib/format";
@@ -80,10 +79,7 @@ export function PipelinesTable({
     <div className="space-y-4">
       {pipelines.length === 0 ? (
         <CharbonPanel className="text-center">
-          <div className="flex justify-center">
-            <ParusLogo />
-          </div>
-          <h2 className="mt-6 font-display text-2xl">Aucun pipeline</h2>
+          <h2 className="font-display text-2xl">Aucun pipeline</h2>
           <p className="mx-auto mt-3 max-w-md text-sm text-blanc/70">
             Connectez une première source : sélectionnez les tables, choisissez
             le mode d’insertion et l’ordonnancement CRON.

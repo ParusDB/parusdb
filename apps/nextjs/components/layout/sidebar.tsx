@@ -231,13 +231,13 @@ export function SidebarContent({ session }: { session: SidebarProps }) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center px-4 py-5">
-        <Link href="/chat" aria-label="ParusDB — accueil">
-          <ParusLogo />
+      <div>
+        <Link href="/chat" aria-label="ParusDB — accueil" className="block">
+          <ParusLogo className="h-auto w-full" />
         </Link>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-2 pb-4">
+      <nav className="flex-1 overflow-y-auto px-2 pb-4 pt-5">
         {has("chat") ? (
           <>
             <NavLink href="/chat/new" icon={<Plus className="h-4 w-4" strokeWidth={1.8} />} label="Nouveau chat" />
@@ -346,7 +346,9 @@ export function Sidebar({ session }: { session: SidebarProps }) {
             <SidebarContent session={session} />
           </SheetContent>
         </Sheet>
-        <ParusLogo />
+        <Link href="/chat" aria-label="ParusDB — accueil">
+          <ParusLogo className="h-10 w-auto" />
+        </Link>
       </div>
 
       {/* Sidebar fixe (desktop) */}

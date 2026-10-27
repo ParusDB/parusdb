@@ -5,7 +5,6 @@ import { requirePermission } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 import { NewChat } from "@/components/chat/new-chat";
 import { CharbonPanel } from "@/components/parus/charbon-panel";
-import { ParusLogo } from "@/components/parus/logo";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
@@ -23,10 +22,7 @@ export default async function NewChatPage() {
     return (
       <div className="mx-auto max-w-3xl">
         <CharbonPanel size="lg" className="text-center">
-          <div className="flex justify-center">
-            <ParusLogo />
-          </div>
-          <h1 className="mt-6 font-display text-3xl">Aucun agent disponible</h1>
+          <h1 className="font-display text-3xl">Aucun agent disponible</h1>
           <p className="mx-auto mt-3 max-w-md text-sm text-blanc/70">
             Pour discuter avec vos données, il faut d’abord un agent IA. Les
             utilisateurs disposant de la permission « Agents IA » peuvent en
