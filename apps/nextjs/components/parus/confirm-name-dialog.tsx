@@ -26,15 +26,21 @@ export function ConfirmNameDialog({
   expectedName,
   confirmLabel,
   action,
+  open: openProp,
+  onOpenChange,
 }: {
-  trigger: React.ReactNode;
+  trigger?: React.ReactNode;
   title: string;
   description: string;
   expectedName: string;
   confirmLabel?: string;
   action: () => Promise<{ ok: boolean; error?: string }>;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = openProp ?? internalOpen;
+  const setOpen = onOpenChange ?? setInternalOpen;
   const [name, setName] = useState("");
   const [pending, setPending] = useState(false);
   const router = useRouter();
@@ -64,7 +70,7 @@ export function ConfirmNameDialog({
 
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
-      <AlertDialogTrigger asChild>{trigger}</AlertDialogTrigger>
+      {trigger ? <AlertDialogTrigger asChild>{trigger}</AlertDialogTrigger> : null}
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">

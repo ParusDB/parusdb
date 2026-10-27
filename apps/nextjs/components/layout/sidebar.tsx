@@ -23,6 +23,7 @@ import {
   PanelLeft,
 } from "lucide-react";
 import { ParusLogo } from "@/components/parus/logo";
+import { SidebarListItem } from "@/components/layout/sidebar-list-item";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -33,6 +34,11 @@ import {
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { signOut, switchActiveRole } from "@/app/(app)/actions";
+import {
+  deleteConversation,
+  renameConversation,
+} from "@/app/(app)/chat/actions";
+import { deleteAgent, renameAgent } from "@/app/(app)/agents/actions";
 
 export interface SidebarConversation {
   id: string;
@@ -245,16 +251,30 @@ export function SidebarContent({ session }: { session: SidebarProps }) {
               <>
                 <SectionLabel>Conversations</SectionLabel>
                 <div className="space-y-0.5">
-                  {session.conversations.map((c) => (
-                    <NavLink
-                      key={c.id}
-                      href={`/chat/${c.id}`}
-                      icon={<MessageSquare className="h-4 w-4" strokeWidth={1.6} />}
-                      label={c.title ?? `Chat ${c.id.slice(0, 8)}`}
-                      exact
-                      className="py-1.5 text-[13px]"
-                    />
-                  ))}
+                  {session.conversations.map((c) => {
+                    const label = c.title ?? `Chat ${c.id.slice(0, 8)}`;
+                    return (
+                      <SidebarListItem
+                        key={c.id}
+                        label={label}
+                        href={`/chat/${c.id}`}
+                        onRename={async (title) => {
+                          await renameConversation(c.id, title);
+                        }}
+                        onDelete={() => deleteConversation(c.id)}
+                        deleteTitle="Supprimer cette conversation ?"
+                        deleteDescription={`« ${label} » et son historique seront supprimés définitivement.`}
+                      >
+                        <NavLink
+                          href={`/chat/${c.id}`}
+                          icon={<MessageSquare className="h-4 w-4" strokeWidth={1.6} />}
+                          label={label}
+                          exact
+                          className="py-1.5 text-[13px]"
+                        />
+                      </SidebarListItem>
+                    );
+                  })}
                 </div>
               </>
             ) : null}
@@ -267,13 +287,25 @@ export function SidebarContent({ session }: { session: SidebarProps }) {
             <NavLink href="/agents/new" icon={<Plus className="h-4 w-4" strokeWidth={1.8} />} label="Nouvel agent IA" />
             <div className="space-y-0.5">
               {session.agents.map((a) => (
-                <NavLink
+                <SidebarListItem
                   key={a.id}
-                  href={`/agents/${a.id}`}
-                  icon={<Bot className="h-4 w-4" strokeWidth={1.6} />}
                   label={a.name}
-                  className="py-1.5 text-[13px]"
-                />
+                  href={`/agents/${a.id}`}
+                  onRename={async (name) => {
+                    await renameAgent(a.id, name);
+                  }}
+                  onDelete={() => deleteAgent(a.id)}
+                  deleteRequiresName
+                  deleteTitle="Supprimer cet agent ?"
+                  deleteDescription={`Toutes les sources associées à « ${a.name} » seront détachées. Les conversations existantes sont conservées et l'agent ne pourra plus être supprimé tant qu'elles y font référence.`}
+                >
+                  <NavLink
+                    href={`/agents/${a.id}`}
+                    icon={<Bot className="h-4 w-4" strokeWidth={1.6} />}
+                    label={a.name}
+                    className="py-1.5 text-[13px]"
+                  />
+                </SidebarListItem>
               ))}
             </div>
           </>

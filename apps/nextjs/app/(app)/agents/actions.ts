@@ -102,6 +102,24 @@ export async function updateAgent(id: string, input: AgentInput) {
   redirect(`/agents`);
 }
 
+// Renommage léger (sidebar) : ne touche que le nom, sans naviguer.
+export async function renameAgent(id: string, name: string) {
+  await requirePermission("agents");
+  const supabase = await createClient();
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("Le nom de l'agent est obligatoire.");
+  const { error } = await supabase
+    .schema("agents")
+    .from("agents")
+    .update({ name: trimmed })
+    .eq("id", id);
+  if (error) {
+    throw new Error(`Le renommage a échoué : ${error.message}`);
+  }
+  revalidatePath("/agents");
+  revalidatePath(`/agents/${id}`);
+}
+
 export async function deleteAgent(id: string): Promise<{ ok: boolean; error?: string }> {
   await requirePermission("agents");
   const supabase = await createClient();
