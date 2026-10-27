@@ -93,6 +93,14 @@ L'interface propose une **barre de navigation latérale gauche** avec les sectio
 
 **Note** : Le menu Support est positionné en bas du menu.
 
+**Logo** : le logo officiel occupe le haut du menu latéral (plein cadre) et sert de
+bouton « Accueil » (retour au Chat).
+
+**Items Conversations et Agents IA** : chaque élément propose un menu « trois points »
+(visible au survol) avec :
+- ✏️ Renommer
+- 🗑️ Supprimer (confirmation ; ressaisie du nom pour un agent)
+
 **Zone utilisateur** (en bas à gauche) :
 
 - Affichage du user connecté (prénom, nom, email)
@@ -316,13 +324,13 @@ L'interface propose une **barre de navigation latérale gauche** avec les sectio
 **Interface de conversation** :
 
 - **État initial** (conversation vierge) :
-    - Logo AbyssIA au centre
+    - Message d'accueil « Posez votre première question à [agent] » (sans logo)
     - Zone de texte en dessous pour :
         - Saisir le message
         - Sélectionner l'agent
         - Bouton "Envoyer"
 - **Après premier message** :
-    - Logo disparaît
+    - Message d'accueil disparaît
     - Zone de texte descend
     - **Affichage classique** :
         - Messages utilisateur → **à droite**

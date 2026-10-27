@@ -253,6 +253,10 @@ l'app.
   **Jointures cross-schema** : la syntaxe `table(colonnes)` dans un `select()` ne
   joint pas une table d'un autre schéma exposé — faire deux requêtes séparées
   (ex. `chat.conversations` → `agents.agents`).
+- **Erreurs PostgREST silencieuses** : toujours vérifier `error` d'une requête avant
+  d'utiliser `data` — un `data ?? []` masque les échecs (PGRST200/205) et rend une
+  page silencieusement vide (cas réel : `/chat` affichait « aucune conversation »
+  alors que l'embedding cross-schema échouait en 400).
 - **Session et RBAC** : helpers de `lib/session.ts` (`requireSession`,
   `requirePermission` → redirection serveur) ; les Server Actions sont colocalisées
   par feature (`actions.ts`), valident les entrées et `revalidate` explicitement.
@@ -303,6 +307,11 @@ remplacer
   CTA marketing/auth). Pas de cards carrées ni de rayons > `3xl`.
 - **Motifs signature** : sections « moments forts » (login, empty states, onboarding) =
   charbon + `grid-bg` + halo jaune radial.
+- **Logo de marque** : `apps/nextjs/public/parusdb-logo.jpg` (JPEG fond blanc, marges
+  rognées), servi par `ParusLogo` (`components/parus/logo.tsx`). Emplacement unique :
+  en-tête de la sidebar, plein cadre, lien « Accueil » vers `/chat` — jamais dans les
+  états vides, les écrans d'authentification ni le contenu principal. Favicon :
+  `app/favicon.ico`.
 - **Interactions** : hover = soulèvement `-translate-y-*` + transition douce ; pas de scale
   agressif ni d'animation flashy ; lucide `strokeWidth` 1.6–1.8.
 - **Dark mode** : via `next-themes` (`attribute="class"`), inversion charbon/blanc cassé

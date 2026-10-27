@@ -589,7 +589,7 @@ La landing est marketing ; l'app est un outil de travail dense. Règles de tradu
 | Ombres de marque | À conserver sur les modaux et dropdowns (`shadow-elev`) |
 
 **Sidebar** : fond `charbon` (ou `card` en clair), texte `blanc/70` → `hover:text-jaune` sur les
-items actifs, logo en haut à gauche, `w-64`.
+items actifs, logo officiel plein cadre en tête (bandeau blanc, bouton accueil), `w-64`.
 
 ---
 
@@ -672,22 +672,31 @@ le « feu jaune » des badges de statut).
 
 ## 11. Logos et assets
 
-Assets de référence dans `src/assets/` :
+Assets applicatifs (dans `apps/nextjs/`) :
 
 | Fichier | Usage |
 | --- | --- |
-| `logo-parusdb-avec-nom-sans-fond.png` | Logo horizontal avec nom, fond transparent — usage général |
-| `logo-parusdb-banniere-transparent.png` | Bannière logo navbar (`h-11 sm:h-14`) |
-| `logo-github-transparent.png` | Icône GitHub sur fond clair/jaune (`h-5`) |
-| `logo-github-fond-noir.jpg` | Icône GitHub sur fond sombre |
-| `mesange-hero.jpg` | Mascotte mésange, photo carrée — hero |
+| `public/parusdb-logo.jpg` | Logo officiel — JPEG à fond blanc, marges rognées (1224×398) |
+| `app/favicon.ico` | Favicon de l'application (convention Next.js des metadata files) |
+
+Une variante transparente (artwork clair, fond PNG alpha) pourra être ajoutée si un
+thème sombre exige un second rendu du logo ; elle n'existe pas à ce jour dans le dépôt.
+
+Assets de la landing (hors dépôt de l'application) : `logo-parusdb-avec-nom-sans-fond.png`,
+`logo-parusdb-banniere-transparent.png`, `logo-github-transparent.png`,
+`logo-github-fond-noir.jpg`, `mesange-hero.jpg`.
 
 Règles :
 
-- Logo sur fond charbon/jaune : version transparente ; jamais de détourage sur fond blanc.
-- Ne jamais recolorer ni déformer le logo ; hauteur navbar `h-11` mobile / `h-14` desktop.
+- **Emplacement unique** : en tête du menu latéral, plein cadre — le blanc du JPEG
+  couvre tout le haut de la colonne, coins supérieurs alignés sur ceux de la sidebar.
+  Le logo est le bouton « Accueil » (retour au Chat). Jamais dans les états vides,
+  les écrans d'authentification ni le contenu principal.
+- **Décision assumée** : le JPEG à fond blanc s'affiche en bandeau plein cadre sur le
+  charbon de la sidebar (la version transparente a été testée puis écartée). Ne jamais
+  recolorer ni déformer le logo.
+- En barre supérieure mobile : hauteur `h-10`.
 - Le titre SEO de référence : « ParusDB - Plateforme Data Analytique IAgentique Open Source ».
-- Favicon : `/favicon.ico` (à copier dans `app/` en Next.js).
 
 ---
 
