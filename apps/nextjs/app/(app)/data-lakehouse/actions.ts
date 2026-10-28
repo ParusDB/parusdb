@@ -184,6 +184,15 @@ export async function deleteCatalogAction(
       error: "La suppression d'un catalogue est réservée aux administrateurs.",
     };
   }
+  // Le catalogue par défaut de la plateforme (catalogue système, ex. parusdb)
+  // est intouchable : l'UI masque le bouton, l'action refuse quelle que soit
+  // la provenance de l'appel.
+  if (name === DEFAULT_CATALOG) {
+    return {
+      ok: false,
+      error: `Le catalogue « ${DEFAULT_CATALOG} » est le catalogue système de la plateforme : il ne peut pas être supprimé.`,
+    };
+  }
   const binding = trinoBindingFor(name);
   if (binding) {
     try {

@@ -202,7 +202,7 @@ export function CatalogsView({
                       <Play className="h-3.5 w-3.5" strokeWidth={1.6} /> Ouvrir
                     </Link>
                   </Button>
-                  {isAdmin ? (
+                  {isAdmin && !catalog.isDefault ? (
                     <ConfirmNameDialog
                       title="Supprimer ce catalogue ?"
                       description={`Le catalogue Polaris « ${catalog.name} », ses schémas, ses tables et tous les fichiers Iceberg associés seront purgés.`}

@@ -10,8 +10,13 @@ const S3_BUCKET = process.env.POLARIS_S3_BUCKET ?? "parus-lakehouse";
 const S3_ENDPOINT = process.env.POLARIS_S3_ENDPOINT ?? "http://rustfs:9000";
 const S3_REGION = process.env.POLARIS_S3_REGION ?? "us-east-1";
 
+// Catalogue par défaut de la plateforme : le catalogue système `parusdb`,
+// créé au setup (apps/polaris/setup.sh) avant tout autre et **non
+// supprimable** (garde UI + Server Action, spec §Data Lakehouse). Les
+// catalogues d'environnement (dev, prod…) et créés par les utilisateurs
+// sont ordinaires.
 export const DEFAULT_CATALOG =
-  process.env.POLARIS_DEFAULT_CATALOG ?? "dev";
+  process.env.POLARIS_SYSTEM_CATALOG ?? "parusdb";
 
 export interface PolarisCatalog {
   name: string;

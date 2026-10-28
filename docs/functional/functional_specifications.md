@@ -129,8 +129,8 @@ créés automatiquement au démarrage :
 
 | Catalogue | Rôle |
 |---|---|
-| `parusdb` | Catalogue **système** de la plateforme — usage libre (administration de ParusDB, données internes), l'équivalent de la base `snowflake` de Snowflake |
-| `dev` | Catalogue d'**environnement** par défaut — cible des données ingérées par les pipelines ELT |
+| `parusdb` | Catalogue **système** de la plateforme — **catalogue par défaut, premier créé, non supprimable**. Usage libre (administration de ParusDB, données internes), l'équivalent de la base `snowflake` de Snowflake |
+| `dev` | Catalogue d'**environnement** initial — premier catalogue de données ; les pipelines ELT visent librement n'importe quel catalogue du lakehouse |
 
 Chaque catalogue est requêtable dans Trino sous **son propre nom** (jamais un
 nom technique générique) : `SELECT * FROM dev.clients`, `SELECT * FROM

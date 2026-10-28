@@ -475,15 +475,19 @@ revient en Envoy.
   le nom du fichier (donc du catalogue Trino) est **toujours le nom du catalogue
   Polaris** : on requête `SELECT … FROM dev.<schéma>.<table>`, jamais
   `FROM polaris…`. Aucun fichier statique commité (`apps/trino/catalog/*.properties`
-  est gitignoré) : le setup de Trino génère les bindings du catalogue système
-  (`POLARIS_SYSTEM_CATALOG`, ex. `parusdb`) et du catalogue par défaut
-  (`POLARIS_CATALOG_NAME`, ex. `dev`) ; l'app génère celui des nouveaux catalogues
+  est gitignoré) : le setup de Trino génère les bindings du catalogue
+  système/par défaut (`POLARIS_SYSTEM_CATALOG`, ex. `parusdb`) et du catalogue
+  d'environnement initial (`POLARIS_CATALOG_NAME`, ex. `dev`) ; l'app génère
+  celui des nouveaux catalogues
   (`TRINO_CATALOG_DIR`) mais **Trino ne le charge qu'au redémarrage**
   (`cd apps/trino && sh run.sh restart`) — l'UI doit l'indiquer.
 - **Catalogues d'installation** : `apps/polaris/setup.sh` crée le catalogue
-  **système** (`parusdb` — usage libre : administration de la plateforme,
-  l'équivalent de la base `snowflake` de Snowflake) **puis** le catalogue
-  d'**environnement** par défaut (`dev`). Leurs descriptions et le RBAC vivent
+  **système** (`parusdb`) **puis** le catalogue d'**environnement** initial
+  (`dev`). `parusdb` est le **catalogue par défaut de la plateforme**
+  (`DEFAULT_CATALOG` côté app, env `POLARIS_SYSTEM_CATALOG`) : premier créé,
+  **non supprimable** — l'UI masque le bouton de suppression et
+  `deleteCatalogAction` refuse quel que soit le canal. Les pipelines ELT
+  visent librement n'importe quel catalogue. Descriptions et RBAC vivent
   dans le seed `apps/supabase/sql/02-lakehouse-catalogs.sql` (appliqué par le
   `setup.sh` racine, idempotent) — Polaris reste la source de vérité des
   catalogues, le registre applicatif ne porte que description et accès.

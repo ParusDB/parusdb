@@ -48,7 +48,7 @@ afficher** (copie par `sed`/`grep`, pas de copier-coller dans un terminal).
 | `TRINO_DEFAULT_CATALOG_BINDING` | Catalogue Trino lié au catalogue Polaris par défaut (`polaris`) |
 | `TRINO_CATALOG_DIR` | Dossier des `.properties` Trino (`../trino/catalog`) : l'app y écrit les bindings des nouveaux catalogues |
 | `POLARIS_API_URL` / `POLARIS_REALM` / `POLARIS_ROOT_CLIENT_ID` / `POLARIS_ROOT_CLIENT_SECRET` | API Management Polaris (secret importé de `apps/polaris/.env`) |
-| `POLARIS_DEFAULT_CATALOG` / `POLARIS_S3_BUCKET` / `POLARIS_S3_ENDPOINT` / `POLARIS_S3_REGION` | Catalogue par défaut et stockage (RustFS) |
+| `POLARIS_SYSTEM_CATALOG` / `POLARIS_S3_BUCKET` / `POLARIS_S3_ENDPOINT` / `POLARIS_S3_REGION` | Catalogue système (par défaut de la plateforme) et stockage (RustFS) |
 | `PARUSDB_DLT_IMAGE` / `PARUSDB_DLT_NETWORK` | Runner dlt pour le « Test connexion » du wizard (introspection en conteneur jetable) — image construite par `apps/dlt` |
 
 ## Architecture applicative

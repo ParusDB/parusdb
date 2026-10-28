@@ -4,10 +4,12 @@
 -- Enregistre dans le registre applicatif (descriptions, RBAC) les catalogues
 -- Polaris créés par apps/polaris/setup.sh :
 --   - le catalogue système de la plateforme (POLARIS_SYSTEM_CATALOG, ex.
---     `parusdb` — usage libre : administration de la plateforme, données
+--     `parusdb` — catalogue par défaut de la plateforme, premier créé, non
+--     supprimable : usage libre, administration de ParusDB, données
 --     internes, l'équivalent de la base « snowflake » de Snowflake) ;
---   - le catalogue d'environnement par défaut (POLARIS_DEFAULT_CATALOG, ex.
---     `dev` — cible des pipelines ELT).
+--   - le catalogue d'environnement initial (POLARIS_DEFAULT_CATALOG, ex.
+--     `dev` — premier catalogue de données ; les pipelines ELT visent
+--     librement n'importe quel catalogue du lakehouse).
 --
 -- Polaris reste la source de vérité des catalogues : ce seed ne crée rien côté
 -- Iceberg, il ne fait que décrire et ouvrir l'accès.
@@ -27,7 +29,7 @@ values
   (:'system_catalog',
    'Catalogue système de la plateforme : usage libre (administration de ParusDB, données internes).'),
   (:'default_catalog',
-   'Catalogue d''environnement par défaut : données ingérées par les pipelines ELT.')
+   'Catalogue d''environnement par défaut. Créez vos propres catalogues selon vos besoins (prod, stg…).')
 on conflict (catalog_name) do update
   set description = excluded.description,
       updated_at = now();
