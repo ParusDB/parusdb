@@ -43,16 +43,28 @@ else
 fi
 
 echo "===> Cleaning up bind-mounted directories..."
-BIND_MOUNTS="./volumes/db/data ./volumes/storage"
-
-for dir in $BIND_MOUNTS; do
+# Fichiers écrits par les conteneurs (propriétaire root) : suppression via un
+# conteneur éphémère busybox (Docker tourne en root), sans sudo. Repli sur
+# rm -rf si Docker échoue (fichiers appartenant à l'utilisateur).
+remove_bind_mount() {
+    dir="$1"
     if [ -d "$dir" ]; then
         echo "Removing $dir..."
         confirm
-        rm -rf "$dir"
+        parent=$(cd "$(dirname "$dir")" && pwd)
+        base=$(basename "$dir")
+        if ! docker run --rm -v "$parent:/v" busybox rm -rf "/v/$base" 2>/dev/null; then
+            rm -rf "$dir"
+        fi
     else
         echo "$dir not found."
     fi
+}
+
+BIND_MOUNTS="./volumes/db/data ./volumes/storage"
+
+for dir in $BIND_MOUNTS; do
+    remove_bind_mount "$dir"
 done
 
 echo "===> Resetting .env file (will save backup to .env.old)..."

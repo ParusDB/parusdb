@@ -90,6 +90,12 @@ RLS partout).
 ```
 parusdb/
 ├── AGENTS.md                     # Ce fichier
+├── setup.sh                      # Première installation : orchestre les setup des apps dans l'ordre
+│                                 # des dépendances + resynchronise apps/nextjs/.env.local (cf. §5)
+├── run.sh                        # Cycle de vie de toute la stack : start/stop/restart/status/logs
+│                                 # (délègue aux run.sh des apps, ordre des dépendances)
+├── reset.sh                      # Désinstallation complète : reset des apps en ordre inverse
+│                                 # (destructif ; option --purge-images pour retirer les images)
 ├── docs/functional/              # Specs produit : fiche, fonctionnel, charte
 ├── .agents/skills/               # Skills officiels Supabase (voir §9)
 │   ├── supabase/SKILL.md
@@ -144,6 +150,9 @@ NVIDIA Container Toolkit (runtime `nvidia`) — voir `apps/ollama/README.md`.
 
 | Action | Commande |
 |---|---|
+| **Installer toute la stack** | `sh setup.sh` (à la racine) — orchestre les apps dans l'ordre des dépendances, applique le SQL applicatif, expose les schémas PostgREST, resynchronise `apps/nextjs/.env.local` (clés Supabase, credentials Polaris, clé de chiffrement) sans les afficher, puis vérifie dlt |
+| **Démarrer / arrêter toute la stack** | `sh run.sh start` / `sh run.sh stop` (à la racine) — ordre des dépendances ; `status`, `logs <app> [service]`, ciblage par app : `sh run.sh start polaris trino` |
+| **Désinstaller tout** | `sh reset.sh` (destructif : conteneurs, volumes, données, `.env` → `.env.old` ; `--purge-images` pour retirer aussi les images) |
 | Installer le frontend | `cd apps/nextjs && npm install` |
 | Dev frontend (http://localhost:3000) | `cd apps/nextjs && npm run dev` |
 | Build de production | `cd apps/nextjs && npm run build` |
@@ -163,6 +172,13 @@ NVIDIA Container Toolkit (runtime `nvidia`) — voir `apps/ollama/README.md`.
 | Appliquer le schéma applicatif (idempotent) | `docker exec -i supabase-db psql -U supabase_admin -d postgres < apps/supabase/sql/01-parusdb-app.sql` |
 | Réinitialiser Polaris / Trino / mcp-trino | `sh reset.sh` dans le dossier correspondant (destructif : métadonnées Polaris + `.env`) |
 | Réinitialiser Ollama | `sh reset.sh` (destructif : conteneurs + modèles téléchargés + `.env`) |
+
+**Leçon d'expérience (reset sans sudo)** : les fichiers des volumes bind-mountés
+(`volumes/db/data`, `volumes/storage`, `volumes/ollama`) sont écrits par les
+conteneurs et appartiennent à root — un `rm -rf` utilisateur échoue
+(« Permission non accordée »). Les `reset.sh` de supabase et ollama les suppriment
+donc via un conteneur éphémère `busybox` ; si cette approche est retirée, il faut
+`sudo rm -rf` à la main (incident réel).
 
 Le frontend utilise **npm** (`package-lock.json`). Ne pas introduire pnpm/yarn ni éditer les
 lockfiles à la main.
@@ -360,7 +376,10 @@ revient en Envoy.
   recréé (`docker compose up -d rest`) — sinon PostgREST répond PGRST205 « Could not
   find the table » même si la table existe (une modification du `.env` exige une
   recréation, pas un simple restart). Ajouter aussi la ligne au `.env` après tout
-  `reset.sh`.
+  `reset.sh`. Le `setup.sh` à la racine fait ce correctif automatiquement après
+  chaque réinstallation — un reset suivi d'un setup à la main sans repasser par
+  le script racine exige de rejouer l'étape (sinon : connexion en échec
+  « Aucun rôle attribué au compte », incident réel post-reset).
 - **Supabase Realtime** : une table ne peut être diffusée que si elle appartient à la
   publication `supabase_realtime` (voir le bloc idempotent de `01-parusdb-app.sql`
   pour `chat.stream_events`) ; les abonnés passent par la RLS de la table avec leur

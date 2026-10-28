@@ -51,7 +51,12 @@ fi
 echo "===> Suppression des modèles (volumes/ollama)..."
 confirm
 if [ -d "volumes/ollama" ]; then
-    rm -rf volumes/ollama
+    # Fichiers écrits par le conteneur (propriétaire root) : suppression via
+    # un conteneur éphémère busybox, sans sudo. Repli sur rm -rf si Docker
+    # échoue (fichiers appartenant à l'utilisateur).
+    if ! docker run --rm -v "$(pwd)/volumes:/v" busybox rm -rf /v/ollama 2>/dev/null; then
+        rm -rf volumes/ollama
+    fi
     echo "    volumes/ollama supprimé"
 else
     echo "    aucun dossier volumes/ollama trouvé"
