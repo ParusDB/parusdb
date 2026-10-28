@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -8,6 +8,7 @@ import {
   Database,
   FileText,
   HardDrive,
+  Loader2,
   Play,
   Plus,
   Search,
@@ -32,7 +33,9 @@ import { formatBytes, formatDate } from "@/lib/format";
 import {
   createCatalogAction,
   deleteCatalogAction,
+  getTrinoRestartStatus,
 } from "@/app/(app)/data-lakehouse/actions";
+import type { TrinoRestartState } from "@/lib/trino-restart";
 
 export interface CatalogCard {
   name: string;
@@ -49,6 +52,7 @@ export function CatalogsView({
   trinoError,
   isAdmin,
   boundCount,
+  trinoRestart,
 }: {
   catalogs: CatalogCard[];
   metrics: {
@@ -62,12 +66,41 @@ export function CatalogsView({
   trinoError: string | null;
   isAdmin: boolean;
   boundCount: number;
+  trinoRestart: TrinoRestartState;
 }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [pending, setPending] = useState(false);
+  const [restart, setRestart] = useState<TrinoRestartState>(trinoRestart);
   const router = useRouter();
+
+  // Redémarrage automatique de Trino : l'état vit côté serveur (attente
+  // d'inactivité, docker restart, retour à la santé) — l'UI le suit par
+  // polling tant que le cycle est en cours, puis rafraîchit la page pour
+  // faire apparaître le binding.
+  useEffect(() => {
+    if (restart.phase === "waiting" || restart.phase === "restarting") {
+      let cancelled = false;
+      const timer = setTimeout(() => {
+        void (async () => {
+          const status = await getTrinoRestartStatus();
+          if (!cancelled) setRestart(status);
+        })();
+      }, 2000);
+      return () => {
+        cancelled = true;
+        clearTimeout(timer);
+      };
+    }
+    if (restart.phase === "done") {
+      toast.success("Trino a redémarré : le catalogue est requêtable.");
+      router.refresh();
+    } else if (restart.phase === "error" && restart.error) {
+      toast.error(`Le redémarrage de Trino a échoué : ${restart.error}`);
+    }
+    return;
+  }, [restart, router]);
 
   async function handleCreate() {
     if (pending) return;
@@ -80,6 +113,9 @@ export function CatalogsView({
         setCreateOpen(false);
         setName("");
         setDescription("");
+        // Le redémarrage automatique est engagé côté serveur : on suit son
+        // état pour désactiver « Ouvrir » jusqu'à ce que Trino soit revenu.
+        setRestart(await getTrinoRestartStatus());
         router.refresh();
       } else {
         toast.error(result.error ?? "La création a échoué.");
@@ -197,11 +233,28 @@ export function CatalogsView({
                   {catalog.createdAt ? ` · ${formatDate(catalog.createdAt)}` : ""}
                 </p>
                 <div className="mt-5 flex items-center gap-1.5 border-t border-border pt-4">
-                  <Button asChild variant="outline" size="sm" className="flex-1">
-                    <Link href={`/data-lakehouse/${catalog.name}`}>
-                      <Play className="h-3.5 w-3.5" strokeWidth={1.6} /> Ouvrir
-                    </Link>
-                  </Button>
+                  {restart.catalog === catalog.name &&
+                  (restart.phase === "waiting" ||
+                    restart.phase === "restarting") ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      disabled
+                    >
+                      <Loader2
+                        className="h-3.5 w-3.5 animate-spin"
+                        strokeWidth={1.6}
+                      />
+                      Redémarrage en cours…
+                    </Button>
+                  ) : (
+                    <Button asChild variant="outline" size="sm" className="flex-1">
+                      <Link href={`/data-lakehouse/${catalog.name}`}>
+                        <Play className="h-3.5 w-3.5" strokeWidth={1.6} /> Ouvrir
+                      </Link>
+                    </Button>
+                  )}
                   {isAdmin && !catalog.isDefault ? (
                     <ConfirmNameDialog
                       title="Supprimer ce catalogue ?"
@@ -229,8 +282,8 @@ export function CatalogsView({
 
       <p className="mono mt-8 text-xs text-muted-foreground">
         {boundCount} catalogue{boundCount > 1 ? "s" : ""} lié
-        {boundCount > 1 ? "s" : ""} à Trino · Les nouveaux catalogues exigent un
-        redémarrage Trino (cd apps/trino && sh run.sh restart).
+        {boundCount > 1 ? "s" : ""} à Trino · Après création, Trino redémarre
+        automatiquement dès qu&apos;aucune requête n&apos;est en cours.
       </p>
 
       {/* Dialog de création */}

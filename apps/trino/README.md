@@ -50,8 +50,10 @@ Prérequis : stack Supabase (avec RustFS) puis Polaris démarrées
   fichier est le nom du catalogue Trino ; `iceberg.rest-catalog.warehouse`
   désigne le catalogue Polaris). Trino ne charge ses catalogues **qu'au
   démarrage** : l'app (apps/nextjs) génère le `.properties` des nouveaux
-  catalogues (`TRINO_CATALOG_DIR`), puis un `sh run.sh restart` est requis —
-  l'UI l'indique à l'utilisateur.
+  catalogues (`TRINO_CATALOG_DIR`) puis **redémarre automatiquement le
+  conteneur** (`lib/trino-restart.ts`, CLI docker — différé tant qu'une
+  requête SQL est en cours) ; l'UI suit l'état du cycle. Seuls les bindings
+  d'installation (`parusdb.properties`, `dev.properties`) sont versionnés.
 - **L'app consomme Trino via le client officiel trino-js-client**
   (`lib/trino.ts`, npm `trino-client`) : itérer toutes les pages du résultat
   (`for await`), remonter `QueryResult.error` en erreur applicative. Le chat,

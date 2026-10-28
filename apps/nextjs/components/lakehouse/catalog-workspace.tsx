@@ -228,8 +228,8 @@ export function CatalogWorkspace({
         <p className="mb-6 flex items-start gap-2 rounded-lg border border-border bg-muted px-4 py-3 text-sm text-muted-foreground">
           <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-olive" strokeWidth={1.8} />
           Ce catalogue n’est pas encore chargé par Trino. Générez sa
-          configuration puis redémarrez Trino :
-          <code className="mono text-xs">cd apps/trino && sh run.sh restart</code>
+          configuration : Trino redémarre automatiquement (dès qu’aucune
+          requête n’est en cours).
         </p>
       ) : null}
 

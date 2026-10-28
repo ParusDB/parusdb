@@ -479,8 +479,15 @@ revient en Envoy.
   système/par défaut (`POLARIS_SYSTEM_CATALOG`, ex. `parusdb`) et du catalogue
   d'environnement initial (`POLARIS_CATALOG_NAME`, ex. `dev`) ; l'app génère
   celui des nouveaux catalogues
-  (`TRINO_CATALOG_DIR`) mais **Trino ne le charge qu'au redémarrage**
-  (`cd apps/trino && sh run.sh restart`) — l'UI doit l'indiquer.
+  (`TRINO_CATALOG_DIR`) et **redémarre automatiquement Trino**
+  (`lib/trino-restart.ts`) : attente d'inactivité (endpoint UI `/v1/query` du
+  coordinateur, seuls les états actifs comptent), `docker restart` via CLI
+  (`TRINO_CONTAINER_NAME` — le serveur Next doit accéder au CLI Docker), attente
+  de santé (`/v1/info`), délai maximal d'attente avant de forcer. L'état vit en
+  mémoire du processus serveur, interrogé par l'UI (bouton « Ouvrir » désactivé
+  « Redémarrage en cours… » tant que le cycle n'est pas terminé) — aucune
+  commande manuelle. Seuls `parusdb.properties` et `dev.properties` sont
+  versionnés (`apps/trino/.gitignore`) ; les autres bindings restent locaux.
 - **Catalogues d'installation** : `apps/polaris/setup.sh` crée le catalogue
   **système** (`parusdb`) **puis** le catalogue d'**environnement** initial
   (`dev`). `parusdb` est le **catalogue par défaut de la plateforme**

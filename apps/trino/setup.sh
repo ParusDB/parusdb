@@ -159,7 +159,8 @@ generate_binding() {
     cat > "$SCRIPT_DIR/catalog/$name.properties" <<PROPS
 #
 # Catalogue Trino "$name" : Iceberg REST -> Polaris (généré par setup.sh).
-# Redémarrer Trino pour le prendre en compte : sh run.sh restart
+# Chargé par Trino à son prochain (re)démarrage — automatique après création
+# via l'application (dès qu'aucune requête n'est en cours).
 #
 connector.name=iceberg
 iceberg.catalog.type=rest

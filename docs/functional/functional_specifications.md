@@ -118,6 +118,7 @@ bouton « Accueil » (retour au Chat).
 **Fonctionnalités** :
 
 - ✅ Création de **multiples catalogues** (exemple vision technique : prod, dev, stg)
+- ✅ **Redémarrage Trino automatique** après création d'un catalogue — différé tant qu'une requête SQL est en cours, annoncé dans l'interface (« Redémarrage en cours… ») : aucune commande en terminal n'est nécessaire
 - ✅ Organisation en **schémas** (customers, products, etc.)
 - ✅ Association des catalogues/schémas à un ou plusieurs **agents LLM**
 - ✅ **Interface SQL** : Éditeur de requêtes avec coloration syntaxique, onglets, affichage des résultats

@@ -6,6 +6,7 @@ import { requirePermission } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadCatalogViews, computeCatalogStats } from "@/lib/lakehouse";
+import { getTrinoRestartState } from "@/lib/trino-restart";
 import type { CatalogEntry } from "@/types/db";
 
 export default async function DataLakehousePage() {
@@ -69,6 +70,7 @@ export default async function DataLakehousePage() {
         trinoError={trinoError}
         isAdmin={session.has("admin.users")}
         boundCount={bound.length}
+        trinoRestart={getTrinoRestartState()}
       />
     </div>
   );

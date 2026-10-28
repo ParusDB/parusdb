@@ -13,6 +13,11 @@ import {
   trinoBindingFor,
 } from "@/lib/lakehouse";
 import { quoteIdent, trinoQuery } from "@/lib/trino";
+import {
+  getTrinoRestartState,
+  requestTrinoRestart,
+  type TrinoRestartState,
+} from "@/lib/trino-restart";
 
 const NAME_PATTERN = /^[a-z][a-z0-9_]*$/;
 
@@ -42,7 +47,7 @@ export async function executeQuery(
     return {
       ok: false,
       error:
-        "Ce catalogue n'est pas encore lié à Trino. Générez sa configuration puis redémarrez Trino (cd apps/trino && sh run.sh restart).",
+        "Ce catalogue n'est pas encore lié à Trino. Si vous venez de le créer, son redémarrage automatique est peut-être en cours — réessayez dans un instant.",
     };
   }
   try {
@@ -144,7 +149,8 @@ export async function createCatalogAction(
     );
   }
 
-  // 4. Binding Trino : fichier de configuration à redémarrer.
+  // 4. Binding Trino : fichier de configuration chargé au prochain
+  //    redémarrage — automatique, dès qu'aucune requête n'est en cours.
   let warning: string | undefined;
   const dir = process.env.TRINO_CATALOG_DIR;
   if (dir) {
@@ -154,8 +160,9 @@ export async function createCatalogAction(
         trinoBindingFileContent(trimmed),
         "utf8",
       );
+      requestTrinoRestart(trimmed);
       warning =
-        "Catalogue créé. Redémarrez Trino pour l'interroger : cd apps/trino && sh run.sh restart.";
+        "Catalogue créé. Trino redémarre automatiquement pour le rendre requêtable (dès qu'aucune requête n'est en cours).";
     } catch {
       warning =
         "Catalogue créé, mais le fichier de binding Trino n'a pas pu être écrit : vérifiez TRINO_CATALOG_DIR.";
@@ -262,10 +269,18 @@ export async function generateBindingAction(
       error: `L'écriture du fichier a échoué : ${error instanceof Error ? error.message : "erreur inattendue"}`,
     };
   }
+  requestTrinoRestart(name);
   revalidatePath("/data-lakehouse");
   revalidatePath(`/data-lakehouse/${name}`);
   return {
     ok: true,
-    warning: `Redémarrez Trino pour activer le catalogue : cd apps/trino && sh run.sh restart.`,
+    warning:
+      "Configuration générée. Trino redémarre automatiquement (dès qu'aucune requête n'est en cours).",
   };
+}
+
+// État du redémarrage automatique de Trino (polling de l'UI).
+export async function getTrinoRestartStatus(): Promise<TrinoRestartState> {
+  await requirePermission("lakehouse");
+  return getTrinoRestartState();
 }
