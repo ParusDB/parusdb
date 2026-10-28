@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePermission } from "@/lib/session";
 import { encryptSecret } from "@/lib/crypto";
+import { deleteModel, validateModelName } from "@/lib/ollama";
 import {
   discoverProviderModels,
   type ProviderApiKind,
@@ -382,6 +383,46 @@ export async function deleteProvider(
     .eq("id", id);
   if (error) {
     return { ok: false, error: `La suppression a échoué : ${error.message}` };
+  }
+  revalidatePath("/admin/providers");
+  return { ok: true };
+}
+
+// Suppression d'un modèle local Ollama (spec §Fournisseurs LLM). Refusé si
+// des agents l'utilisent encore : leur exécution échouerait silencieusement.
+export async function deleteOllamaModel(
+  model: string,
+): Promise<{ ok: boolean; error?: string }> {
+  await requirePermission("admin.providers");
+  const name = validateModelName(model);
+  if (!name) {
+    return {
+      ok: false,
+      error: "Nom de modèle invalide (attendu : le nom publié sur ollama.com, ex. « gemma3:4b »).",
+    };
+  }
+
+  const admin = createAdminClient();
+  const { count } = await admin
+    .schema("agents")
+    .from("agents")
+    .select("id", { count: "exact", head: true })
+    .eq("model_provider", "ollama")
+    .eq("model_id", name);
+  if ((count ?? 0) > 0) {
+    return {
+      ok: false,
+      error: `${count} agent(s) utilisent encore le modèle « ${name} » : reconfigurez-les sur un autre modèle avant de supprimer celui-ci.`,
+    };
+  }
+
+  try {
+    await deleteModel(name);
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "La suppression a échoué.",
+    };
   }
   revalidatePath("/admin/providers");
   return { ok: true };

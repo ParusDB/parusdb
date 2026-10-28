@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Bot, KeyRound, Pencil, Plus, Trash2 } from "lucide-react";
+import { Bot, Download, KeyRound, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/dialog";
 import { ConfirmNameDialog } from "@/components/parus/confirm-name-dialog";
 import { cn } from "@/lib/utils";
-import { addProvider, deleteProvider, updateProvider } from "@/app/(app)/admin/actions";
+import { addProvider, deleteOllamaModel, deleteProvider, updateProvider } from "@/app/(app)/admin/actions";
 
 // Miroir client des types de lib/providers.ts (module serveur : clés
 // déchiffrées côté BFF uniquement, jamais importé ici).
@@ -69,6 +69,7 @@ export function ProvidersView({
 }) {
   const [selected, setSelected] = useState<string>("ollama");
   const [editing, setEditing] = useState<ProviderEntry | "new" | null>(null);
+  const [pullOpen, setPullOpen] = useState(false);
   const router = useRouter();
 
   const selectedProvider = providers.find((p) => p.id === selected) ?? null;
@@ -184,19 +185,31 @@ export function ProvidersView({
 
       {/* Colonne droite : modèles du fournisseur sélectionné */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <h2 className="font-display text-lg">
             {selectedProvider ? selectedProvider.name : "Ollama (local)"}
           </h2>
-          <p className="mono text-xs text-muted-foreground">
-            {selectedProvider
-              ? selectedProvider.discoveryError
-                ? "Découverte en échec"
-                : `${selectedProvider.models.length} modèle(s) découvert(s)`
-              : ollama.online
-                ? `${ollama.models.length} modèle(s)`
-                : "Ollama injoignable"}
-          </p>
+          <div className="flex items-center gap-3">
+            {!selectedProvider && ollama.online ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPullOpen(true)}
+              >
+                <Download className="h-3.5 w-3.5" strokeWidth={1.8} />{" "}
+                Télécharger un modèle
+              </Button>
+            ) : null}
+            <p className="mono text-xs text-muted-foreground">
+              {selectedProvider
+                ? selectedProvider.discoveryError
+                  ? "Découverte en échec"
+                  : `${selectedProvider.models.length} modèle(s) découvert(s)`
+                : ollama.online
+                  ? `${ollama.models.length} modèle(s)`
+                  : "Ollama injoignable"}
+            </p>
+          </div>
         </div>
 
         {selectedProvider?.discoveryError ? (
@@ -216,9 +229,10 @@ export function ProvidersView({
 
         {!selectedProvider && ollama.online ? (
           <p className="text-sm text-muted-foreground">
-            Modèles servis par le serveur d’inférence local. Le téléchargement
-            et la suppression se pilotent côté serveur Ollama
-            (<code className="mono text-xs">cd apps/ollama && sh run.sh start</code>).
+            Modèles servis par le serveur d’inférence local. Téléchargez un
+            nouveau modèle depuis la bibliothèque Ollama
+            (<code className="mono text-xs">ollama.com</code>) ou supprimez
+            ceux qui ne servent plus.
           </p>
         ) : null}
 
@@ -229,6 +243,7 @@ export function ProvidersView({
                 <TableHead>Modèle</TableHead>
                 <TableHead>Source</TableHead>
                 {selectedProvider ? <TableHead>Type d’API</TableHead> : <TableHead>Taille</TableHead>}
+                {!selectedProvider ? <TableHead className="w-16">Actions</TableHead> : null}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -260,7 +275,7 @@ export function ProvidersView({
               ) : ollama.models.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={3}
+                    colSpan={4}
                     className="py-8 text-center text-sm text-muted-foreground"
                   >
                     Aucun modèle téléchargé sur le serveur Ollama.
@@ -276,6 +291,25 @@ export function ProvidersView({
                     <TableCell className="mono text-xs">
                       {(model.size / 1024 ** 3).toFixed(1)} Go
                     </TableCell>
+                    <TableCell>
+                      <ConfirmNameDialog
+                        title="Supprimer ce modèle ?"
+                        description={`Le modèle « ${model.name} » sera supprimé du serveur Ollama et son emprise disque libérée. Action irréversible, refusée si des agents l'utilisent encore.`}
+                        expectedName={model.name}
+                        confirmLabel="Supprimer"
+                        action={() => deleteOllamaModel(model.name)}
+                        trigger={
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            className="hover:text-destructive"
+                            aria-label={`Supprimer ${model.name}`}
+                          >
+                            <Trash2 className="h-4 w-4" strokeWidth={1.6} />
+                          </Button>
+                        }
+                      />
+                    </TableCell>
                   </TableRow>
                 ))
               )}
@@ -289,6 +323,13 @@ export function ProvidersView({
         editing={editing}
         onClose={() => setEditing(null)}
         onSaved={() => router.refresh()}
+      />
+
+      <PullModelDialog
+        key={`pull-${pullOpen ? "open" : "closed"}`}
+        open={pullOpen}
+        onClose={() => setPullOpen(false)}
+        onDone={() => router.refresh()}
       />
     </div>
   );
@@ -407,6 +448,230 @@ function ProviderDialog({
           >
             {pending ? "Validation…" : "Valider"}
           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Évènement relayé par le Route Handler /admin/providers/pull (une ligne JSON).
+interface PullEvent {
+  type: "log" | "progress" | "success" | "error";
+  message?: string;
+  digest?: string;
+  total?: number;
+  completed?: number;
+}
+
+// Téléchargement d'un modèle Ollama (spec §Fournisseurs LLM) : saisie du nom
+// tel que publié sur ollama.com, progression en temps réel (barre + logs
+// Ollama bruts) via le flux NDJSON du BFF. La fermeture du dialog interrompt
+// le téléchargement (abort).
+function PullModelDialog({
+  open,
+  onClose,
+  onDone,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState<{ downloaded: number; total: number } | null>(null);
+  const [logs, setLogs] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const logsRef = useRef<HTMLDivElement>(null);
+
+  // Défilement automatique vers la dernière ligne de log.
+  useEffect(() => {
+    const el = logsRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [logs]);
+
+  function close() {
+    abortRef.current?.abort();
+    onClose();
+  }
+
+  async function handlePull() {
+    if (running) return;
+    if (!name.trim()) {
+      toast.error("Le nom du modèle est obligatoire.");
+      return;
+    }
+    setError(null);
+    setProgress(null);
+    setLogs([]);
+    setRunning(true);
+    // Ollama émet la progression couche par couche : l'agrégation par digest
+    // donne un pourcentage global du téléchargement.
+    const layers = new Map<string, { total: number; completed: number }>();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    try {
+      const res = await fetch("/admin/providers/pull", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: name.trim() }),
+        signal: controller.signal,
+      });
+      if (!res.ok || !res.body) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setError(data?.error ?? "Le téléchargement a échoué.");
+        return;
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let newline: number;
+        while ((newline = buffer.indexOf("\n")) >= 0) {
+          const line = buffer.slice(0, newline).trim();
+          buffer = buffer.slice(newline + 1);
+          if (!line) continue;
+          let evt: PullEvent;
+          try {
+            evt = JSON.parse(line) as PullEvent;
+          } catch {
+            continue;
+          }
+          if (evt.type === "error") {
+            setError(evt.message ?? "Le téléchargement a échoué.");
+            return;
+          }
+          if (evt.type === "success") {
+            toast.success(`Modèle « ${name.trim()} » téléchargé.`);
+            setName("");
+            onDone();
+            onClose();
+            return;
+          }
+          if (evt.type === "log") {
+            if (evt.message) setLogs((prev) => [...prev.slice(-199), evt.message!]);
+          } else if (evt.type === "progress") {
+            if (evt.digest) {
+              layers.set(evt.digest, {
+                total: evt.total ?? 0,
+                completed: evt.completed ?? 0,
+              });
+            }
+            let downloaded = 0;
+            let total = 0;
+            for (const layer of layers.values()) {
+              downloaded += layer.completed;
+              total += layer.total;
+            }
+            setProgress({ downloaded, total });
+          }
+        }
+      }
+      // Flux terminé sans évènement success ni error (déconnexion réseau).
+      setError("Le téléchargement a été interrompu : le flux d'Ollama s'est arrêté prématurément.");
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") {
+        toast.info("Téléchargement annulé.");
+        return;
+      }
+      setError(e instanceof Error ? e.message : "Le téléchargement a échoué.");
+    } finally {
+      setRunning(false);
+      abortRef.current = null;
+    }
+  }
+
+  const percent =
+    progress && progress.total > 0
+      ? Math.min(100, Math.round((progress.downloaded / progress.total) * 100))
+      : null;
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && close()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Télécharger un modèle local</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="grid gap-2">
+            <Label htmlFor="pull-model-name">Nom du modèle</Label>
+            <Input
+              id="pull-model-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="ministral-3:3b"
+              className="mono"
+              disabled={running}
+              autoFocus
+            />
+            <p className="text-xs text-muted-foreground">
+              Copiez le nom exact depuis la bibliothèque Ollama (ollama.com),
+              ex. « ministral-3:3b ». Le modèle est téléchargé sur le serveur
+              d’inférence local : la durée dépend de sa taille.
+            </p>
+          </div>
+
+          {running ? (
+            <div className="space-y-2 rounded-2xl border border-border bg-background p-4">
+              {percent !== null && progress ? (
+                <>
+                  <div
+                    className="h-2 w-full overflow-hidden rounded-full bg-border"
+                    role="progressbar"
+                    aria-valuenow={percent}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                  >
+                    <div
+                      className="h-full rounded-full bg-jaune transition-all"
+                      style={{ width: `${percent}%` }}
+                    />
+                  </div>
+                  <p className="mono text-xs text-muted-foreground">
+                    {(progress.downloaded / 1024 ** 3).toFixed(1)} /{" "}
+                    {(progress.total / 1024 ** 3).toFixed(1)} Go ({percent} %)
+                  </p>
+                </>
+              ) : (
+                <div
+                  className="h-2 w-full overflow-hidden rounded-full bg-border"
+                  role="progressbar"
+                  aria-label="Téléchargement en cours"
+                >
+                  <div className="h-full w-full rounded-full bg-jaune opacity-60 animate-pulse" />
+                </div>
+              )}
+            </div>
+          ) : null}
+
+          {logs.length > 0 ? (
+            <div
+              ref={logsRef}
+              className="max-h-40 overflow-y-auto rounded-2xl bg-charbon p-3 mono text-xs leading-relaxed text-blanc"
+            >
+              {logs.map((line, index) => (
+                <div key={index}>{line}</div>
+              ))}
+            </div>
+          ) : null}
+
+          {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={close}>
+            {running ? "Annuler le téléchargement" : "Annuler"}
+          </Button>
+          {!running ? (
+            <Button
+              onClick={() => void handlePull()}
+              className="bg-jaune font-semibold text-charbon hover:bg-jaune/90"
+            >
+              Valider
+            </Button>
+          ) : null}
         </DialogFooter>
       </DialogContent>
     </Dialog>

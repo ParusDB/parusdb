@@ -514,14 +514,23 @@ soumission, jamais sur la seule décision de la page.
 | Mistral | Mistral | 6 modèle(s) | Modifier / Supprimer |
 
 - **Ollama (local)** : toujours présent (serveur d'inférence embarqué),
-  non supprimable. Le téléchargement et la suppression des modèles se
-  pilotent côté serveur Ollama.
+  non supprimable. Les modèles locaux se téléchargent et se suppriment
+  depuis cette page (voir ci-dessous).
 - **Ajouter une clé API** : bouton → saisie du **nom du fournisseur** et de la
   **clé API**. Le type d'API (OpenAI, Anthropic, Mistral, compatible
   OpenAI) est **déduit automatiquement du nom** ; pour un fournisseur
   inconnu, une **URL de base** est demandée (API compatible OpenAI). La clé
   est **validée par un appel réel au fournisseur** : aucun enregistrement si
   elle est rejetée.
+- **Télécharger un modèle local** : bouton (panneau Ollama) → saisie du
+  **nom du modèle** tel que publié sur ollama.com (ex. `gemma3:4b`) →
+  « Valider » lance le **téléchargement** sur le serveur Ollama, avec
+  progression en temps réel (pourcentage, volume téléchargé). Un modèle
+  déjà installé est refusé ; la fermeture de la fenêtre interrompt le
+  téléchargement.
+- **Supprimer un modèle local** : action par modèle (panneau Ollama) →
+  confirmation par **ressaisie du nom** ; refusée si des agents utilisent
+  encore le modèle.
 - **Clé API** : chiffrée AES-256-GCM au repos, masquée dans l'interface,
   jamais renvoyée au navigateur.
 
