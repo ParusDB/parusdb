@@ -43,6 +43,9 @@ export interface CatalogCard {
   createdAt: string | null;
   binding: string | null;
   isDefault: boolean;
+  // Privilège « Gestion » du rôle actif (RBAC refonte) : bouton de
+  // suppression (le catalogue système reste intouchable).
+  canManage: boolean;
 }
 
 export function CatalogsView({
@@ -50,7 +53,6 @@ export function CatalogsView({
   metrics,
   polarisError,
   trinoError,
-  isAdmin,
   boundCount,
   trinoRestart,
 }: {
@@ -64,7 +66,6 @@ export function CatalogsView({
   };
   polarisError: string | null;
   trinoError: string | null;
-  isAdmin: boolean;
   boundCount: number;
   trinoRestart: TrinoRestartState;
 }) {
@@ -255,7 +256,7 @@ export function CatalogsView({
                       </Link>
                     </Button>
                   )}
-                  {isAdmin && !catalog.isDefault ? (
+                  {catalog.canManage ? (
                     <ConfirmNameDialog
                       title="Supprimer ce catalogue ?"
                       description={`Le catalogue Polaris « ${catalog.name} », ses schémas, ses tables et tous les fichiers Iceberg associés seront purgés.`}

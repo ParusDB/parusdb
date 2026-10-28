@@ -3,7 +3,24 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requirePermission } from "@/lib/session";
+import { hasGrant, requireSession, type SessionContext } from "@/lib/session";
+
+// Droit requis sur l'agent, avec message français (la RLS reste la garde
+// finale côté base).
+async function assertGrant(
+  session: SessionContext,
+  agentId: string,
+  privilege: "read" | "write" | "manage",
+) {
+  const granted = await hasGrant(session.userId, "agent", agentId, privilege);
+  if (!granted) {
+    throw new Error(
+      privilege === "manage"
+        ? "Seuls les membres du rôle propriétaire (ou un rôle avec le privilège « Gestion ») peuvent supprimer cet agent."
+        : "Votre rôle actif ne permet pas de modifier cet agent (privilège « Écriture » requis).",
+    );
+  }
+}
 
 export interface AgentInput {
   name: string;
@@ -75,7 +92,10 @@ async function writeSources(
 }
 
 export async function createAgent(input: AgentInput) {
-  const session = await requirePermission("agents");
+  const session = await requireSession();
+  if (!session.activeRole) {
+    throw new Error("Aucun rôle actif : impossible de créer un agent.");
+  }
   const supabase = await createClient();
   const name = input.name.trim();
   if (!name) throw new Error("Le nom de l'agent est obligatoire.");
@@ -86,6 +106,9 @@ export async function createAgent(input: AgentInput) {
     .from("agents")
     .insert({
       owner_id: session.userId,
+      // Le rôle actif qui crée l'agent en devient propriétaire (RBAC
+      // refonte) : tous les comptes portant ce rôle le voient.
+      owner_role_id: session.activeRole.id,
       name,
       description: input.description.trim() || null,
       model_provider: input.model_provider,
@@ -105,7 +128,8 @@ export async function createAgent(input: AgentInput) {
 }
 
 export async function updateAgent(id: string, input: AgentInput) {
-  await requirePermission("agents");
+  const session = await requireSession();
+  await assertGrant(session, id, "write");
   const supabase = await createClient();
   const name = input.name.trim();
   if (!name) throw new Error("Le nom de l'agent est obligatoire.");
@@ -133,7 +157,8 @@ export async function updateAgent(id: string, input: AgentInput) {
 
 // Renommage léger (sidebar) : ne touche que le nom, sans naviguer.
 export async function renameAgent(id: string, name: string) {
-  await requirePermission("agents");
+  const session = await requireSession();
+  await assertGrant(session, id, "write");
   const supabase = await createClient();
   const trimmed = name.trim();
   if (!trimmed) throw new Error("Le nom de l'agent est obligatoire.");
@@ -150,7 +175,12 @@ export async function renameAgent(id: string, name: string) {
 }
 
 export async function deleteAgent(id: string): Promise<{ ok: boolean; error?: string }> {
-  await requirePermission("agents");
+  const session = await requireSession();
+  try {
+    await assertGrant(session, id, "manage");
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "La suppression a échoué." };
+  }
   const supabase = await createClient();
   const { error } = await supabase
     .schema("agents")

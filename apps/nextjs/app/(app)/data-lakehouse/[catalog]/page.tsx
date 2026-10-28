@@ -3,7 +3,7 @@ export const instant = false;
 
 import { notFound } from "next/navigation";
 import { CatalogWorkspace } from "@/components/lakehouse/catalog-workspace";
-import { requirePermission } from "@/lib/session";
+import { requireGrant } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 import { trinoBindingFor, loadCatalogTree } from "@/lib/lakehouse";
 import type { CatalogEntry } from "@/types/db";
@@ -13,8 +13,10 @@ export default async function CatalogPage({
 }: {
   params: Promise<{ catalog: string }>;
 }) {
-  await requirePermission("lakehouse");
+  // Page d'un catalogue : privilège « Lecture » requis sur le rôle actif
+  // (propriété ou grant).
   const { catalog } = await params;
+  await requireGrant("catalog", catalog, "read");
   const supabase = await createClient();
 
   const { data: entry } = await supabase

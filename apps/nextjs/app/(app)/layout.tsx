@@ -1,5 +1,6 @@
 import { Sidebar, type SidebarProps } from "@/components/layout/sidebar";
 import { requireSession } from "@/lib/session";
+import { can, grantsForActiveRole } from "@/lib/rbac";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
@@ -17,23 +18,23 @@ export default async function AppLayout({
   const session = await requireSession();
   const supabase = await createClient();
 
-  const [conversationsRes, agentsRes] = await Promise.all([
-    session.has("chat")
-      ? supabase
-          .schema("chat")
-          .from("conversations")
-          .select("id, title")
-          .order("updated_at", { ascending: false })
-          .limit(15)
-      : Promise.resolve({ data: [] }),
-    session.has("agents")
-      ? supabase
-          .schema("agents")
-          .from("agents")
-          .select("id, name")
-          .order("created_at", { ascending: false })
-          .limit(15)
-      : Promise.resolve({ data: [] }),
+  // Les menus sont visibles par tous les comptes authentifiés (RBAC
+  // refonte) : le CONTENU est filtré par le rôle actif via la RLS. Les
+  // conversations incluent celles partagées au rôle actif (lecture seule).
+  const [conversationsRes, agentsRes, grants] = await Promise.all([
+    supabase
+      .schema("chat")
+      .from("conversations")
+      .select("id, title, owner_id")
+      .order("updated_at", { ascending: false })
+      .limit(15),
+    supabase
+      .schema("agents")
+      .from("agents")
+      .select("id, name, owner_role_id")
+      .order("created_at", { ascending: false })
+      .limit(15),
+    grantsForActiveRole(session).catch(() => []),
   ]);
 
   const sidebarProps: SidebarProps = {
@@ -44,15 +45,36 @@ export default async function AppLayout({
     },
     roles: session.roles.map((r) => ({ id: r.id, name: r.name })),
     activeRoleId: session.activeRole?.id ?? null,
-    permissions: session.permissions,
-    conversations: (conversationsRes.data ?? []).map((c: { id: string; title: string | null }) => ({
-      id: c.id,
-      title: c.title,
-    })),
-    agents: (agentsRes.data ?? []).map((a: { id: string; name: string }) => ({
-      id: a.id,
-      name: a.name,
-    })),
+    isAdmin: session.isAdmin,
+    conversations: (conversationsRes.data ?? []).map(
+      (c: { id: string; title: string | null; owner_id: string }) => ({
+        id: c.id,
+        title: c.title,
+        owned: c.owner_id === session.userId,
+      }),
+    ),
+    agents: (agentsRes.data ?? []).map(
+      (a: { id: string; name: string; owner_role_id: string | null }) => ({
+        id: a.id,
+        name: a.name,
+        canRename: can(
+          session,
+          grants,
+          "agent",
+          a.id,
+          a.owner_role_id,
+          "write",
+        ),
+        canDelete: can(
+          session,
+          grants,
+          "agent",
+          a.id,
+          a.owner_role_id,
+          "manage",
+        ),
+      }),
+    ),
   };
 
   if (session.roles.length === 0) {

@@ -2,7 +2,11 @@
 
 import { spawn } from "node:child_process";
 import { createClient } from "@/lib/supabase/server";
-import { requirePermission } from "@/lib/session";
+import {
+  hasGrant,
+  requireSession,
+  type SessionContext,
+} from "@/lib/session";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { decryptSecret, encryptSecret } from "@/lib/crypto";
@@ -13,6 +17,10 @@ import { decryptSecret, encryptSecret } from "@/lib/crypto";
 // L'exécution est asynchrone : l'interface insère un run `queued`, l'ordon-
 // nanceur dlt démarre un conteneur jetable qui écrit le résultat
 // (connectors.pipeline_runs, AGENTS.md §12).
+// RBAC refonte : le pipeline appartient au rôle actif qui l'a créé ; les
+// actions exigent write (modifier/lancer/désactiver) ou manage (supprimer),
+// la destination d'ingestion doit être un catalogue en write (RLS en garde
+// finale).
 
 export interface PipelineInput {
   name: string;
@@ -44,6 +52,29 @@ const DLT_IMAGE = process.env.PARUSDB_DLT_IMAGE ?? "parus-dlt-runner:1.0.0";
 const DLT_NETWORK = process.env.PARUSDB_DLT_NETWORK ?? "supabase_default";
 const INTROSPECT_TIMEOUT_MS = 90_000;
 
+// Droit requis sur le pipeline, avec message français (la RLS reste la
+// garde finale côté base).
+async function assertPipelineGrant(
+  session: SessionContext,
+  pipelineId: string,
+  privilege: "write" | "manage",
+): Promise<{ ok: boolean; error?: string }> {
+  const granted = await hasGrant(
+    session.userId,
+    "pipeline",
+    pipelineId,
+    privilege,
+  );
+  if (granted) return { ok: true };
+  return {
+    ok: false,
+    error:
+      privilege === "manage"
+        ? "Seuls les membres du rôle propriétaire (ou un rôle avec le privilège « Gestion ») peuvent supprimer ce pipeline."
+        : "Votre rôle actif ne permet pas de modifier ou lancer ce pipeline (privilège « Écriture » requis).",
+  };
+}
+
 // Test de connexion + introspection réels : conteneur jetable du runner dlt
 // (job JSON sur stdin, réponse JSON sur stdout — les credentials transitent
 // par stdin, jamais par l'environnement ni le disque).
@@ -51,7 +82,7 @@ export async function testConnection(
   sourceType: string,
   config: Record<string, string>,
 ): Promise<TestConnectionResult> {
-  await requirePermission("connectors");
+  await requireSession();
   const job = JSON.stringify({
     source_type: sourceType,
     credentials: config,
@@ -152,13 +183,30 @@ function pipelineCredentials(sourceConfig: Record<string, string>) {
 }
 
 async function insertPipelineRow(input: PipelineInput): Promise<string> {
-  const session = await requirePermission("connectors");
+  const session = await requireSession();
+  if (!session.activeRole) {
+    throw new Error("Aucun rôle actif : impossible d'enregistrer un pipeline.");
+  }
+  const writable = await hasGrant(
+    session.userId,
+    "catalog",
+    input.destinationCatalog,
+    "write",
+  );
+  if (!writable) {
+    throw new Error(
+      "Votre rôle actif ne peut pas ingérer vers ce catalogue (privilège « Écriture » requis sur la destination).",
+    );
+  }
   const supabase = await createClient();
   const { data, error } = await supabase
     .schema("connectors")
     .from("pipelines")
     .insert({
       owner_id: session.userId,
+      // Le rôle actif qui crée le pipeline en devient propriétaire (RBAC
+      // refonte) : tous les comptes portant ce rôle le voient.
+      owner_role_id: session.activeRole.id,
       name: input.name,
       source_type: input.sourceType,
       source_config: { cursors: input.cursors },
@@ -210,7 +258,7 @@ async function queueRun(
 }
 
 export async function createPipeline(input: PipelineInput) {
-  await requirePermission("connectors");
+  await requireSession();
   const id = await insertPipelineRow(input);
   // « Enregistrer » = sauvegarde + lancement immédiat (spec §Connecteurs) :
   // le run part dès que l'ordonnanceur dlt le réclame (quelques secondes).
@@ -220,7 +268,9 @@ export async function createPipeline(input: PipelineInput) {
 }
 
 export async function updatePipeline(id: string, input: PipelineInput) {
-  await requirePermission("connectors");
+  const session = await requireSession();
+  const check = await assertPipelineGrant(session, id, "write");
+  if (!check.ok) throw new Error(check.error);
   const supabase = await createClient();
 
   // Credentials laissés vides en édition : conserver les valeurs chiffrées
@@ -276,7 +326,9 @@ export async function updatePipeline(id: string, input: PipelineInput) {
 export async function deletePipeline(
   id: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  await requirePermission("connectors");
+  const session = await requireSession();
+  const check = await assertPipelineGrant(session, id, "manage");
+  if (!check.ok) return check;
   const supabase = await createClient();
   const { error } = await supabase
     .schema("connectors")
@@ -295,7 +347,9 @@ export async function deletePipeline(
 export async function runPipeline(
   id: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  await requirePermission("connectors");
+  const session = await requireSession();
+  const check = await assertPipelineGrant(session, id, "write");
+  if (!check.ok) return check;
   const supabase = await createClient();
   const { data: pipeline } = await supabase
     .schema("connectors")
@@ -316,7 +370,9 @@ export async function togglePipeline(
   id: string,
   next: "active" | "inactive",
 ): Promise<{ ok: boolean; error?: string }> {
-  await requirePermission("connectors");
+  const session = await requireSession();
+  const check = await assertPipelineGrant(session, id, "write");
+  if (!check.ok) return check;
   const supabase = await createClient();
   const { error } = await supabase
     .schema("connectors")

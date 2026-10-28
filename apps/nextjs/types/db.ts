@@ -7,8 +7,33 @@ export interface Role {
   key: string;
   name: string;
   description: string | null;
-  permissions: string[];
   is_system: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// Grant RBAC : privilèges hiérarchiques (manage ⊇ write ⊇ read) d'un rôle sur
+// une ressource (catalogue, agent, pipeline) — docs/functional/rbac_refonte.md.
+export interface Grant {
+  role_id: string;
+  resource_type: "catalog" | "agent" | "pipeline";
+  resource_id: string;
+  privileges: ("read" | "write" | "manage")[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+// Utilisateur applicatif (compte service pour un outil data : dbt, Power BI,
+// Airbyte…) : miroir applicatif d'un principal Polaris. Le clientSecret
+// n'est jamais stocké côté applicatif.
+export interface AppUser {
+  id: string;
+  name: string;
+  note: string | null;
+  role_id: string;
+  polaris_client_id: string;
+  credentials_rotated_at: string | null;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -27,6 +52,9 @@ export interface Agent {
   owner_id: string;
   name: string;
   description: string | null;
+  // Rôle propriétaire : le rôle actif qui a créé l'agent (RBAC refonte) ;
+  // owner_id reste la traçabilité « créé par ».
+  owner_role_id: string | null;
   // 'ollama' (serveur local embarqué) ou l'id d'un fournisseur externe
   // (admin.providers, cf. LlmProvider).
   model_provider: string;
@@ -65,6 +93,9 @@ export interface CatalogEntry {
   catalog_name: string;
   description: string | null;
   created_by: string | null;
+  // Rôle propriétaire : le rôle actif qui a créé le catalogue (RBAC
+  // refonte) ; created_by reste la traçabilité « créé par ».
+  owner_role_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -95,6 +126,9 @@ export interface Pipeline {
   destination_schema: string | null;
   status: "active" | "inactive" | "error";
   last_run_at: string | null;
+  // Rôle propriétaire : le rôle actif qui a créé le pipeline (RBAC
+  // refonte) ; owner_id reste la traçabilité « créé par ».
+  owner_role_id: string | null;
   created_at: string;
   updated_at: string;
   owner?: { first_name: string | null; last_name: string | null } | null;

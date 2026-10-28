@@ -8,6 +8,7 @@ import {
   Bot,
   ChevronDown,
   Database,
+  Info,
   LogOut,
   MessageSquare,
   Plug,
@@ -41,18 +42,24 @@ import { deleteAgent, renameAgent } from "@/app/(app)/agents/actions";
 export interface SidebarConversation {
   id: string;
   title: string | null;
+  // Propriétaire de la conversation (les partages sont en lecture seule).
+  owned: boolean;
 }
 
 export interface SidebarAgent {
   id: string;
   name: string;
+  // Privilèges du rôle actif : renommer (write) / supprimer (manage).
+  canRename: boolean;
+  canDelete: boolean;
 }
 
 export interface SidebarProps {
   user: { email: string; firstName: string | null; lastName: string | null };
   roles: { id: string; name: string }[];
   activeRoleId: string | null;
-  permissions: string[];
+  // Le compte porte le rôle admin : section Administration (RBAC refonte).
+  isAdmin: boolean;
   conversations: SidebarConversation[];
   agents: SidebarAgent[];
 }
@@ -224,13 +231,16 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 // Contenu de navigation — partagé entre la sidebar fixe et le menu mobile.
+// Tous les menus fonctionnels sont visibles par les comptes authentifiés
+// (RBAC refonte) : le contenu est filtré par le rôle actif via la RLS.
+// La section Administration n'apparaît que pour les comptes admin.
 export function SidebarContent({ session }: { session: SidebarProps }) {
-  const has = (p: string) => session.permissions.includes(p);
   const adminItems = [
-    { href: "/admin/users", label: "Utilisateurs", icon: <UserRound className="h-4 w-4" strokeWidth={1.6} />, perm: "admin.users" },
-    { href: "/admin/roles", label: "Rôles", icon: <Shield className="h-4 w-4" strokeWidth={1.6} />, perm: "admin.roles" },
-    { href: "/admin/providers", label: "Fournisseurs LLM", icon: <KeyRound className="h-4 w-4" strokeWidth={1.6} />, perm: "admin.providers" },
-  ].filter((item) => has(item.perm));
+    { href: "/admin/informations", label: "Informations", icon: <Info className="h-4 w-4" strokeWidth={1.6} /> },
+    { href: "/admin/users", label: "Utilisateurs", icon: <UserRound className="h-4 w-4" strokeWidth={1.6} /> },
+    { href: "/admin/roles", label: "Rôles", icon: <Shield className="h-4 w-4" strokeWidth={1.6} /> },
+    { href: "/admin/providers", label: "Fournisseurs LLM", icon: <KeyRound className="h-4 w-4" strokeWidth={1.6} /> },
+  ];
 
   return (
     <div className="flex h-full flex-col">
@@ -239,8 +249,7 @@ export function SidebarContent({ session }: { session: SidebarProps }) {
       </Link>
 
       <nav className="flex-1 overflow-y-auto px-2 pb-4 pt-5">
-        {has("chat") ? (
-          <>
+        <div>
             <NavLink href="/chat/new" icon={<Plus className="h-4 w-4" strokeWidth={1.8} />} label="Nouveau chat" />
             {session.conversations.length > 0 ? (
               <>
@@ -253,10 +262,18 @@ export function SidebarContent({ session }: { session: SidebarProps }) {
                         key={c.id}
                         label={label}
                         href={`/chat/${c.id}`}
-                        onRename={async (title) => {
-                          await renameConversation(c.id, title);
-                        }}
-                        onDelete={() => deleteConversation(c.id)}
+                        onRename={
+                          c.owned
+                            ? async (title) => {
+                                await renameConversation(c.id, title);
+                              }
+                            : undefined
+                        }
+                        onDelete={
+                          c.owned
+                            ? () => deleteConversation(c.id)
+                            : undefined
+                        }
                         deleteTitle="Supprimer cette conversation ?"
                         deleteDescription={`« ${label} » et son historique seront supprimés définitivement.`}
                       >
@@ -273,51 +290,43 @@ export function SidebarContent({ session }: { session: SidebarProps }) {
                 </div>
               </>
             ) : null}
-          </>
-        ) : null}
+        </div>
 
-        {has("agents") ? (
-          <>
-            <SectionLabel>Agents IA</SectionLabel>
-            <NavLink href="/agents/new" icon={<Plus className="h-4 w-4" strokeWidth={1.8} />} label="Nouvel agent IA" />
-            <div className="space-y-0.5">
-              {session.agents.map((a) => (
-                <SidebarListItem
-                  key={a.id}
-                  label={a.name}
-                  href={`/agents/${a.id}`}
-                  onRename={async (name) => {
-                    await renameAgent(a.id, name);
-                  }}
-                  onDelete={() => deleteAgent(a.id)}
-                  deleteRequiresName
-                  deleteTitle="Supprimer cet agent ?"
-                  deleteDescription={`Toutes les sources associées à « ${a.name} » seront détachées. Les conversations existantes sont conservées et l'agent ne pourra plus être supprimé tant qu'elles y font référence.`}
-                >
-                  <NavLink
-                    href={`/agents/${a.id}`}
-                    icon={<Bot className="h-4 w-4" strokeWidth={1.6} />}
-                    label={a.name}
-                    className="py-1.5 text-[13px]"
-                  />
-                </SidebarListItem>
-              ))}
-            </div>
-          </>
-        ) : null}
+        <SectionLabel>Agents IA</SectionLabel>
+        <NavLink href="/agents/new" icon={<Plus className="h-4 w-4" strokeWidth={1.8} />} label="Nouvel agent IA" />
+        <div className="space-y-0.5">
+          {session.agents.map((a) => (
+            <SidebarListItem
+              key={a.id}
+              label={a.name}
+              href={`/agents/${a.id}`}
+              onRename={
+                a.canRename
+                  ? async (name) => {
+                      await renameAgent(a.id, name);
+                    }
+                  : undefined
+              }
+              onDelete={a.canDelete ? () => deleteAgent(a.id) : undefined}
+              deleteRequiresName
+              deleteTitle="Supprimer cet agent ?"
+              deleteDescription={`Toutes les sources associées à « ${a.name} » seront détachées. Les conversations existantes sont conservées et l'agent ne pourra plus être supprimé tant qu'elles y font référence.`}
+            >
+              <NavLink
+                href={`/agents/${a.id}`}
+                icon={<Bot className="h-4 w-4" strokeWidth={1.6} />}
+                label={a.name}
+                className="py-1.5 text-[13px]"
+              />
+            </SidebarListItem>
+          ))}
+        </div>
 
-        {has("lakehouse") ? (
-          <>
-            <SectionLabel>Données</SectionLabel>
-            <NavLink href="/data-lakehouse" icon={<Database className="h-4 w-4" strokeWidth={1.6} />} label="Data Lakehouse" exact />
-          </>
-        ) : null}
+        <SectionLabel>Données</SectionLabel>
+        <NavLink href="/data-lakehouse" icon={<Database className="h-4 w-4" strokeWidth={1.6} />} label="Data Lakehouse" exact />
+        <NavLink href="/connectors" icon={<Plug className="h-4 w-4" strokeWidth={1.6} />} label="Connecteurs" exact />
 
-        {has("connectors") ? (
-          <NavLink href="/connectors" icon={<Plug className="h-4 w-4" strokeWidth={1.6} />} label="Connecteurs" exact />
-        ) : null}
-
-        {adminItems.length > 0 ? (
+        {session.isAdmin ? (
           <>
             <SectionLabel>Administration</SectionLabel>
             <div className="space-y-0.5">

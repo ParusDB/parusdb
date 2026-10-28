@@ -34,7 +34,9 @@ export interface PipelineRow {
   cron: string;
   last_run_at: string | null;
   created_at: string;
-  isOwner: boolean;
+  // Privilèges du rôle actif sur le pipeline (RBAC refonte).
+  canEdit: boolean;
+  canDelete: boolean;
 }
 
 const STATUS_LABEL: Record<PipelineRow["status"], { tone: "active" | "inactive" | "error"; label: string }> = {
@@ -136,43 +138,49 @@ export function PipelinesTable({
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center justify-end gap-1">
-                      <Button asChild variant="ghost" size="icon-sm" aria-label="Modifier le pipeline">
-                        <Link href={`/connectors/${row.id}`}>
-                          <Pencil className="h-4 w-4" strokeWidth={1.6} />
-                        </Link>
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label="Lancer le pipeline"
-                        onClick={() => void handleRun(row.id)}
-                      >
-                        <Play className="h-4 w-4" strokeWidth={1.6} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={row.status === "active" ? "Désactiver le pipeline" : "Activer le pipeline"}
-                        onClick={() => void handleToggle(row)}
-                      >
-                        <Pause className="h-4 w-4" strokeWidth={1.6} />
-                      </Button>
-                      <ConfirmNameDialog
-                        title="Supprimer ce pipeline ?"
-                        description={`Le pipeline « ${row.name} » et son historique d’exécution seront supprimés.`}
-                        expectedName={row.name}
-                        trigger={
+                      {row.canEdit ? (
+                        <>
+                          <Button asChild variant="ghost" size="icon-sm" aria-label="Modifier le pipeline">
+                            <Link href={`/connectors/${row.id}`}>
+                              <Pencil className="h-4 w-4" strokeWidth={1.6} />
+                            </Link>
+                          </Button>
                           <Button
                             variant="ghost"
                             size="icon-sm"
-                            className="hover:text-destructive"
-                            aria-label={`Supprimer le pipeline ${row.name}`}
+                            aria-label="Lancer le pipeline"
+                            onClick={() => void handleRun(row.id)}
                           >
-                            <Trash2 className="h-4 w-4" strokeWidth={1.6} />
+                            <Play className="h-4 w-4" strokeWidth={1.6} />
                           </Button>
-                        }
-                        action={() => deletePipeline(row.id)}
-                      />
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={row.status === "active" ? "Désactiver le pipeline" : "Activer le pipeline"}
+                            onClick={() => void handleToggle(row)}
+                          >
+                            <Pause className="h-4 w-4" strokeWidth={1.6} />
+                          </Button>
+                        </>
+                      ) : null}
+                      {row.canDelete ? (
+                        <ConfirmNameDialog
+                          title="Supprimer ce pipeline ?"
+                          description={`Le pipeline « ${row.name} » et son historique d’exécution seront supprimés.`}
+                          expectedName={row.name}
+                          trigger={
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              className="hover:text-destructive"
+                              aria-label={`Supprimer le pipeline ${row.name}`}
+                            >
+                              <Trash2 className="h-4 w-4" strokeWidth={1.6} />
+                            </Button>
+                          }
+                          action={() => deletePipeline(row.id)}
+                        />
+                      ) : null}
                     </div>
                   </TableCell>
                 </TableRow>

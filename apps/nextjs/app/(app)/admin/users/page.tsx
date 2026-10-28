@@ -3,7 +3,7 @@ export const instant = false;
 
 import { PageHeader } from "@/components/parus/page-header";
 import { UsersTable } from "@/components/admin/users-table";
-import { requirePermission } from "@/lib/session";
+import { requireAdmin } from "@/lib/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 // Statut « désactivé » : bannissement GoTrue toujours actif. Le calcul de
@@ -17,7 +17,7 @@ function isBanned(bannedUntil: string | undefined | null): boolean {
 }
 
 export default async function AdminUsersPage() {
-  await requirePermission("admin.users");
+  await requireAdmin();
   const admin = createAdminClient();
 
   const [{ data: userList }, { data: profiles }, { data: roles }, { data: userRoles }] =

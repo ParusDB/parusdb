@@ -1,21 +1,27 @@
-// Permissions applicatives ParusDB (RBAC, spec §Rôles et Permissions).
-// Les clés vivent dans iam.roles.permissions (text[]) ; ce fichier est la
-// source côté TypeScript pour l'UI (libellés et checklist d'édition).
+// Métadonnées du RBAC applicatif (refonte, docs/functional/rbac_refonte.md).
+// Les accès ne sont plus des permissions statiques de menu : ce fichier est
+// la source TypeScript des types de ressources et des privilèges hiérarchiques
+// (manage ⊇ write ⊇ read) affichés dans l'éditeur de rôles (/admin/roles).
 
-export const PERMISSIONS = [
-  { key: "chat", label: "Chat" },
-  { key: "agents", label: "Agents IA" },
-  { key: "lakehouse", label: "Data Lakehouse" },
-  { key: "connectors", label: "Connecteurs" },
-  { key: "admin.users", label: "Administration — Utilisateurs" },
-  { key: "admin.roles", label: "Administration — Rôles" },
-  { key: "admin.providers", label: "Administration — Fournisseurs LLM" },
+export const RESOURCE_TYPES = [
+  { key: "catalog", label: "Catalogues" },
+  { key: "agent", label: "Agents IA" },
+  { key: "pipeline", label: "Pipelines" },
 ] as const;
 
-export type PermissionKey = (typeof PERMISSIONS)[number]["key"];
+export const PRIVILEGES = [
+  { key: "read", label: "Lecture" },
+  { key: "write", label: "Écriture" },
+  { key: "manage", label: "Gestion" },
+] as const;
 
-export const PERMISSION_KEYS: PermissionKey[] = PERMISSIONS.map((p) => p.key);
+export type ResourceKey = (typeof RESOURCE_TYPES)[number]["key"];
+export type PrivilegeKey = (typeof PRIVILEGES)[number]["key"];
 
-export function permissionLabel(key: string): string {
-  return PERMISSIONS.find((p) => p.key === key)?.label ?? key;
+export function resourceLabel(key: string): string {
+  return RESOURCE_TYPES.find((r) => r.key === key)?.label ?? key;
+}
+
+export function privilegeLabel(key: string): string {
+  return PRIVILEGES.find((p) => p.key === key)?.label ?? key;
 }

@@ -4,7 +4,8 @@ export const instant = false;
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/parus/page-header";
 import { AgentForm } from "@/components/agents/agent-form";
-import { requirePermission } from "@/lib/session";
+import { requireGrant } from "@/lib/session";
+import { readableCatalogNames } from "@/lib/rbac";
 import { createClient } from "@/lib/supabase/server";
 import { listModelSources } from "@/lib/providers";
 import type { Agent } from "@/types/db";
@@ -14,8 +15,10 @@ export default async function EditAgentPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const session = await requirePermission("agents");
+  // Édition d'un agent : privilège « Écriture » requis sur le rôle actif
+  // (propriété ou grant). La lecture seule redirige vers le chat.
   const { id } = await params;
+  await requireGrant("agent", id, "write");
   const supabase = await createClient();
 
   const [{ data: agent }, { data: sourceRows }] = await Promise.all([
@@ -26,33 +29,8 @@ export default async function EditAgentPage({
 
   const [modelSources, catalogs] = await Promise.all([
     listModelSources(),
-    session.activeRole
-      ? Promise.all([
-          supabase
-            .schema("lakehouse")
-            .from("catalog_registry")
-            .select("catalog_name")
-            .order("catalog_name"),
-          supabase
-            .schema("lakehouse")
-            .from("catalog_access")
-            .select("catalog_name")
-            .eq("role_id", session.activeRole.id),
-        ]).then(([registryRes, accessRes]) => {
-          const all = (registryRes.data ?? []).map(
-            (r: { catalog_name: string }) => r.catalog_name,
-          );
-          const accessRows = accessRes.data ?? [];
-          // Si le rôle a des entrées catalog_access, filtrer ; sinon tous les
-          // catalogues du registre sont accessibles (fallback pour les
-          // catalogues créés avant la mise en place de catalog_access).
-          if (accessRows.length === 0) return all;
-          const allowed = new Set(
-            accessRows.map((r: { catalog_name: string }) => r.catalog_name),
-          );
-          return all.filter((c) => allowed.has(c));
-        })
-      : Promise.resolve([]),
+    // Sources de connaissances : catalogues lisibles par le rôle actif (RLS).
+    readableCatalogNames().catch(() => [] as string[]),
   ]);
 
   const row = agent as unknown as Agent;

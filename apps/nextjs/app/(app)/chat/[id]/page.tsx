@@ -2,7 +2,7 @@
 export const instant = false;
 
 import { notFound } from "next/navigation";
-import { requirePermission } from "@/lib/session";
+import { requireSession } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 import { fetchProviderLabels, providerLabel } from "@/lib/providers";
 import { ConversationView } from "@/components/chat/conversation-view";
@@ -15,7 +15,7 @@ export default async function ConversationPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ pending?: string }>;
 }) {
-  await requirePermission("chat");
+  await requireSession();
   const { id } = await params;
   const { pending } = await searchParams;
   const supabase = await createClient();

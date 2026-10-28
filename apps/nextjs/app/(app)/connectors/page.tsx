@@ -4,10 +4,10 @@ export const instant = false;
 import { PageHeader } from "@/components/parus/page-header";
 import { PipelinesTable } from "@/components/connectors/pipelines-table";
 import { RunsPanel } from "@/components/connectors/runs-panel";
-import { requirePermission } from "@/lib/session";
+import { requireSession } from "@/lib/session";
+import { can, grantsForActiveRole, readableCatalogNames } from "@/lib/rbac";
 import { createClient } from "@/lib/supabase/server";
-import { loadCatalogViews } from "@/lib/lakehouse";
-import type { CatalogEntry, Pipeline } from "@/types/db";
+import type { Pipeline } from "@/types/db";
 import { findSource } from "@/lib/sources";
 import { Plus } from "lucide-react";
 import Link from "next/link";
@@ -18,27 +18,21 @@ export default async function ConnectorsPage({
 }: {
   searchParams: Promise<{ created?: string }>;
 }) {
-  const session = await requirePermission("connectors");
+  const session = await requireSession();
   const supabase = await createClient();
   const { created } = await searchParams;
 
-  const { data: registryRows } = await supabase
-    .schema("lakehouse")
-    .from("catalog_registry")
-    .select("catalog_name, description, created_by, created_at, updated_at");
-  const registry = (registryRows ?? []) as unknown as CatalogEntry[];
-  let catalogs: string[] = [];
-  try {
-    catalogs = (await loadCatalogViews(registry)).map((c) => c.name);
-  } catch {
-    catalogs = registry.map((r) => r.catalog_name);
-  }
-
-  const { data: pipelines } = await supabase
-    .schema("connectors")
-    .from("pipelines")
-    .select("id, owner_id, name, source_type, destination_catalog, destination_schema, status, cron, last_run_at, created_at, updated_at")
-    .order("created_at", { ascending: false });
+  // Pipelines : visibles si le rôle actif est propriétaire ou bénéficiaire
+  // d'un grant (RLS pipelines_select_perm).
+  const [{ data: pipelines }, grants, catalogs] = await Promise.all([
+    supabase
+      .schema("connectors")
+      .from("pipelines")
+      .select("id, owner_id, owner_role_id, name, source_type, destination_catalog, destination_schema, status, cron, last_run_at, created_at, updated_at")
+      .order("created_at", { ascending: false }),
+    grantsForActiveRole(session).catch(() => []),
+    readableCatalogNames().catch(() => [] as string[]),
+  ]);
 
   const rows = (pipelines ?? []) as Pipeline[];
 
@@ -102,7 +96,8 @@ export default async function ConnectorsPage({
         pipelines={rows.map((p) => ({
           ...p,
           sourceLabel: findSource(p.source_type)?.label ?? p.source_type,
-          isOwner: p.owner_id === session.userId,
+          canEdit: can(session, grants, "pipeline", p.id, p.owner_role_id, "write"),
+          canDelete: can(session, grants, "pipeline", p.id, p.owner_role_id, "manage"),
         }))}
         catalogs={catalogs}
       />

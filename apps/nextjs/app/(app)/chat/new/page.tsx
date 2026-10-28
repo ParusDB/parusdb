@@ -1,7 +1,7 @@
 // Page dynamique : la session (cookies) impose un rendu à la requête.
 export const instant = false;
 
-import { requirePermission } from "@/lib/session";
+import { requireSession } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 import { fetchProviderLabels, providerLabel } from "@/lib/providers";
 import { NewChat } from "@/components/chat/new-chat";
@@ -10,8 +10,10 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
 export default async function NewChatPage() {
-  const session = await requirePermission("chat");
+  await requireSession();
   const supabase = await createClient();
+  // Les agents visibles sont ceux où le rôle actif dispose du privilège
+  // « Lecture » (RLS agents_select_perm).
   const [{ data: agents }, providerLabels] = await Promise.all([
     supabase
       .schema("agents")
@@ -28,18 +30,16 @@ export default async function NewChatPage() {
         <CharbonPanel size="lg" className="text-center">
           <h1 className="font-display text-3xl">Aucun agent disponible</h1>
           <p className="mx-auto mt-3 max-w-md text-sm text-blanc/70">
-            Pour discuter avec vos données, il faut d’abord un agent IA. Les
-            utilisateurs disposant de la permission « Agents IA » peuvent en
-            créer un.
+            Pour discuter avec vos données, il faut d’abord un agent IA.
+            Créez-en un, ou demandez à un administrateur de partager un agent
+            avec votre rôle.
           </p>
-          {session.has("agents") ? (
-            <Button
-              asChild
-              className="mt-6 rounded-full bg-jaune font-semibold text-charbon shadow-[0_20px_60px_-20px_rgba(255,215,0,0.5)] transition-transform hover:-translate-y-0.5"
-            >
-              <Link href="/agents/new">Créer un agent IA</Link>
-            </Button>
-          ) : null}
+          <Button
+            asChild
+            className="mt-6 rounded-full bg-jaune font-semibold text-charbon shadow-[0_20px_60px_-20px_rgba(255,215,0,0.5)] transition-transform hover:-translate-y-0.5"
+          >
+            <Link href="/agents/new">Créer un agent IA</Link>
+          </Button>
         </CharbonPanel>
       </div>
     );

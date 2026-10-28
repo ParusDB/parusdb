@@ -3,15 +3,18 @@ export const instant = false;
 
 import { PageHeader } from "@/components/parus/page-header";
 import { ConversationList } from "@/components/chat/conversation-list";
-import { requirePermission } from "@/lib/session";
+import { requireSession } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 import { Plus } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
 export default async function ChatPage() {
-  const session = await requirePermission("chat");
+  const session = await requireSession();
   const supabase = await createClient();
+
+  // Conversations visibles : les vôtres, plus celles partagées au rôle actif
+  // (RLS conversations_select_visible — lecture seule pour les partages).
 
   // Jointure cross-schema impossible via PostgREST (AGENTS.md §7) :
   // deux requêtes séparées, fusion ici.

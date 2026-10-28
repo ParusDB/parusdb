@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requirePermission } from "@/lib/session";
+import { requireAdmin } from "@/lib/session";
 import { encryptSecret } from "@/lib/crypto";
 import { deleteModel, validateModelName } from "@/lib/ollama";
 import {
@@ -27,7 +27,7 @@ export interface AdminUserInput {
 const BAN_FOREVER = "876000h";
 
 export async function createUser(input: AdminUserInput): Promise<{ ok: boolean; error?: string }> {
-  await requirePermission("admin.users");
+  await requireAdmin();
   const admin = createAdminClient();
   const { data, error } = await admin.auth.admin.createUser({
     email: input.email.trim(),
@@ -40,7 +40,7 @@ export async function createUser(input: AdminUserInput): Promise<{ ok: boolean; 
   const userId = data.user.id;
 
   // Profil + rôles : le trigger iam.on_auth_user_created a déjà posé le rôle
-  // par défaut (metier) ; on ajuste avec la sélection de l'administrateur.
+  // par défaut (public) ; on ajuste avec la sélection de l'administrateur.
   await admin
     .schema("iam")
     .from("user_profiles")
@@ -59,7 +59,7 @@ export async function updateUser(
   userId: string,
   input: Omit<AdminUserInput, "email" | "password">,
 ): Promise<{ ok: boolean; error?: string }> {
-  await requirePermission("admin.users");
+  await requireAdmin();
   const admin = createAdminClient();
   const { error } = await admin
     .schema("iam")
@@ -92,13 +92,15 @@ async function syncUserRoles(
   await admin.schema("iam").from("user_roles").insert(
     roleIds.map((roleId) => ({ user_id: userId, role_id: roleId })),
   );
+  // Le rôle actif doit rester un rôle attribué : s'il a été retiré, le
+  // replier sur le premier rôle de la sélection.
   const { data: active } = await admin
     .schema("iam")
     .from("user_active_role")
-    .select("user_id")
+    .select("role_id")
     .eq("user_id", userId)
     .maybeSingle();
-  if (!active) {
+  if (!active || !roleIds.includes(active.role_id)) {
     await admin.schema("iam").from("user_active_role").upsert({
       user_id: userId,
       role_id: roleIds[0],
@@ -110,7 +112,7 @@ export async function setUserStatus(
   userId: string,
   disabled: boolean,
 ): Promise<{ ok: boolean; error?: string }> {
-  await requirePermission("admin.users");
+  await requireAdmin();
   const admin = createAdminClient();
   const { error } = await admin.auth.admin.updateUserById(userId, {
     ban_duration: disabled ? BAN_FOREVER : "none",
@@ -125,7 +127,7 @@ export async function setUserStatus(
 export async function deleteUser(
   userId: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  await requirePermission("admin.users");
+  await requireAdmin();
   const admin = createAdminClient();
   const { error } = await admin.auth.admin.deleteUser(userId);
   if (error) {
@@ -143,15 +145,13 @@ export async function createRole(input: {
   key: string;
   name: string;
   description: string;
-  permissions: string[];
 }): Promise<{ ok: boolean; error?: string }> {
-  await requirePermission("admin.roles");
+  await requireAdmin();
   const admin = createAdminClient();
   const { error } = await admin.schema("iam").from("roles").insert({
     key: input.key.trim(),
     name: input.name.trim(),
     description: input.description.trim() || null,
-    permissions: input.permissions,
     is_system: false,
   });
   if (error) {
@@ -166,10 +166,9 @@ export async function updateRole(
   input: {
     name: string;
     description: string;
-    permissions: string[];
   },
 ): Promise<{ ok: boolean; error?: string }> {
-  await requirePermission("admin.roles");
+  await requireAdmin();
   const admin = createAdminClient();
   const { error } = await admin
     .schema("iam")
@@ -177,7 +176,6 @@ export async function updateRole(
     .update({
       name: input.name.trim(),
       description: input.description.trim() || null,
-      permissions: input.permissions,
     })
     .eq("id", roleId);
   if (error) {
@@ -190,7 +188,7 @@ export async function updateRole(
 export async function deleteRole(
   roleId: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  await requirePermission("admin.roles");
+  await requireAdmin();
   const admin = createAdminClient();
   const { count } = await admin
     .schema("iam")
@@ -210,6 +208,15 @@ export async function deleteRole(
     .eq("id", roleId)
     .eq("is_system", false);
   if (error) {
+    // Rôle propriétaire d'objets (agents, pipelines, catalogues) ou lié à un
+    // utilisateur applicatif : la base refuse (ON DELETE RESTRICT).
+    if (error.code === "23503") {
+      return {
+        ok: false,
+        error:
+          "Impossible de supprimer : ce rôle est propriétaire d'objets (agents, pipelines ou catalogues) ou utilisé par un utilisateur applicatif. Réaffectez-les d'abord.",
+      };
+    }
     return { ok: false, error: `La suppression a échoué : ${error.message}` };
   }
   revalidatePath("/admin/roles");
@@ -248,7 +255,7 @@ export async function addProvider(input: {
   baseUrl?: string;
   apiKey: string;
 }): Promise<{ ok: boolean; error?: string; modelCount?: number }> {
-  const session = await requirePermission("admin.providers");
+  const session = await requireAdmin();
   const name = input.name.trim();
   if (!name || !input.apiKey.trim()) {
     return { ok: false, error: "Le nom du fournisseur et la clé API sont obligatoires." };
@@ -312,7 +319,7 @@ export async function updateProvider(
     apiKey?: string;
   },
 ): Promise<{ ok: boolean; error?: string }> {
-  await requirePermission("admin.providers");
+  await requireAdmin();
   const name = input.name.trim();
   if (!name) {
     return { ok: false, error: "Le nom du fournisseur est obligatoire." };
@@ -374,7 +381,7 @@ export async function updateProvider(
 export async function deleteProvider(
   id: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  await requirePermission("admin.providers");
+  await requireAdmin();
   const admin = createAdminClient();
   const { error } = await admin
     .schema("admin")
@@ -393,7 +400,7 @@ export async function deleteProvider(
 export async function deleteOllamaModel(
   model: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  await requirePermission("admin.providers");
+  await requireAdmin();
   const name = validateModelName(model);
   if (!name) {
     return {

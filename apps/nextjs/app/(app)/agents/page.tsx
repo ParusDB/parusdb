@@ -2,7 +2,8 @@
 export const instant = false;
 
 import { PageHeader } from "@/components/parus/page-header";
-import { requirePermission } from "@/lib/session";
+import { requireSession } from "@/lib/session";
+import { can, grantsForActiveRole } from "@/lib/rbac";
 import { createClient } from "@/lib/supabase/server";
 import { fetchProviderLabels, providerLabel } from "@/lib/providers";
 import { AgentsGrid } from "@/components/agents/agents-grid";
@@ -12,16 +13,17 @@ import { Button } from "@/components/ui/button";
 import type { Agent } from "@/types/db";
 
 export default async function AgentsPage() {
-  const session = await requirePermission("agents");
+  const session = await requireSession();
   const supabase = await createClient();
-  const [{ data: agents }, { data: sources }, providerLabels] = await Promise.all([
+  const [{ data: agents }, { data: sources }, providerLabels, grants] = await Promise.all([
     supabase
       .schema("agents")
       .from("agents")
-      .select("id, owner_id, name, description, model_provider, model_id, system_prompt, created_at, updated_at")
+      .select("id, owner_id, owner_role_id, name, description, model_provider, model_id, system_prompt, created_at, updated_at")
       .order("created_at", { ascending: false }),
     supabase.schema("agents").from("agent_sources").select("agent_id, source_name"),
     fetchProviderLabels(supabase).catch(() => new Map<string, string>()),
+    grantsForActiveRole(session).catch(() => []),
   ]);
 
   const rows = (agents ?? []) as unknown as Agent[];
@@ -54,7 +56,8 @@ export default async function AgentsPage() {
           provider: providerLabel(a.model_provider, providerLabels),
           model: a.model_id,
           sources: sourceMap.get(a.id) ?? [],
-          isOwner: a.owner_id === session.userId,
+          canEdit: can(session, grants, "agent", a.id, a.owner_role_id, "write"),
+          canDelete: can(session, grants, "agent", a.id, a.owner_role_id, "manage"),
         }))}
       />
     </div>

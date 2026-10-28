@@ -4,18 +4,19 @@ export const instant = false;
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/parus/page-header";
 import { PipelineWizard } from "@/components/connectors/pipeline-wizard";
-import { requirePermission } from "@/lib/session";
+import { requireGrant } from "@/lib/session";
+import { writableCatalogNames } from "@/lib/rbac";
 import { createClient } from "@/lib/supabase/server";
-import { loadCatalogViews } from "@/lib/lakehouse";
-import type { CatalogEntry } from "@/types/db";
 
 export default async function EditPipelinePage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requirePermission("connectors");
+  // Édition d'un pipeline : privilège « Écriture » requis sur le rôle actif
+  // (propriété ou grant).
   const { id } = await params;
+  const session = await requireGrant("pipeline", id, "write");
   const supabase = await createClient();
 
   const { data: pipeline } = await supabase
@@ -28,17 +29,10 @@ export default async function EditPipelinePage({
     .maybeSingle();
   if (!pipeline) notFound();
 
-  const { data: registryRows } = await supabase
-    .schema("lakehouse")
-    .from("catalog_registry")
-    .select("catalog_name, description, created_by, created_at, updated_at");
-  const registry = (registryRows ?? []) as unknown as CatalogEntry[];
-  let catalogs: string[] = [];
-  try {
-    catalogs = (await loadCatalogViews(registry)).map((c) => c.name);
-  } catch {
-    catalogs = registry.map((r) => r.catalog_name);
-  }
+  // Destinations possibles : catalogues en « Écriture » pour le rôle actif.
+  const catalogs = await writableCatalogNames(session).catch(
+    () => [] as string[],
+  );
 
   const row = pipeline as {
     id: string;

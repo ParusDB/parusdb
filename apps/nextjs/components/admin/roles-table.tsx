@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Check, Pencil, Plus, Shield, Trash2 } from "lucide-react";
+import { Pencil, Plus, Shield, Trash2 } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -24,14 +24,17 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ConfirmNameDialog } from "@/components/parus/confirm-name-dialog";
-import { PERMISSIONS, permissionLabel } from "@/lib/permissions";
-import { cn } from "@/lib/utils";
 import type { Role } from "@/types/db";
 import {
   createRole,
   deleteRole,
   updateRole,
 } from "@/app/(app)/admin/actions";
+
+// Table des rôles (RBAC refonte — docs/functional/rbac_refonte.md). La
+// distribution des droits par rôle (grants lecture/écriture/gestion sur les
+// catalogues, agents et pipelines) se fait dans l'éditeur dédié de chaque
+// rôle ; ici : création/édition des rôles, effectifs, suppression.
 
 function slugify(value: string): string {
   return value
@@ -59,19 +62,8 @@ function RoleDialog({
   const [key, setKey] = useState(role?.key ?? "");
   const [keyTouched, setKeyTouched] = useState(isEdit);
   const [description, setDescription] = useState(role?.description ?? "");
-  const [permissions, setPermissions] = useState<string[]>(
-    role?.permissions ?? [],
-  );
   const [pending, setPending] = useState(false);
   const router = useRouter();
-
-  function togglePermission(pkey: string) {
-    setPermissions((prev) =>
-      prev.includes(pkey)
-        ? prev.filter((p) => p !== pkey)
-        : [...prev, pkey],
-    );
-  }
 
   async function handleSubmit() {
     if (pending) return;
@@ -82,12 +74,11 @@ function RoleDialog({
     setPending(true);
     try {
       const result = isEdit
-        ? await updateRole(role.id, { name, description, permissions })
+        ? await updateRole(role.id, { name, description })
         : await createRole({
             key: key.trim(),
             name: name.trim(),
             description,
-            permissions,
           });
       if (result.ok) {
         toast.success(isEdit ? "Rôle mis à jour." : "Rôle créé.");
@@ -120,7 +111,7 @@ function RoleDialog({
                   setName(e.target.value);
                   if (!keyTouched) setKey(slugify(e.target.value));
                 }}
-                placeholder="Data Analyst"
+                placeholder="Data Engineer"
               />
             </div>
             {!isEdit ? (
@@ -133,7 +124,7 @@ function RoleDialog({
                     setKeyTouched(true);
                     setKey(slugify(e.target.value));
                   }}
-                  placeholder="data_analyst"
+                  placeholder="data_engineer"
                   className="mono"
                 />
               </div>
@@ -152,44 +143,13 @@ function RoleDialog({
               id="role-description"
               value={description ?? ""}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Accès lecture au lakehouse et au chat"
+              placeholder="Accès lecture au catalogue sales, écriture sur les agents de l'équipe"
             />
           </div>
-          <div className="grid gap-2">
-            <Label>Permissions</Label>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {PERMISSIONS.map((permission) => {
-                const selected = permissions.includes(permission.key);
-                return (
-                  <button
-                    key={permission.key}
-                    type="button"
-                    onClick={() => togglePermission(permission.key)}
-                    className={cn(
-                      "flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors",
-                      selected
-                        ? "border-jaune bg-jaune/10"
-                        : "border-border hover:border-charbon",
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "flex h-5 w-5 items-center justify-center rounded-full border",
-                        selected
-                          ? "border-jaune bg-jaune text-charbon"
-                          : "border-border text-muted-foreground",
-                      )}
-                    >
-                      {selected ? (
-                        <Check className="h-3 w-3" strokeWidth={2} />
-                      ) : null}
-                    </span>
-                    {permission.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          <p className="text-sm text-muted-foreground">
+            Les droits sur les objets (catalogues, agents IA, pipelines) se
+            distribuent depuis la fiche du rôle une fois celui-ci créé.
+          </p>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -236,7 +196,7 @@ export function RolesTable({
           <TableHeader>
             <TableRow>
               <TableHead>Rôle</TableHead>
-              <TableHead>Permissions</TableHead>
+              <TableHead>Description</TableHead>
               <TableHead>Utilisateurs</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
@@ -262,18 +222,8 @@ export function RolesTable({
                     </div>
                   </div>
                 </TableCell>
-                <TableCell>
-                  <div className="flex max-w-md flex-wrap gap-1">
-                    {role.permissions.map((p) => (
-                      <Badge
-                        key={p}
-                        variant="outline"
-                        className="mono text-[10px] font-normal"
-                      >
-                        {permissionLabel(p)}
-                      </Badge>
-                    ))}
-                  </div>
+                <TableCell className="max-w-md text-muted-foreground">
+                  {role.description ?? "—"}
                 </TableCell>
                 <TableCell className="text-muted-foreground">
                   {counts[role.id] ?? 0}
@@ -294,7 +244,7 @@ export function RolesTable({
                     {!role.is_system ? (
                       <ConfirmNameDialog
                         title="Supprimer ce rôle ?"
-                        description={`Le rôle « ${role.name} » sera supprimé. Les utilisateurs qui le portent doivent être réaffectés au préalable.`}
+                        description={`Le rôle « ${role.name} » sera supprimé. Les utilisateurs qui le portent et les objets qu'il possède doivent être réaffectés au préalable.`}
                         expectedName={role.name}
                         trigger={
                           <Button

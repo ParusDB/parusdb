@@ -3,12 +3,12 @@ export const instant = false;
 
 import { PageHeader } from "@/components/parus/page-header";
 import { ProvidersView } from "@/components/admin/providers-view";
-import { requirePermission } from "@/lib/session";
+import { requireAdmin } from "@/lib/session";
 import { listProviderDetails } from "@/lib/providers";
 import { listModels } from "@/lib/ollama";
 
 export default async function AdminProvidersPage() {
-  await requirePermission("admin.providers");
+  await requireAdmin();
 
   const [providers, ollama] = await Promise.all([
     listProviderDetails(),

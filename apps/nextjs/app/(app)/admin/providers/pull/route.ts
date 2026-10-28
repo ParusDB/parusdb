@@ -81,9 +81,9 @@ export async function POST(request: Request) {
   if (!session) {
     return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
   }
-  if (!session.has("admin.providers")) {
+  if (!session.isAdmin) {
     return NextResponse.json(
-      { error: "Permission « admin.providers » requise." },
+      { error: "Rôle administrateur requis." },
       { status: 403 },
     );
   }

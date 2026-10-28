@@ -3,12 +3,12 @@ export const instant = false;
 
 import { PageHeader } from "@/components/parus/page-header";
 import { RolesTable } from "@/components/admin/roles-table";
-import { requirePermission } from "@/lib/session";
+import { requireAdmin } from "@/lib/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Role } from "@/types/db";
 
 export default async function AdminRolesPage() {
-  await requirePermission("admin.roles");
+  await requireAdmin();
   const admin = createAdminClient();
   const [{ data: roles }, { data: userRoles }] = await Promise.all([
     admin.schema("iam").from("roles").select("*").order("created_at"),
@@ -24,7 +24,7 @@ export default async function AdminRolesPage() {
       <PageHeader
         eyebrow="Administration"
         title="Rôles"
-        description="Rôles applicatifs et permissions granulaires. Un utilisateur peut cumuler plusieurs rôles et choisir son rôle actif sans se déconnecter."
+        description="Rôles applicatifs et droits par objet. Un utilisateur peut cumuler plusieurs rôles et choisir son rôle actif sans se déconnecter."
       />
       <RolesTable
         roles={(roles ?? []) as unknown as Role[]}

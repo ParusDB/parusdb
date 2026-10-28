@@ -3,8 +3,11 @@
 import { writeFile, unlink } from "node:fs/promises";
 import path from "node:path";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { requirePermission } from "@/lib/session";
+import {
+  hasGrant,
+  requireSession,
+  type Privilege,
+} from "@/lib/session";
 import { revalidatePath } from "next/cache";
 import { createCatalog, deleteCatalog, ensureDefaultCatalogIsolated, DEFAULT_CATALOG } from "@/lib/polaris";
 import {
@@ -21,6 +24,16 @@ import {
 
 const NAME_PATTERN = /^[a-z][a-z0-9_]*$/;
 
+// Privilège requis par une requête SQL : lecture pour les requêtes
+// d'interrogation, écriture pour tout ce qui modifie les objets (DDL/DML).
+// Heuristique sur le premier mot-clé — la garde finale reste la RLS du
+// registre et la documentation de l'éditeur (AGENTS.md §10).
+const READ_ONLY_SQL = /^\s*(select|show|describe|desc|explain)\b/i;
+
+function requiredSqlPrivilege(sql: string): Privilege {
+  return READ_ONLY_SQL.test(sql) ? "read" : "write";
+}
+
 export interface QueryExecution {
   ok: boolean;
   columns?: { name: string; type: string }[];
@@ -31,16 +44,34 @@ export interface QueryExecution {
 }
 
 // Exécution SQL : passe par Trino (unique moteur) avec les droits du rôle
-// actif vérifiés côté serveur (spec §Data Lakehouse).
+// actif vérifiés côté serveur (spec §Data Lakehouse, RBAC refonte).
 export async function executeQuery(
   catalog: string,
   sql: string,
 ): Promise<QueryExecution> {
-  const session = await requirePermission("lakehouse");
+  const session = await requireSession();
   const supabase = await createClient();
   const trimmed = sql.trim();
   if (!trimmed) {
     return { ok: false, error: "La requête est vide." };
+  }
+  // Lecture : privilège « Lecture » sur le catalogue ; toute requête
+  // modifiante exige le privilège « Écriture ».
+  const privilege = requiredSqlPrivilege(trimmed);
+  const granted = await hasGrant(
+    session.userId,
+    "catalog",
+    catalog,
+    privilege,
+  );
+  if (!granted) {
+    return {
+      ok: false,
+      error:
+        privilege === "read"
+          ? "Votre rôle actif ne permet pas de lire ce catalogue (privilège « Lecture » requis)."
+          : "Votre rôle actif ne permet pas de modifier ce catalogue (privilège « Écriture » requis).",
+    };
   }
   const binding = trinoBindingFor(catalog);
   if (!binding) {
@@ -85,7 +116,13 @@ export async function createCatalogAction(
   name: string,
   description: string,
 ): Promise<{ ok: boolean; error?: string; warning?: string }> {
-  const session = await requirePermission("lakehouse");
+  const session = await requireSession();
+  if (!session.activeRole) {
+    return {
+      ok: false,
+      error: "Aucun rôle actif : impossible de créer un catalogue.",
+    };
+  }
   const trimmed = name.trim();
   if (!NAME_PATTERN.test(trimmed)) {
     return {
@@ -116,7 +153,9 @@ export async function createCatalogAction(
     return created;
   }
 
-  // 2. Registre applicatif (description).
+  // 2. Registre applicatif (description). Le rôle actif qui crée le
+  //    catalogue en devient propriétaire (RBAC refonte) : tous les comptes
+  //    portant ce rôle le voient.
   const { error: registryError } = await supabase
     .schema("lakehouse")
     .from("catalog_registry")
@@ -124,6 +163,7 @@ export async function createCatalogAction(
       catalog_name: trimmed,
       description: description.trim() || null,
       created_by: session.userId,
+      owner_role_id: session.activeRole.id,
     });
   if (registryError) {
     return {
@@ -132,24 +172,7 @@ export async function createCatalogAction(
     };
   }
 
-  // 3. Accès pour tous les rôles disposant de la permission lakehouse
-  //    (permissions granulaires par catalogue, spec §RBAC).
-  const admin = createAdminClient();
-  const { data: lakehouseRoles } = await admin
-    .schema("iam")
-    .from("roles")
-    .select("id")
-    .contains("permissions", ["lakehouse"]);
-  if (lakehouseRoles && lakehouseRoles.length > 0) {
-    await admin.schema("lakehouse").from("catalog_access").insert(
-      lakehouseRoles.map((r: { id: string }) => ({
-        role_id: r.id,
-        catalog_name: trimmed,
-      })),
-    );
-  }
-
-  // 4. Binding Trino : fichier de configuration chargé au prochain
+  // 3. Binding Trino : fichier de configuration chargé au prochain
   //    redémarrage — automatique, dès qu'aucune requête n'est en cours.
   let warning: string | undefined;
   const dir = process.env.TRINO_CATALOG_DIR;
@@ -176,19 +199,21 @@ export async function createCatalogAction(
   return { ok: true, warning };
 }
 
-// Suppression d'un catalogue : confirmation admin + ressaisie du nom côté UI
-// (action irréversible). Spec Polaris 1.8.0 : le catalogue doit être vide —
-// la purge des fichiers Iceberg passe par les DROP Trino (la propriété
-// polaris.config.drop-with-purge.enabled est posée à la création), puis le
-// catalogue est supprimé via l'API Management.
+// Suppression d'un catalogue : confirmation + ressaisie du nom côté UI
+// (action irréversible). Privilège « Gestion » requis sur le catalogue
+// (propriété du rôle actif ou grant — RBAC refonte). Spec Polaris 1.8.0 : le
+// catalogue doit être vide — la purge des fichiers Iceberg passe par les
+// DROP Trino (la propriété polaris.config.drop-with-purge.enabled est posée
+// à la création), puis le catalogue est supprimé via l'API Management.
 export async function deleteCatalogAction(
   name: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const session = await requirePermission("lakehouse");
-  if (!session.has("admin.users")) {
+  const session = await requireSession();
+  const canDelete = await hasGrant(session.userId, "catalog", name, "manage");
+  if (!canDelete) {
     return {
       ok: false,
-      error: "La suppression d'un catalogue est réservée aux administrateurs.",
+      error: "La suppression d'un catalogue exige le privilège « Gestion » (rôle propriétaire ou grant dédié).",
     };
   }
   // Le catalogue par défaut de la plateforme (catalogue système, ex. parusdb)
@@ -249,7 +274,14 @@ export async function deleteCatalogAction(
 export async function generateBindingAction(
   name: string,
 ): Promise<{ ok: boolean; error?: string; warning?: string }> {
-  await requirePermission("lakehouse");
+  const session = await requireSession();
+  const canManage = await hasGrant(session.userId, "catalog", name, "manage");
+  if (!canManage) {
+    return {
+      ok: false,
+      error: "Cette action exige le privilège « Gestion » sur le catalogue.",
+    };
+  }
   const dir = process.env.TRINO_CATALOG_DIR;
   if (!dir) {
     return {
@@ -281,6 +313,6 @@ export async function generateBindingAction(
 
 // État du redémarrage automatique de Trino (polling de l'UI).
 export async function getTrinoRestartStatus(): Promise<TrinoRestartState> {
-  await requirePermission("lakehouse");
+  await requireSession();
   return getTrinoRestartState();
 }

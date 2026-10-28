@@ -50,7 +50,7 @@ export function SidebarListItem({
   label: string;
   href: string;
   onRename?: (label: string) => Promise<void>;
-  onDelete: () => Promise<{ ok: boolean; error?: string }>;
+  onDelete?: () => Promise<{ ok: boolean; error?: string }>;
   deleteRequiresName?: boolean;
   deleteTitle: string;
   deleteDescription: string;
@@ -66,6 +66,7 @@ export function SidebarListItem({
 
   // Supprimer l'élément ouvert revient à sa liste d'origine.
   async function runDelete(): Promise<{ ok: boolean; error?: string }> {
+    if (!onDelete) return { ok: false, error: "Suppression non autorisée." };
     const result = await onDelete();
     if (result.ok && (pathname === href || pathname.startsWith(`${href}/`))) {
       router.push(parentHref);
@@ -91,6 +92,7 @@ export function SidebarListItem({
   }
 
   async function handleDelete() {
+    if (!onDelete) return;
     setPending(true);
     try {
       const result = await runDelete();
@@ -109,6 +111,7 @@ export function SidebarListItem({
   return (
     <div className="group relative flex items-center">
       <div className="min-w-0 flex-1">{children}</div>
+      {onRename || onDelete ? (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -132,14 +135,17 @@ export function SidebarListItem({
               <Pencil className="h-4 w-4" strokeWidth={1.6} /> Renommer
             </DropdownMenuItem>
           ) : null}
-          <DropdownMenuItem
-            onSelect={() => setConfirming(true)}
-            className="text-destructive focus:text-destructive"
-          >
-            <Trash2 className="h-4 w-4" strokeWidth={1.6} /> Supprimer
-          </DropdownMenuItem>
+          {onDelete ? (
+            <DropdownMenuItem
+              onSelect={() => setConfirming(true)}
+              className="text-destructive focus:text-destructive"
+            >
+              <Trash2 className="h-4 w-4" strokeWidth={1.6} /> Supprimer
+            </DropdownMenuItem>
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
+      ) : null}
 
       {renaming ? (
         <Dialog open={renaming} onOpenChange={setRenaming}>

@@ -16,7 +16,9 @@ export interface AgentCardData {
   provider: string;
   model: string;
   sources: string[];
-  isOwner: boolean;
+  // Privilèges du rôle actif sur l'agent (RBAC refonte).
+  canEdit: boolean;
+  canDelete: boolean;
 }
 
 export function AgentsGrid({ agents }: { agents: AgentCardData[] }) {
@@ -76,12 +78,19 @@ export function AgentsGrid({ agents }: { agents: AgentCardData[] }) {
             ) : null}
           </div>
           <div className="mt-5 flex items-center gap-1.5 border-t border-border pt-4">
-            <Button asChild variant="outline" size="sm" className="flex-1">
-              <Link href={`/agents/${agent.id}`}>
-                <Pencil className="h-3.5 w-3.5" strokeWidth={1.6} /> Modifier
-              </Link>
-            </Button>
-            <ConfirmNameDialog
+            {agent.canEdit ? (
+              <Button asChild variant="outline" size="sm" className="flex-1">
+                <Link href={`/agents/${agent.id}`}>
+                  <Pencil className="h-3.5 w-3.5" strokeWidth={1.6} /> Modifier
+                </Link>
+              </Button>
+            ) : (
+              <Button asChild variant="outline" size="sm" className="flex-1">
+                <Link href="/chat/new">Discuter</Link>
+              </Button>
+            )}
+            {agent.canDelete ? (
+              <ConfirmNameDialog
               title="Supprimer cet agent ?"
               description={`Toutes les sources associées à « ${agent.name} » seront détachées. Les conversations existantes sont conservées et l’agent ne pourra plus être supprimé tant qu’elles y font référence.`}
               expectedName={agent.name}
@@ -101,6 +110,7 @@ export function AgentsGrid({ agents }: { agents: AgentCardData[] }) {
                 return result;
               }}
             />
+            ) : null}
           </div>
         </div>
       ))}
