@@ -501,7 +501,7 @@ revient en Envoy.
 ## 11. Chat IA — Ollama + mcp-trino
 
 **Déploiement en place** : `apps/ollama` (serveur d'inférence GPU, modèle par défaut
-`gemma4:e2b`, function calling natif) et `apps/mcp-trino` (endpoint MCP Streamable HTTP
+`ministral-3:3b`, function calling natif) et `apps/mcp-trino` (endpoint MCP Streamable HTTP
 `http://localhost:8185/mcp`, lecture seule, schémas autorisés bornés par
 `TRINO_ALLOWED_SCHEMAS`). Le test e2e `sh run.sh test` (apps/ollama) valide le parcours
 complet : question métier → exploration du lakehouse → SQL exécuté → réponse restituée.
@@ -544,7 +544,7 @@ complet : question métier → exploration du lakehouse → SQL exécuté → r�
 - **Boucle agentique** (`lib/agent-runner.ts`) : historique normalisé + `tools`,
   max 8 allers-retours (`PARUSDB_AGENT_MAX_STEPS`). Le prompt socle impose le français,
   l'exploration avant exécution, et documente la syntaxe Trino des dates relatives
-  (`date_add('month', -3, current_date)`) : sans cet indice, `gemma4:e2b` tente des
+  (`date_add('month', -3, current_date)`) : sans cet indice, `ministral-3:3b` tente des
   syntaxes inexistantes — un LLM peut échouer de façon non déterministe, toujours
   rejouer un test e2e chat avant de conclure.
 - **Backends LLM normalisés** (`lib/llm.ts`) : Ollama, compatible OpenAI

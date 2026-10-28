@@ -14,7 +14,7 @@ exposés par [mcp-trino](../mcp-trino).
 | GPU | réservation `driver: nvidia` (NVIDIA Container Toolkit requis sur l'hôte) |
 | Modèles | stockés dans `volumes/ollama/` (bind mount, plusieurs Go par modèle) |
 | Réseau | aucun réseau partagé : l'API est publiée sur le port hôte `OLLAMA_PORT` |
-| Modèle par défaut | `gemma4:e2b` — 2.3B paramètres effectifs, function calling natif (tools MCP), ~4.6 Go, tient dans les 6 Go de VRAM d'une RTX 3050 laptop |
+| Modèle par défaut | `ministral-3:3b` — modèle Mistral compact, function calling (tools MCP), tient dans les 6 Go de VRAM d'une RTX 3050 laptop |
 
 ## Prérequis GPU (une seule fois)
 
@@ -75,7 +75,7 @@ sh reset.sh   # tout réinitialiser (conteneurs + modèles + .env)
   (`lib/agent-runner.ts`) plafonne les allers-retours Ollama ↔ mcp-trino à
   `PARUSDB_AGENT_MAX_STEPS` (8 par défaut) et le titre de conversation est
   généré par une seconde requête au même modèle.
-- **Le LLM est non déterministe** : `gemma4:e2b` peut échouer sur une syntaxe
+- **Le LLM est non déterministe** : `ministral-3:3b` peut échouer sur une syntaxe
   Trino invalide d'une exécution à l'autre. Le prompt socle de l'app documente
   la syntaxe des dates relatives Trino (`date_add('month', -3, current_date)`)
   et impose de corriger et rejouer en cas d'erreur SQL — toujours rejouer un

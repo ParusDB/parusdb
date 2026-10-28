@@ -4,7 +4,7 @@
 
 const OLLAMA_URL = process.env.OLLAMA_URL ?? "http://localhost:11434";
 export const DEFAULT_MODEL =
-  process.env.OLLAMA_DEFAULT_MODEL ?? "gemma4:e2b";
+  process.env.OLLAMA_DEFAULT_MODEL ?? "ministral-3:3b";
 
 export interface OllamaModel {
   name: string;

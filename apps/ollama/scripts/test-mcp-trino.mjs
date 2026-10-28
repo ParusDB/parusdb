@@ -15,7 +15,7 @@
  *
  * Usage :
  *   node scripts/test-mcp-trino.mjs
- *   node scripts/test-mcp-trino.mjs --question "..." --model gemma4:e2b --think
+ *   node scripts/test-mcp-trino.mjs --question "..." --model ministral-3:3b --think
  *
  * Données de test : le script recrée (idempotent) la table `${CATALOG}.sales.orders`
  * dans le lakehouse et y insère des commandes sur les 6 derniers mois. Le total
@@ -60,7 +60,7 @@ function readEnv(file) {
 
 const args = parseArgs(process.argv.slice(2));
 if (args.help) {
-  console.log("Usage : node scripts/test-mcp-trino.mjs [--question \"...\"] [--model gemma4:e2b] [--think]");
+  console.log("Usage : node scripts/test-mcp-trino.mjs [--question \"...\"] [--model ministral-3:3b] [--think]");
   process.exit(0);
 }
 
@@ -70,7 +70,7 @@ const trinoEnv = readEnv(path.join(here, "..", "..", "trino", ".env"));
 
 const OLLAMA_BASE = `http://localhost:${ollamaEnv.OLLAMA_PORT || "11434"}`;
 const MCP_ENDPOINT = `http://localhost:${mcpEnv.MCP_TRINO_HTTP_PORT || "8185"}/mcp`;
-const MODEL = args.model || ollamaEnv.OLLAMA_DEFAULT_MODEL || "gemma4:e2b";
+const MODEL = args.model || ollamaEnv.OLLAMA_DEFAULT_MODEL || "ministral-3:3b";
 const QUESTION = args.question || "Quel est mon chiffre d'affaire sur 3 mois ?";
 const MAX_STEPS = 8;
 

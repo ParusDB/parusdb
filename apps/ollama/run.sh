@@ -75,7 +75,7 @@ case "$CMD" in
         ;;
     cli)
         model="${1:-$(get_env_value OLLAMA_DEFAULT_MODEL)}"
-        [ -n "$model" ] || { echo "ERREUR : précisez un modèle (sh run.sh cli gemma4:e2b)" >&2; exit 1; }
+        [ -n "$model" ] || { echo "ERREUR : précisez un modèle (sh run.sh cli ministral-3:3b)" >&2; exit 1; }
         echo "Chat interactif avec '$model' — /bye ou Ctrl-D pour sortir."
         exec docker compose exec ollama ollama run "$model"
         ;;
