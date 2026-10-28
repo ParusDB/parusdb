@@ -74,18 +74,18 @@ esac
 # (y compris la purge du bucket, cohérente avec une désinstallation totale).
 reset_app() {
     app="$1"
-    shift
+    cmd="$2"
     echo ""
     echo "===> [$app] reset..."
-    (cd "apps/$app" && "$@")
+    (cd "apps/$app" && sh -c "$cmd")
 }
 
-reset_app dlt sh reset.sh
-reset_app ollama sh reset.sh -y
-reset_app mcp-trino yes sh reset.sh
-reset_app trino yes sh reset.sh
-reset_app polaris yes sh reset.sh
-reset_app supabase sh reset.sh -y
+reset_app dlt "sh reset.sh"
+reset_app ollama "sh reset.sh -y"
+reset_app mcp-trino "yes | sh reset.sh"
+reset_app trino "yes | sh reset.sh"
+reset_app polaris "yes | sh reset.sh"
+reset_app supabase "sh reset.sh -y"
 
 if [ "$PURGE_IMAGES" = "1" ]; then
     echo ""
