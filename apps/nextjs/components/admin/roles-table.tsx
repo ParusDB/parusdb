@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Pencil, Plus, Shield, Trash2 } from "lucide-react";
+import { KeyRound, Pencil, Plus, Shield, Trash2 } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -24,7 +24,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ConfirmNameDialog } from "@/components/parus/confirm-name-dialog";
-import type { Role } from "@/types/db";
+import { RoleGrantsDialog } from "@/components/admin/role-grants-dialog";
+import type { Grant, Role } from "@/types/db";
 import {
   createRole,
   deleteRole,
@@ -171,12 +172,37 @@ function RoleDialog({
 export function RolesTable({
   roles,
   counts,
+  grants,
+  catalogs,
+  agents,
+  pipelines,
 }: {
   roles: Role[];
   counts: Record<string, number>;
+  grants: Grant[];
+  catalogs: { id: string; name: string }[];
+  agents: { id: string; name: string }[];
+  pipelines: { id: string; name: string }[];
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Role | null>(null);
+  const [grantsRole, setGrantsRole] = useState<Role | null>(null);
+
+  // Résumé des droits d'un rôle pour la colonne « Droits ».
+  function grantsSummary(role: Role): string {
+    const own = grants.filter((g) => g.role_id === role.id);
+    if (role.key === "admin") return "Accès complet";
+    const catalogsN = own.filter((g) => g.resource_type === "catalog").length;
+    const agentsN = own.filter((g) => g.resource_type === "agent").length;
+    const pipelinesN = own.filter((g) => g.resource_type === "pipeline").length;
+    if (catalogsN + agentsN + pipelinesN === 0) return "Aucun objet";
+    const parts = [
+      catalogsN > 0 ? `${catalogsN} catalogue${catalogsN > 1 ? "s" : ""}` : null,
+      agentsN > 0 ? `${agentsN} agent${agentsN > 1 ? "s" : ""}` : null,
+      pipelinesN > 0 ? `${pipelinesN} pipeline${pipelinesN > 1 ? "s" : ""}` : null,
+    ].filter(Boolean);
+    return parts.join(" · ");
+  }
 
   return (
     <div className="space-y-4">
@@ -197,6 +223,7 @@ export function RolesTable({
             <TableRow>
               <TableHead>Rôle</TableHead>
               <TableHead>Description</TableHead>
+              <TableHead>Droits</TableHead>
               <TableHead>Utilisateurs</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
@@ -225,11 +252,30 @@ export function RolesTable({
                 <TableCell className="max-w-md text-muted-foreground">
                   {role.description ?? "—"}
                 </TableCell>
+                <TableCell className="max-w-xs">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGrantsRole(role);
+                    }}
+                    className="mono text-left text-xs underline decoration-dotted underline-offset-4 hover:text-jaune"
+                  >
+                    {grantsSummary(role)}
+                  </button>
+                </TableCell>
                 <TableCell className="text-muted-foreground">
                   {counts[role.id] ?? 0}
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center justify-end gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`Droits du rôle ${role.name}`}
+                      onClick={() => setGrantsRole(role)}
+                    >
+                      <KeyRound className="h-4 w-4" strokeWidth={1.6} />
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon-sm"
@@ -266,6 +312,20 @@ export function RolesTable({
           </TableBody>
         </Table>
       </div>
+
+      {grantsRole ? (
+        <RoleGrantsDialog
+          role={grantsRole}
+          open={grantsRole !== null}
+          onOpenChange={(open) => {
+            if (!open) setGrantsRole(null);
+          }}
+          grants={grants}
+          catalogs={catalogs}
+          agents={agents}
+          pipelines={pipelines}
+        />
+      ) : null}
 
       {dialogOpen ? (
         <RoleDialog

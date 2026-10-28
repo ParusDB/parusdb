@@ -224,6 +224,115 @@ export async function deleteRole(
 }
 
 // ---------------------------------------------------------------------------
+// Grants RBAC (docs/functional/rbac_refonte.md) : l'admin distribue les
+// privilèges read/write/manage par rôle sur les catalogues, agents et
+// pipelines. La hiérarchie (manage ⊇ write ⊇ read) est appliquée au moment
+// de l'enregistrement : un privilège supérieur inclut toujours les
+// inférieurs.
+// ---------------------------------------------------------------------------
+
+export type GrantPrivilege = "read" | "write" | "manage";
+export type GrantResourceType = "catalog" | "agent" | "pipeline";
+
+const GRANT_PRIVILEGES: GrantPrivilege[] = ["read", "write", "manage"];
+const GRANT_RESOURCE_TYPES: GrantResourceType[] = ["catalog", "agent", "pipeline"];
+
+// Complète l'ensemble des privilèges selon la hiérarchie.
+function expandPrivileges(privileges: GrantPrivilege[]): GrantPrivilege[] {
+  const set = new Set(privileges);
+  if (set.has("manage")) {
+    set.add("write");
+  }
+  if (set.has("write")) {
+    set.add("read");
+  }
+  return GRANT_PRIVILEGES.filter((p) => set.has(p));
+}
+
+// L'objet référencé doit exister au moment de l'attribution.
+async function resourceExists(
+  admin: ReturnType<typeof createAdminClient>,
+  resourceType: GrantResourceType,
+  resourceId: string,
+): Promise<boolean> {
+  if (resourceType === "catalog") {
+    const { count } = await admin
+      .schema("lakehouse")
+      .from("catalog_registry")
+      .select("catalog_name", { count: "exact", head: true })
+      .eq("catalog_name", resourceId);
+    return (count ?? 0) > 0;
+  }
+  if (resourceType === "agent") {
+    const { count } = await admin
+      .schema("agents")
+      .from("agents")
+      .select("id", { count: "exact", head: true })
+      .eq("id", resourceId);
+    return (count ?? 0) > 0;
+  }
+  const { count } = await admin
+    .schema("connectors")
+    .from("pipelines")
+    .select("id", { count: "exact", head: true })
+    .eq("id", resourceId);
+  return (count ?? 0) > 0;
+}
+
+export async function setRoleGrant(input: {
+  roleId: string;
+  resourceType: GrantResourceType;
+  resourceId: string;
+  privileges: GrantPrivilege[];
+}): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+  const admin = createAdminClient();
+  if (!GRANT_RESOURCE_TYPES.includes(input.resourceType)) {
+    return { ok: false, error: "Type de ressource inconnu." };
+  }
+  const valid = input.privileges.filter((p) =>
+    GRANT_PRIVILEGES.includes(p),
+  );
+  if (valid.length !== input.privileges.length) {
+    return { ok: false, error: "Privilège inconnu." };
+  }
+  const privileges = expandPrivileges(valid);
+  if (privileges.length === 0) {
+    const { error } = await admin
+      .schema("iam")
+      .from("grants")
+      .delete()
+      .eq("role_id", input.roleId)
+      .eq("resource_type", input.resourceType)
+      .eq("resource_id", input.resourceId);
+    if (error) {
+      return { ok: false, error: `La révocation a échoué : ${error.message}` };
+    }
+  } else {
+    if (!(await resourceExists(admin, input.resourceType, input.resourceId))) {
+      return { ok: false, error: "La ressource visée n'existe plus." };
+    }
+    const { error } = await admin
+      .schema("iam")
+      .from("grants")
+      .upsert(
+        {
+          role_id: input.roleId,
+          resource_type: input.resourceType,
+          resource_id: input.resourceId,
+          privileges,
+        },
+        { onConflict: "role_id,resource_type,resource_id" },
+      );
+    if (error) {
+      return { ok: false, error: `L'enregistrement a échoué : ${error.message}` };
+    }
+  }
+  revalidatePath("/admin/roles");
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
 // Fournisseurs LLM (spec §Administration — Fournisseurs LLM)
 // ---------------------------------------------------------------------------
 
