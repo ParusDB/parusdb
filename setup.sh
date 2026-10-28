@@ -98,8 +98,8 @@ else
     echo "    secrets déjà générés (conservés)"
 fi
 
-log "[supabase] overrides compose (Kong, RustFS, restart RustFS)..."
-(cd apps/supabase && sh run.sh config add kong rustfs rustfs-restart) >/dev/null
+log "[supabase] overrides compose (Kong, RustFS, restart RustFS, sessions auth)..."
+(cd apps/supabase && sh run.sh config add kong rustfs rustfs-restart auth-sessions) >/dev/null
 echo "    overrides enregistrés"
 
 log "[supabase] démarrage de la stack..."

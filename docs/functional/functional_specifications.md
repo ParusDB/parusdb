@@ -543,6 +543,13 @@ formulaire d'agent.
 
 ### Conventions d'Interface
 
+- **Expiration de session** : la session se termine après **30 minutes d'inactivité**
+  (OWASP : timeout d'inactivité obligatoire côté serveur ; la durée vise une plateforme
+  data interne). À la reprise, l'utilisateur est ramené à la page de connexion — aucune
+  donnée n'est perdue. La durée est configurable côté serveur
+  (`SESSIONS_INACTIVITY_TIMEOUT`, cf. AGENTS.md §9) ; un réglage de 15 minutes peut être
+  retenu pour des données sensibles.
+
 - **Dark/Light/System Mode** : Sélecteur global en bas à gauche
 - **Rôle actif** : Changement possible sans déconnexion
 - **Confirmations sensibles** : Resaisie du nom pour les suppressions irréversibles (ex : catalogues)

@@ -370,6 +370,17 @@ revient en Envoy.
   le storage Supabase + tout le lakehouse restent silencieusement cassés. Ne jamais éditer
   les fichiers vendor (ils sont 3-way mergés par `update.sh`) : les correctifs locaux se
   posent en fichiers d'override ParusDB enregistrés dans `COMPOSE_FILE`.
+- **Expiration des sessions après inactivité** : l'override ParusDB
+  `docker-compose.auth-sessions.yml` (`sh run.sh config add auth-sessions`, fait par le
+  setup racine) transmet `GOTRUE_SESSIONS_INACTIVITY_TIMEOUT` au service auth — le compose
+  vendor ne l'expose pas. Valeur par défaut **30m** (`SESSIONS_INACTIVITY_TIMEOUT` dans
+  `apps/supabase/.env`, durée Go) ; le timeout s'applique au moment du **refresh** : durée
+  effective = timeout + `JWT_EXPIRY` (1 h). **Pièges GoTrue** : variable omise = sessions
+  illimitées ; `0` **refuse le démarrage** (validation). Le client supabase-js ne rafraîchit
+  que sur onglet visible et le proxy SSR à la navigation — une session inactive n'est pas
+  maintenue artificiellement. Second bouton disponible : `GOTRUE_SESSIONS_TIMEBOX` (durée
+  de vie maximale d'une session, non activé). Une modification exige de recréer le
+  conteneur (`sh run.sh up auth`), pas un simple restart.
 
 - **Skills obligatoires** : charger `.agents/skills/supabase/SKILL.md` (checklist sécurité :
   JWT, clés, RLS, vues) **et** `supabase-postgres-best-practices/SKILL.md` (règles préfixées

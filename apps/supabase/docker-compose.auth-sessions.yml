@@ -1,0 +1,23 @@
+# Override ParusDB : expiration des sessions utilisateur après inactivité
+# (AGENTS.md §9 — aucune édition des fichiers vendor).
+#
+# Le docker-compose vendor ne transmet pas les variables de session GoTrue
+# (GOTRUE_SESSIONS_*) au service auth : cet override les ajoute. À
+# enregistrer dans COMPOSE_FILE, comme rustfs / rustfs-restart :
+#   sh run.sh config add auth-sessions
+# (le setup à la racine le fait automatiquement), puis recréer le conteneur :
+#   sh run.sh up auth
+# Une modification du .env exige une recréation, pas un simple restart.
+#
+# SESSIONS_INACTIVITY_TIMEOUT : durée Go (ex. 30m). La session est terminée
+# par GoTrue lorsque son refresh token n'a pas été utilisé depuis cette
+# durée — le check s'applique au moment du rafraîchissement, donc la durée
+# effective vaut timeout + JWT_EXPIRY (1 h par défaut). Le client supabase-js
+# ne rafraîchit que sur onglet visible, le proxy SSR à la navigation : une
+# session inactive n'est donc jamais maintenue artificiellement en vie.
+# Retirer cet override de COMPOSE_FILE = sessions illimitées (déconseillé,
+# OWASP exige un timeout d'inactivité côté serveur).
+services:
+  auth:
+    environment:
+      GOTRUE_SESSIONS_INACTIVITY_TIMEOUT: ${SESSIONS_INACTIVITY_TIMEOUT:-30m}
