@@ -59,3 +59,65 @@ export async function deleteConversation(id: string): Promise<{ ok: boolean; err
   revalidatePath("/chat");
   redirect("/chat");
 }
+
+// ---------------------------------------------------------------------------
+// Partage de conversation (RBAC refonte — docs/functional/rbac_refonte.md) :
+// le propriétaire autorise l'accès en LECTURE SEULE aux comptes partageant
+// l'un de ses rôles. Révocable à tout moment.
+// ---------------------------------------------------------------------------
+
+export async function shareConversation(
+  conversationId: string,
+  roleId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const session = await requireSession();
+  if (!session.roles.some((r) => r.id === roleId)) {
+    return {
+      ok: false,
+      error: "Vous ne portez pas ce rôle : impossible de partager la conversation avec lui.",
+    };
+  }
+  const supabase = await createClient();
+  const { error } = await supabase
+    .schema("chat")
+    .from("conversation_shares")
+    .insert({
+      conversation_id: conversationId,
+      role_id: roleId,
+      granted_by: session.userId,
+    });
+  if (error) {
+    if (error.code === "23505") {
+      return { ok: true };
+    }
+    return {
+      ok: false,
+      error: `Le partage a échoué : ${error.message}`,
+    };
+  }
+  revalidatePath(`/chat/${conversationId}`);
+  return { ok: true };
+}
+
+export async function unshareConversation(
+  conversationId: string,
+  roleId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const session = await requireSession();
+  const supabase = await createClient();
+  const { error } = await supabase
+    .schema("chat")
+    .from("conversation_shares")
+    .delete()
+    .eq("conversation_id", conversationId)
+    .eq("role_id", roleId)
+    .eq("granted_by", session.userId);
+  if (error) {
+    return {
+      ok: false,
+      error: `La révocation a échoué : ${error.message}`,
+    };
+  }
+  revalidatePath(`/chat/${conversationId}`);
+  return { ok: true };
+}

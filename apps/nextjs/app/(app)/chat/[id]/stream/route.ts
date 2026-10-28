@@ -50,17 +50,27 @@ export async function POST(
     return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
   }
 
-  // RLS : seul le propriétaire voit la conversation.
+  // RLS : le propriétaire a tous les droits ; les rôles bénéficiaires d'un
+  // partage ont la lecture seule — l'envoi est refusé ici explicitement.
   const { data: conversation } = await supabase
     .schema("chat")
     .from("conversations")
-    .select("id, title, agent_id")
+    .select("id, title, agent_id, owner_id")
     .eq("id", id)
     .maybeSingle();
   if (!conversation) {
     return NextResponse.json(
       { error: "Conversation introuvable." },
       { status: 404 },
+    );
+  }
+  if (conversation.owner_id !== user.id) {
+    return NextResponse.json(
+      {
+        error:
+          "Cette conversation est partagée avec vous en lecture seule : seul son propriétaire peut y écrire.",
+      },
+      { status: 403 },
     );
   }
 

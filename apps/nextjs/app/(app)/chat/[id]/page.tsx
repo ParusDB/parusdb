@@ -15,7 +15,7 @@ export default async function ConversationPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ pending?: string }>;
 }) {
-  await requireSession();
+  const session = await requireSession();
   const { id } = await params;
   const { pending } = await searchParams;
   const supabase = await createClient();
@@ -23,12 +23,30 @@ export default async function ConversationPage({
   const { data: conversation } = await supabase
     .schema("chat")
     .from("conversations")
-    .select("id, title, agent_id")
+    .select("id, title, agent_id, owner_id")
     .eq("id", id)
     .maybeSingle();
 
-  // RLS : seul le propriétaire voit la conversation.
+  // RLS : le propriétaire et les rôles bénéficiaires d'un partage voient la
+  // conversation — les partages sont en lecture seule.
   if (!conversation) notFound();
+
+  // Partages existants : visibles par le propriétaire (granted_by) — l'UI de
+  // partage n'est proposée qu'au propriétaire.
+  const owned = conversation.owner_id === session.userId;
+  let shares: { roleId: string; roleName: string }[] = [];
+  if (owned) {
+    const { data: shareRows } = await supabase
+      .schema("chat")
+      .from("conversation_shares")
+      .select("role_id")
+      .eq("conversation_id", id);
+    const roleMap = new Map(session.roles.map((r) => [r.id, r.name]));
+    shares = (shareRows ?? []).map((s: { role_id: string }) => ({
+      roleId: s.role_id,
+      roleName: roleMap.get(s.role_id) ?? "Rôle",
+    }));
+  }
 
   // Agent lié (requête séparée : PostgREST ne joint pas cross-schema avec
   // la syntaxe `agents(...)` depuis le schéma `chat`).
@@ -65,6 +83,12 @@ export default async function ConversationPage({
           providerLabels,
         )}/${(agent as { model_id?: string } | null)?.model_id ?? ""}`,
       }}
+      owned={owned}
+      shares={shares}
+      shareableRoles={session.roles.map((r) => ({
+        id: r.id,
+        name: r.name,
+      }))}
       initialMessages={(messages ?? []) as unknown as Message[]}
       pendingMessage={pending ?? null}
     />

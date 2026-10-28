@@ -3,11 +3,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Bot, Pencil, Send, Terminal, Trash2 } from "lucide-react";
+import { Bot, Eye, Pencil, Send, Share2, Terminal, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -25,6 +34,8 @@ import { MessageBubble, MessageContent } from "@/components/chat/message-bubble"
 import {
   deleteConversation,
   renameConversation,
+  shareConversation,
+  unshareConversation,
 } from "@/app/(app)/chat/actions";
 import type { Message } from "@/types/db";
 
@@ -51,6 +62,12 @@ export interface ConversationViewProps {
     agentName: string;
     model: string;
   };
+  /** Propriétaire de la conversation (sinon : partage en lecture seule). */
+  owned: boolean;
+  /** Partages actifs du propriétaire (rôle → lecture seule). */
+  shares: { roleId: string; roleName: string }[];
+  /** Rôles portés par le propriétaire, avec lesquels partager. */
+  shareableRoles: { id: string; name: string }[];
   initialMessages: Message[];
   /** Premier message passé par /chat/new via ?pending= — envoyé au montage. */
   pendingMessage?: string | null;
@@ -58,6 +75,9 @@ export interface ConversationViewProps {
 
 export function ConversationView({
   conversation,
+  owned,
+  shares,
+  shareableRoles,
   initialMessages,
   pendingMessage,
 }: ConversationViewProps) {
@@ -71,6 +91,9 @@ export function ConversationView({
   const [streamText, setStreamText] = useState("");
   const [renaming, setRenaming] = useState(false);
   const [newTitle, setNewTitle] = useState(conversation.title ?? "");
+  const [sharing, setSharing] = useState(false);
+  const [shareRole, setShareRole] = useState("");
+  const [sharePending, setSharePending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const [supabase] = useState(() => createClient());
@@ -261,6 +284,34 @@ export function ConversationView({
     }
   }
 
+  // Partage : le rôle bénéficiaire obtient la lecture seule, révocable.
+  async function handleShare() {
+    if (!shareRole || sharePending) return;
+    setSharePending(true);
+    try {
+      const result = await shareConversation(conversation.id, shareRole);
+      if (result.ok) {
+        toast.success("Conversation partagée en lecture seule.");
+        setShareRole("");
+        router.refresh();
+      } else {
+        toast.error(result.error ?? "Le partage a échoué.");
+      }
+    } finally {
+      setSharePending(false);
+    }
+  }
+
+  async function handleUnshare(roleId: string, roleName: string) {
+    const result = await unshareConversation(conversation.id, roleId);
+    if (result.ok) {
+      toast.success(`Accès retiré au rôle « ${roleName} ».`);
+      router.refresh();
+    } else {
+      toast.error(result.error ?? "La révocation a échoué.");
+    }
+  }
+
   return (
     // Pleine largeur du viewport : les marges négatives annulent le padding
     // horizontal du <main> du shell, pour que la barre de défilement soit
@@ -279,35 +330,55 @@ export function ConversationView({
             {conversation.agentName} · {conversation.model}
           </p>
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="icon-sm" aria-label="Actions de conversation">
-              <Pencil className="h-4 w-4" strokeWidth={1.6} />
+        {!owned ? (
+          <Badge
+            variant="outline"
+            className="mono shrink-0 gap-1 border-olive/40 text-[10px] uppercase tracking-wider text-olive"
+          >
+            <Eye className="h-3 w-3" strokeWidth={1.6} /> Lecture seule
+          </Badge>
+        ) : null}
+        {owned ? (
+          <>
+            <Button
+              variant="outline"
+              size="icon-sm"
+              aria-label="Partager la conversation"
+              onClick={() => setSharing(true)}
+            >
+              <Share2 className="h-4 w-4" strokeWidth={1.6} />
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              onClick={() => {
-                setNewTitle(conversation.title ?? "");
-                setRenaming(true);
-              }}
-            >
-              <Pencil className="h-4 w-4" /> Renommer
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="text-destructive"
-              onClick={() =>
-                void deleteConversation(conversation.id).then((r) => {
-                  if (r && !r.ok) {
-                    toast.error(r.error ?? "La suppression a échoué.");
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon-sm" aria-label="Actions de conversation">
+                  <Pencil className="h-4 w-4" strokeWidth={1.6} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={() => {
+                    setNewTitle(conversation.title ?? "");
+                    setRenaming(true);
+                  }}
+                >
+                  <Pencil className="h-4 w-4" /> Renommer
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-destructive"
+                  onClick={() =>
+                    void deleteConversation(conversation.id).then((r) => {
+                      if (r && !r.ok) {
+                        toast.error(r.error ?? "La suppression a échoué.");
+                      }
+                    })
                   }
-                })
-              }
-            >
-              <Trash2 className="h-4 w-4" /> Supprimer
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+                >
+                  <Trash2 className="h-4 w-4" /> Supprimer
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        ) : null}
       </div>
 
       {/* Messages : zone de défilement pleine largeur — la barre verticale
@@ -356,43 +427,53 @@ export function ConversationView({
         </div>
       </div>
 
-      {/* Composer */}
-      <div className="mx-auto w-full max-w-4xl border-t border-border pt-4">
-        <div className="flex items-end gap-2">
-          <Textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
+      {/* Composer : réservé au propriétaire — les partages sont en lecture
+          seule (RBAC refonte). */}
+      {owned ? (
+        <div className="mx-auto w-full max-w-4xl border-t border-border pt-4">
+          <div className="flex items-end gap-2">
+            <Textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  const value = input;
+                  setInput("");
+                  void send(value);
+                }
+              }}
+              placeholder={`Message à ${conversation.agentName}…`}
+              className="max-h-40 min-h-11"
+              aria-label="Votre message"
+              disabled={streaming}
+            />
+            <Button
+              onClick={() => {
                 const value = input;
                 setInput("");
                 void send(value);
-              }
-            }}
-            placeholder={`Message à ${conversation.agentName}…`}
-            className="max-h-40 min-h-11"
-            aria-label="Votre message"
-            disabled={streaming}
-          />
-          <Button
-            onClick={() => {
-              const value = input;
-              setInput("");
-              void send(value);
-            }}
-            disabled={streaming || input.trim().length === 0}
-            size="icon"
-            className="h-11 w-11 shrink-0 bg-jaune text-charbon hover:bg-jaune/90"
-            aria-label="Envoyer"
-          >
-            <Send className="h-4 w-4" strokeWidth={1.8} />
-          </Button>
+              }}
+              disabled={streaming || input.trim().length === 0}
+              size="icon"
+              className="h-11 w-11 shrink-0 bg-jaune text-charbon hover:bg-jaune/90"
+              aria-label="Envoyer"
+            >
+              <Send className="h-4 w-4" strokeWidth={1.8} />
+            </Button>
+          </div>
+          <p className="mono mt-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+            Réponses générées localement · Diffusion Supabase Realtime · SQL en lecture seule
+          </p>
         </div>
-        <p className="mono mt-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-          Réponses générées localement · Diffusion Supabase Realtime · SQL en lecture seule
-        </p>
-      </div>
+      ) : (
+        <div className="mx-auto w-full max-w-4xl border-t border-border pt-4">
+          <p className="text-sm text-muted-foreground">
+            Conversation partagée en lecture seule : seul son propriétaire peut
+            y écrire.
+          </p>
+        </div>
+      )}
 
       <Dialog open={renaming} onOpenChange={setRenaming}>
         <DialogContent>
@@ -417,6 +498,75 @@ export function ConversationView({
               Enregistrer
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={sharing} onOpenChange={setSharing}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Partager la conversation</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Les utilisateurs partageant le rôle choisi consultent cette
+            conversation en lecture seule — ils ne peuvent ni écrire, ni
+            renommer, ni supprimer.
+          </p>
+          {shares.length > 0 ? (
+            <div className="space-y-1.5">
+              <Label>Accès accordés</Label>
+              {shares.map((s) => (
+                <div
+                  key={s.roleId}
+                  className="flex items-center justify-between rounded-lg border border-border px-3 py-2"
+                >
+                  <span className="text-sm">{s.roleName}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => void handleUnshare(s.roleId, s.roleName)}
+                  >
+                    Retirer
+                  </Button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {shareableRoles.length > 0 ? (
+            <div className="space-y-2">
+              <Label>Autoriser l’accès aux utilisateurs du rôle…</Label>
+              <div className="flex items-center gap-2">
+                <Select value={shareRole} onValueChange={setShareRole}>
+                  <SelectTrigger aria-label="Rôle à autoriser">
+                    <SelectValue placeholder="Choisir un rôle" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {shareableRoles
+                      .filter(
+                        (r) => !shares.some((s) => s.roleId === r.id),
+                      )
+                      .map((r) => (
+                        <SelectItem key={r.id} value={r.id}>
+                          {r.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  onClick={() => void handleShare()}
+                  disabled={!shareRole || sharePending}
+                  className="shrink-0 bg-jaune font-semibold text-charbon hover:bg-jaune/90"
+                >
+                  Partager
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Vous ne portez aucun rôle avec lequel partager cette
+              conversation.
+            </p>
+          )}
         </DialogContent>
       </Dialog>
     </div>
