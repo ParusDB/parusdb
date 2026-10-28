@@ -10,8 +10,8 @@
 4. Gestion des Données
 5. Connecteurs ELT
 6. Modèle de Données et Relations
-7. Parcours Utilisateur
-8. Rôles et Permissions
+7. Rôles et Permissions
+8. Parcours Utilisateur
 
 ---
 
@@ -560,4 +560,4 @@ formulaire d'agent.
 
 ---
 
-*Dernière mise à jour : 27 octobre 2026*
+*Dernière mise à jour : 28 octobre 2026*
