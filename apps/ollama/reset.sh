@@ -39,14 +39,31 @@ confirm
 
 echo "===> Arrêt et suppression des conteneurs..."
 
-if [ -f ".env" ]; then
-    docker compose down --remove-orphans
-elif [ -f ".env.example" ]; then
-    echo "Pas de .env, utilisation de .env.example pour docker compose down..."
-    docker compose --env-file .env.example -f docker-compose.yml down --remove-orphans
-else
-    echo "Arrêt ignoré : aucun fichier d'environnement."
-fi
+# Un `docker compose down` n'utilise aucune valeur d'environnement réelle :
+# seules les interpolations `${VAR:?…}` du compose doivent aboutir. Un `.env`
+# illisible (créé en root par un sudo, incident réel) ou réduit aux valeurs
+# d'exemple (reset interrompu avant setup) ne doit donc pas bloquer l'arrêt :
+# on fournit une valeur factice à chaque variable référencée par le compose
+# et on force un fichier d'environnement lisible.
+compose_down() {
+    if [ -r ".env" ]; then
+        env_file=".env"
+    elif [ -r ".env.example" ]; then
+        env_file=".env.example"
+    else
+        env_file="/dev/null"
+    fi
+    compose_vars=""
+    for var in $(grep -ohE '\$\{[A-Za-z_][A-Za-z0-9_]*' docker-compose.yml \
+        | sed 's/^\${//' | sort -u); do
+        compose_vars="$compose_vars $var=1"
+    done
+    # shellcheck disable=SC2086
+    env $compose_vars docker compose --env-file "$env_file" -f docker-compose.yml \
+        down --remove-orphans
+}
+
+compose_down
 
 echo "===> Suppression des modèles (volumes/ollama)..."
 confirm

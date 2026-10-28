@@ -52,6 +52,15 @@ log() {
     printf '===> %s\n' "$*"
 }
 
+# Jamais en root : lancé par sudo, ce script (et ceux des apps qu'il
+# délègue) crée des `.env` appartenant à root (mode 600), qui bloquent
+# ensuite toutes les exécutions utilisateur par « permission denied »
+# (incident réel). Les suppressions privilégiées (fichiers de volumes
+# appartenant à root) passent déjà par des conteneurs éphémères busybox.
+if [ "$(id -u)" = "0" ]; then
+    fail "ne lancez pas ce script en root/sudo : il créerait des .env appartenant à root. Lancez-le en utilisateur normal."
+fi
+
 # Lecture d'une variable KEY=VALUE dans un fichier .env (sans le sourcer).
 read_env_var() {
     [ -f "$1" ] || return 0

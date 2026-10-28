@@ -45,6 +45,15 @@ fail() {
     exit 1
 }
 
+# Jamais en root : lancé par sudo, ce script (et ceux des apps qu'il
+# délègue) crée des `.env` appartenant à root (mode 600), qui bloquent
+# ensuite toutes les exécutions utilisateur par « permission denied »
+# (incident réel). Les suppressions privilégiées (fichiers de volumes
+# appartenant à root) passent déjà par des conteneurs éphémères busybox.
+if [ "$(id -u)" = "0" ]; then
+    fail "ne lancez pas ce script en root/sudo : il créerait des .env appartenant à root. Lancez-le en utilisateur normal."
+fi
+
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --purge-images) PURGE_IMAGES=1 ;;
@@ -72,12 +81,21 @@ esac
 # Les reset.sh interactifs de polaris, trino et mcp-trino sont confirmés par
 # `yes` : la confirmation globale ci-dessus couvre toutes leurs options
 # (y compris la purge du bucket, cohérente avec une désinstallation totale).
+FAILED_APPS=""
 reset_app() {
     app="$1"
     cmd="$2"
     echo ""
     echo "===> [$app] reset..."
-    (cd "apps/$app" && sh -c "$cmd")
+    # Tolérant : un échec sur une app n'interrompt pas les suivantes —
+    # un reset à moitié fait est le pire état possible (incident réel :
+    # échec sur une app, toutes les suivantes épargnées sans prévenir).
+    if (cd "apps/$app" && sh -c "$cmd"); then
+        :
+    else
+        echo "AVERTISSEMENT : reset de [$app] en échec (poursuite)" >&2
+        FAILED_APPS="$FAILED_APPS $app"
+    fi
 }
 
 reset_app dlt "sh reset.sh"
@@ -107,6 +125,13 @@ if [ "$PURGE_IMAGES" = "1" ]; then
         | while IFS= read -r img; do
             [ -n "$img" ] && docker rmi -f "$img" >/dev/null 2>&1 || true
           done
+fi
+
+if [ -n "$FAILED_APPS" ]; then
+    echo ""
+    echo "ERREUR : reset en échec pour :$FAILED_APPS" >&2
+    echo "La stack est partiellement réinitialisée ; corrigez la cause puis relancez sh reset.sh." >&2
+    exit 1
 fi
 
 echo ""

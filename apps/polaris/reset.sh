@@ -40,14 +40,31 @@ confirm
 
 echo "===> Arrêt et suppression des conteneurs..."
 
-if [ -f ".env" ]; then
-    docker compose down -v --remove-orphans
-elif [ -f ".env.example" ]; then
-    echo "Pas de .env, utilisation de .env.example pour docker compose down..."
-    docker compose --env-file .env.example -f docker-compose.yml down -v --remove-orphans
-else
-    echo "Arrêt ignoré : aucun fichier d'environnement."
-fi
+# Un `docker compose down` n'utilise aucune valeur d'environnement réelle :
+# seules les interpolations `${VAR:?…}` du compose doivent aboutir. Un `.env`
+# illisible (créé en root par un sudo, incident réel) ou réduit aux valeurs
+# d'exemple (reset interrompu avant setup) ne doit donc pas bloquer l'arrêt :
+# on fournit une valeur factice à chaque variable référencée par le compose
+# et on force un fichier d'environnement lisible.
+compose_down() {
+    if [ -r ".env" ]; then
+        env_file=".env"
+    elif [ -r ".env.example" ]; then
+        env_file=".env.example"
+    else
+        env_file="/dev/null"
+    fi
+    compose_vars=""
+    for var in $(grep -ohE '\$\{[A-Za-z_][A-Za-z0-9_]*' docker-compose.yml \
+        | sed 's/^\${//' | sort -u); do
+        compose_vars="$compose_vars $var=1"
+    done
+    # shellcheck disable=SC2086
+    env $compose_vars docker compose --env-file "$env_file" -f docker-compose.yml \
+        down -v --remove-orphans
+}
+
+compose_down
 
 POLARIS_DB_NAME=$(grep '^POLARIS_DB_NAME=' .env 2>/dev/null | head -n 1 | cut -d= -f2- | tr -d "\r\"'")
 POLARIS_DB_USER=$(grep '^POLARIS_DB_USER=' .env 2>/dev/null | head -n 1 | cut -d= -f2- | tr -d "\r\"'")
@@ -75,17 +92,27 @@ if docker ps --filter name=supabase-rustfs --format '{{.Names}}' 2>/dev/null | g
     S3_SECRET_ACCESS_KEY=$(grep '^S3_SECRET_ACCESS_KEY=' .env 2>/dev/null | head -n 1 | cut -d= -f2- | tr -d "\r\"'")
     POLARIS_S3_BUCKET=${POLARIS_S3_BUCKET:-parus-lakehouse}
     S3_ENDPOINT_INTERNAL=${S3_ENDPOINT_INTERNAL:-http://rustfs:9000}
-    if [ "$auto_confirm" = "0" ]; then
+    if [ -z "$S3_ACCESS_KEY_ID" ] || [ -z "$S3_SECRET_ACCESS_KEY" ]; then
+        # .env réduit aux valeurs d'exemple (reset interrompu avant setup) :
+        # impossible de purger, on poursuit — dans le reset complet de la
+        # stack, les données Iceberg sont détruites de toute façon avec le
+        # volume storage de Supabase.
+        echo "Credentials RustFS absents du .env (valeurs d'exemple) : bucket '$POLARIS_S3_BUCKET' conservé."
+    elif [ "$auto_confirm" = "0" ]; then
         printf "Supprimer aussi le bucket '%s' et toutes les données Iceberg qu'il contient ? (y/N) " "$POLARIS_S3_BUCKET"
         read -r REPLY
         case "$REPLY" in
             [Yy])
-                docker run --rm -i --network supabase_default --entrypoint /bin/sh rustfs/rc -s <<RC
+                if docker run --rm -i --network supabase_default --entrypoint /bin/sh rustfs/rc -s <<RC
 set -e
 rc alias set parus-rustfs "$S3_ENDPOINT_INTERNAL" "$S3_ACCESS_KEY_ID" "$S3_SECRET_ACCESS_KEY"
 rc rb --force "parus-rustfs/$POLARIS_S3_BUCKET"
 RC
-                echo "Bucket supprimé."
+                then
+                    echo "Bucket supprimé."
+                else
+                    echo "AVERTISSEMENT : purge du bucket en échec (bucket conservé, poursuite)" >&2
+                fi
                 ;;
             *)
                 echo "Bucket conservé."

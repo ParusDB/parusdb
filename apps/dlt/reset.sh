@@ -20,11 +20,26 @@ KEEP_ENV=0
 [ "${1:-}" = "--keep-env" ] && KEEP_ENV=1
 
 echo "===> Arrêt de l'ordonnanceur et suppression du volume d'état..."
-if [ -f .env ]; then
-    docker compose down -v 2>/dev/null || true
+# Un `docker compose down` n'utilise aucune valeur d'environnement réelle :
+# seules les interpolations `${VAR:?…}` du compose doivent aboutir. Un `.env`
+# illisible (créé en root par un sudo, incident réel) ne doit donc pas
+# bloquer l'arrêt : on fournit une valeur factice à chaque variable
+# référencée par le compose et on force un fichier d'environnement lisible.
+if [ -r ".env" ]; then
+    env_file=".env"
+elif [ -r ".env.example" ]; then
+    env_file=".env.example"
 else
-    docker compose down -v 2>/dev/null || true
+    env_file="/dev/null"
 fi
+compose_vars=""
+for var in $(grep -ohE '\$\{[A-Za-z_][A-Za-z0-9_]*' docker-compose.yml \
+    | sed 's/^\${//' | sort -u); do
+    compose_vars="$compose_vars $var=1"
+done
+# shellcheck disable=SC2086
+env $compose_vars docker compose --env-file "$env_file" -f docker-compose.yml \
+    down -v 2>/dev/null || true
 docker volume rm parus-dlt-state 2>/dev/null || true
 echo "    conteneurs et volume parus-dlt-state supprimés"
 

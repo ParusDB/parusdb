@@ -179,7 +179,16 @@ NVIDIA Container Toolkit (runtime `nvidia`) — voir `apps/ollama/README.md`.
 conteneurs et appartiennent à root — un `rm -rf` utilisateur échoue
 (« Permission non accordée »). Les `reset.sh` de supabase et ollama les suppriment
 donc via un conteneur éphémère `busybox` ; si cette approche est retirée, il faut
-`sudo rm -rf` à la main (incident réel).
+`sudo rm -rf` à la main (incident réel). **Ne jamais lancer `setup.sh`/`reset.sh`
+en sudo** : un script tourné en root crée des `.env` appartenant à root (mode 600),
+qui bloquent ensuite toutes les exécutions utilisateur par « permission denied »
+(incident réel) ; les scripts racine refusent désormais de tourner en root. Les
+`reset.sh` des apps tolèrent par ailleurs un `.env` illisible ou réduit aux
+valeurs d'exemple au moment du `docker compose down` (valeurs factices injectées
+pour les interpolations `${VAR:?…}` — un `down` n'utilise aucune valeur réelle),
+et le `reset.sh` racine poursuit app par app puis récapitule les échecs en fin
+d'exécution (code de sortie non nul) : un reset à moitié fait doit toujours être
+visible, jamais silencieux.
 
 Le frontend utilise **npm** (`package-lock.json`). Ne pas introduire pnpm/yarn ni éditer les
 lockfiles à la main.
