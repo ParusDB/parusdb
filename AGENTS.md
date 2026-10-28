@@ -278,6 +278,16 @@ l'app.
   par feature (`actions.ts`), valident les entrées et `revalidate` explicitement.
   Le client administrateur (`lib/supabase/admin.ts`, service_role) reste serveur
   uniquement.
+- **Onboarding premier démarrage** (`/auth/onboarding`, spec §Onboarding) : tant
+  qu'aucun compte n'existe (`lib/onboarding.ts` → `isFirstInstall()`), login et
+  sign-up redirigent vers l'onboarding ; la Server Action
+  (`app/auth/onboarding/actions.ts`) crée le compte via l'API admin
+  (`email_confirm: true`, pas de lien email), attribue explicitement le rôle
+  `admin` (le trigger `iam.on_auth_user_created` reste le filet de sécurité des
+  sign-up normaux) et ouvre la session. **La condition « aucun compte » est
+  revérifiée dans l'action** (jamais seulement dans la page) : sinon n'importe
+  qui pourrait se créer administrateur une fois la plateforme peuplée. Pages
+  `instant = false` (état de première installation dynamique).
 - **eslint react-hooks v6 (incluse dans eslint-config-next 16)** : `setState`
   synchrone dans un `useEffect` est une **erreur** — hydratation via
   `useSyncExternalStore` (pattern `useIsHydrated`), restaurations de stockage

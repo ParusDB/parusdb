@@ -287,6 +287,33 @@ parusdb.<schéma>.<table>`.
 
 ---
 
+### Onboarding du Premier Démarrage
+
+**Déclencheur** : la plateforme ne compte **aucun utilisateur** (premier
+lancement après installation).
+
+**Parcours** :
+
+1. Toute visite des pages « Connexion » ou « Créer un compte » redirige vers
+   l'écran d'**onboarding** (« moment fort » de la charte : charbon, grille,
+   halo jaune).
+2. L'écran annonce : « Vous êtes le premier utilisateur de cette installation :
+   votre compte recevra le rôle **Administrateur**. »
+3. Saisie : prénom, nom, email, mot de passe (8 caractères minimum) et
+   confirmation.
+4. **Aucune confirmation par email** : le compte est confirmé immédiatement,
+   le rôle Administrateur est attribué automatiquement et la session s'ouvre
+   directement.
+5. Dès qu'un compte existe, l'écran disparaît définitivement : les visites
+   suivantes retombent sur la page de connexion classique, et la création de
+   compte passe par le parcours standard avec lien de confirmation.
+
+**Garantie** : l'attribution du rôle Administrateur n'est possible **que** tant
+qu'aucun compte n'existe — la condition est revérifiée côté serveur à la
+soumission, jamais sur la seule décision de la page.
+
+---
+
 ## 👥 Parcours Utilisateur
 
 ### Vue d'Ensemble
