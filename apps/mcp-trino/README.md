@@ -14,7 +14,7 @@ jamais écrire dans le lakehouse.
 | Image | `ghcr.io/tuannvm/mcp-trino:4.3.1` |
 | Transport | MCP Streamable HTTP, endpoint `/mcp` (legacy `/sse` conservé) |
 | Outils | `list_catalogs`, `list_schemas`, `list_tables`, `get_table_schema`, `execute_query`, `explain_query` |
-| Cible | Trino (`apps/trino`) sur le réseau externe `supabase_default`, catalogue `polaris` |
+| Cible | Trino (`apps/trino`) sur le réseau externe `supabase_default`, catalogue `dev` (environnement par défaut) |
 | Politique | lecture seule (`TRINO_ALLOW_WRITE_QUERIES=false`), schémas autorisés `dev.sales` |
 | État | sans état ; aucune donnée stockée |
 

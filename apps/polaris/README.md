@@ -40,14 +40,17 @@ Prérequis : stack Supabase démarrée avec l'override RustFS
 
 ## Catalogues
 
-`setup.sh` crée le catalogue d'environnement défini par `POLARIS_DEFAULT_CATALOG`
-(`dev` par défaut, cf. AGENTS.md §10 : un catalogue par environnement), avec
-`default-base-location` sous `s3://parus-lakehouse/<catalogue>`. Les catalogues
-supplémentaires sont créés par l'application (apps/nextjs, `lib/polaris.ts`) via
-l'API Management : même payload que `setup.sh` (base location dédiée sous le
-bucket, `polaris.config.drop-with-purge.enabled=true`), suivi du grant
+`setup.sh` crée le **catalogue système** de la plateforme (`POLARIS_SYSTEM_CATALOG`,
+`parusdb` — catalogue par défaut, non supprimable, cf. AGENTS.md §10) **puis** le
+catalogue d'environnement défini par `POLARIS_DEFAULT_CATALOG` (`dev` par défaut :
+un catalogue par environnement), avec `default-base-location` sous
+`s3://parus-lakehouse/<catalogue>`. Les catalogues supplémentaires sont créés par
+l'application (apps/nextjs, `lib/polaris.ts`) via l'API Management : même payload
+que `setup.sh` (base location dédiée sous le bucket,
+`polaris.config.drop-with-purge.enabled=true`), suivi du grant
 `CATALOG_MANAGE_CONTENT` sur `catalog_admin` et de l'écriture du binding Trino
-(`../trino/catalog/<catalogue>.properties`, à activer par un redémarrage Trino).
+(`../trino/catalog/<catalogue>.properties`, activé par un redémarrage de Trino —
+automatique depuis l'application, `lib/trino-restart.ts`).
 
 ## Pièges d'intégration Polaris 1.8.0 (leçons de la mise en place)
 

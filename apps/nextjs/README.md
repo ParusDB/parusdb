@@ -44,9 +44,8 @@ afficher** (copie par `sed`/`grep`, pas de copier-coller dans un terminal).
 | `PARUSDB_ENCRYPTION_KEY` | Clé AES-256-GCM des credentials (`openssl rand -hex 32`) |
 | `OLLAMA_URL` / `OLLAMA_DEFAULT_MODEL` / `PARUSDB_AGENT_MAX_STEPS` | Serveur d'inférence, modèle par défaut, plafond d'allers-retours outils |
 | `MCP_TRINO_URL` | Endpoint MCP Streamable HTTP (`http://localhost:8185/mcp`) |
-| `TRINO_URL` / `TRINO_USER` | Moteur SQL + utilisateur applicatif tracé dans les logs Trino |
-| `TRINO_DEFAULT_CATALOG_BINDING` | Catalogue Trino lié au catalogue Polaris par défaut (`polaris`) |
-| `TRINO_CATALOG_DIR` | Dossier des `.properties` Trino (`../trino/catalog`) : l'app y écrit les bindings des nouveaux catalogues |
+| `TRINO_URL` / `TRINO_USER` / `TRINO_CONTAINER_NAME` | Moteur SQL, utilisateur applicatif tracé dans les logs Trino, conteneur redémarré automatiquement après création d'un catalogue |
+| `TRINO_CATALOG_DIR` | Dossier des `.properties` Trino (`../trino/catalog`) : l'app y écrit les bindings des nouveaux catalogues (fichier portant le nom du catalogue) |
 | `POLARIS_API_URL` / `POLARIS_REALM` / `POLARIS_ROOT_CLIENT_ID` / `POLARIS_ROOT_CLIENT_SECRET` | API Management Polaris (secret importé de `apps/polaris/.env`) |
 | `POLARIS_SYSTEM_CATALOG` / `POLARIS_S3_BUCKET` / `POLARIS_S3_ENDPOINT` / `POLARIS_S3_REGION` | Catalogue système (par défaut de la plateforme) et stockage (RustFS) |
 | `PARUSDB_DLT_IMAGE` / `PARUSDB_DLT_NETWORK` | Runner dlt pour le « Test connexion » du wizard (introspection en conteneur jetable) — image construite par `apps/dlt` |
@@ -130,7 +129,7 @@ vérification RLS par requêtes de test et, pour le chat, un test e2e rejoué
 |---|---|---|
 | `PGRST205 Could not find the table` alors qu'elle existe | Schéma absent de `PGRST_DB_SCHEMAS` | L'ajouter dans `apps/supabase/.env` puis `docker compose up -d rest` (recréation, pas restart) |
 | Réponse de chat partielle ou figée | Abonnement Realtime établi après l'envoi | Le composant attend `SUBSCRIBED` avant de poster ; vérifier que `chat.stream_events` est dans la publication `supabase_realtime` |
-| Nouveau catalogue invisible dans l'éditeur SQL | Trino ne charge les catalogues qu'au démarrage | `cd apps/trino && sh run.sh restart` |
+| Nouveau catalogue invisible dans l'éditeur SQL | Trino ne charge les catalogues qu'au démarrage | Le redémarrage est automatique (différé tant qu'une requête SQL est en cours) : patienter le retour à la normale du bouton « Redémarrage en cours… » ; en cas d'échec, `cd apps/trino && sh run.sh restart` |
 | `Could not find the table 'public.<x>'` | Requête sans `Accept-Profile` | Passer par `supabase.schema('<schéma>')` |
 | `node` échoue avec `GLIBCXX_3.4.x not found` | `LD_LIBRARY_PATH` d'une extension VS Code qui masque le libstdc++ système | `unset LD_LIBRARY_PATH` avant toute commande node/npm |
 | Chat en erreur « <fournisseur> a répondu HTTP … » ou « Invalid model » | Clé révoquée ou identifiant de modèle absent chez le fournisseur | Vérifier la clé (« Modifier » dans `/admin/providers`) et l'id du modèle de l'agent (sans préfixe de fournisseur) |

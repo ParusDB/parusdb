@@ -63,7 +63,7 @@ sh reset.sh   # tout réinitialiser (conteneurs + modèles + .env)
 ## Notes opérationnelles
 
 - Version épinglée dans `docker-compose.yml` : mettre à jour = changer le
-  tag puis `sh update.sh`. Gemma 4 requiert une version récente d'Ollama.
+  tag puis `sh update.sh`. Ministral 3 requiert une version récente d'Ollama.
 - Sans NVIDIA Container Toolkit, `docker compose up` échoue avec
   « could not select device driver "nvidia" » : suivre le prérequis GPU.
 - `sh reset.sh` supprime les modèles téléchargés (plusieurs Go à

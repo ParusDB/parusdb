@@ -406,7 +406,9 @@ revient en Envoy.
   d'autorisation → `raw_app_meta_data`. Les rôles applicatifs ParusDB (admin/technique/métier,
   rôles multiples, rôle actif) vivent dans des tables applicatives (`iam.roles`,
   `iam.user_roles`, `iam.user_active_role`), pas dans les JWT claims éditables. Le trigger
-  `iam.on_auth_user_created` attribue `admin` au premier compte créé, `metier` aux suivants.
+  `iam.on_auth_user_created` attribue `admin` au premier compte créé, `metier` aux suivants — le
+  parcours nominal du premier compte est l'onboarding (§7), qui attribue explicitement le rôle
+  sans lien de confirmation email ; le trigger reste le filet de sécurité des sign-up normaux.
 - **Clés** : côté client uniquement la **publishable key**. La clé `service_role` (et tout
   secret) ne sort jamais du serveur. Jetons d'accès scopés pour scripts/CI.
 - **Vérifier après correction** : une modification SQL se vérifie par une requête de test ;

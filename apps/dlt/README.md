@@ -107,7 +107,7 @@ Le registre machine fait foi (`sh run.sh catalog` → JSON consommé par
 `demo/` fournit une source PostgreSQL bidon (`docker compose -f
 demo/docker-compose.yml up -d`, données `seed.sql`) : créer un pipeline de
 type PostgreSQL vers le catalogue de destination, l'exécuter, puis
-requêter `polaris.ventes_demo.orders` côté Trino (ou via le Chat IA — le
+requêter `dev.ventes_demo.orders` côté Trino (ou via le Chat IA — le
 chemin question → LLM → mcp-trino → Trino → réponse a été validé avec ces
 données). Le mode incrémental se vérifie en insérant un delta dans la source
 puis en relançant : le run ne charge que les lignes nouvelles/modifiées.
