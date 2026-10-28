@@ -3,6 +3,7 @@ import { runAgent, generateConversationTitle } from "@/lib/agent-runner";
 import { DEFAULT_MODEL } from "@/lib/ollama";
 import { createOllamaBackend, type LlmBackend } from "@/lib/llm";
 import { resolveProviderBackend } from "@/lib/providers";
+import { DEFAULT_CATALOG } from "@/lib/polaris";
 import { NextResponse } from "next/server";
 
 // Génération de la réponse d'un agent. Le BFF orchestre le LLM configuré
@@ -196,7 +197,7 @@ export async function POST(
     if (!trace.query) continue;
     await supabase.schema("lakehouse").from("query_history").insert({
       user_id: user.id,
-      catalog_name: process.env.TRINO_DEFAULT_CATALOG_BINDING ?? "polaris",
+      catalog_name: DEFAULT_CATALOG,
       query: trace.query,
       status: trace.ok ? "success" : "error",
     });

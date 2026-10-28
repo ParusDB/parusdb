@@ -7,7 +7,9 @@
 #   1. stack Supabase : .env, secrets régénérés si valeurs vendor par défaut,
 #      overrides Kong + RustFS, démarrage, schéma applicatif, exposition
 #      PostgREST des schémas métier ;
-#   2. Apache Polaris : setup (démarrage + catalogue par défaut) ;
+#   2. Apache Polaris : setup (démarrage, catalogue système `parusdb` puis
+#      catalogue d'environnement) + seed applicatif des catalogues
+#      (descriptions, RBAC — apps/supabase/sql/02-lakehouse-catalogs.sql) ;
 #   3. Trino : setup (démarrage + bindings de catalogues) ;
 #   4. mcp-trino puis Ollama : setup (modèles re-téléchargés si absents) ;
 #   5. synchronisation de apps/nextjs/.env.local (clés Supabase, credentials
@@ -126,9 +128,25 @@ fi
 # ---------------------------------------------------------------------------
 # 2. Apache Polaris (catalogue Iceberg)
 # ---------------------------------------------------------------------------
-log "[polaris] setup (rôle, base, bucket, clés RSA, catalogue par défaut)..."
+log "[polaris] setup (rôle, base, bucket, clés RSA, catalogue système + catalogue par défaut)..."
 (cd apps/polaris && sh setup.sh)
 echo "    Polaris prêt"
+
+# ---------------------------------------------------------------------------
+# 2b. Seed applicatif des catalogues d'installation (descriptions + RBAC)
+# ---------------------------------------------------------------------------
+log "[supabase] seed des catalogues lakehouse (02-lakehouse-catalogs.sql)..."
+SYSTEM_CATALOG=$(read_env_var "apps/polaris/.env" POLARIS_SYSTEM_CATALOG)
+DEFAULT_CATALOG=$(read_env_var "apps/polaris/.env" POLARIS_DEFAULT_CATALOG)
+if [ -n "$SYSTEM_CATALOG" ] && [ -n "$DEFAULT_CATALOG" ]; then
+    docker exec -i supabase-db psql -U supabase_admin -d postgres \
+        -v system_catalog="$SYSTEM_CATALOG" \
+        -v default_catalog="$DEFAULT_CATALOG" \
+        < "apps/supabase/sql/02-lakehouse-catalogs.sql" >/dev/null
+    echo "    catalogues '$SYSTEM_CATALOG' et '$DEFAULT_CATALOG' enregistrés (descriptions + accès)"
+else
+    echo "    AVERTISSEMENT : POLARIS_SYSTEM_CATALOG ou POLARIS_DEFAULT_CATALOG vide — seed sauté"
+fi
 
 # ---------------------------------------------------------------------------
 # 3. Trino (moteur SQL)

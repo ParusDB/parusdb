@@ -124,6 +124,18 @@ bouton « Accueil » (retour au Chat).
 - ✅ **Explorateur de schémas** : Arbre des schémas → tables/vues → colonnes
 - ✅ **Métriques globales** : Espace disque utilisé (Go), nombre de fichiers, etc.
 
+**Catalogues d'installation** : une installation fraîche expose deux catalogues,
+créés automatiquement au démarrage :
+
+| Catalogue | Rôle |
+|---|---|
+| `parusdb` | Catalogue **système** de la plateforme — usage libre (administration de ParusDB, données internes), l'équivalent de la base `snowflake` de Snowflake |
+| `dev` | Catalogue d'**environnement** par défaut — cible des données ingérées par les pipelines ELT |
+
+Chaque catalogue est requêtable dans Trino sous **son propre nom** (jamais un
+nom technique générique) : `SELECT * FROM dev.clients`, `SELECT * FROM
+parusdb.<schéma>.<table>`.
+
 **Cas particulier** : Si un catalogue est vide, proposition automatique de créer un premier connecteur (redirection vers le menu "Connecteurs").
 
 ---

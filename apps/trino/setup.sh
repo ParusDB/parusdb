@@ -10,7 +10,13 @@
 #   2. création de .env depuis .env.example si absent, import des credentials
 #      Polaris depuis apps/polaris/.env ;
 #   3. démarrage de la stack compose ;
-#   4. test de bout en bout : lecture des schémas du catalogue polaris.
+#   4. génération des bindings de catalogues : un fichier
+#      catalog/<catalogue>.properties par catalogue Polaris (le nom du fichier
+#      est le nom du catalogue Trino — on requête `SELECT … FROM dev…`, pas
+#      `FROM polaris…`). Le catalogue par défaut et le catalogue système
+#      sont générés ici ; les autres le sont par l'application à leur
+#      création ;
+#   5. test de bout en bout : lecture des schémas de chaque catalogue.
 #
 # Usage :
 #   sh setup.sh               # bootstrap complet puis démarrage
@@ -119,6 +125,7 @@ POLARIS_ROOT_CLIENT_ID=$(read_env_var "$POLARIS_ENV" POLARIS_ROOT_CLIENT_ID)
 POLARIS_ROOT_CLIENT_SECRET=$(read_env_var "$POLARIS_ENV" POLARIS_ROOT_CLIENT_SECRET)
 POLARIS_REALM_VAL=$(read_env_var "$POLARIS_ENV" POLARIS_REALM)
 POLARIS_DEFAULT_CATALOG=$(read_env_var "$POLARIS_ENV" POLARIS_DEFAULT_CATALOG)
+POLARIS_SYSTEM_CATALOG=$(read_env_var "$POLARIS_ENV" POLARIS_SYSTEM_CATALOG)
 POLARIS_S3_ENDPOINT=$(read_env_var "$POLARIS_ENV" S3_ENDPOINT)
 POLARIS_S3_REGION=$(read_env_var "$POLARIS_ENV" S3_REGION)
 
@@ -129,15 +136,60 @@ set_env_value POLARIS_CLIENT_ID "$POLARIS_ROOT_CLIENT_ID"
 set_env_value POLARIS_CLIENT_SECRET "$POLARIS_ROOT_CLIENT_SECRET"
 [ -n "$POLARIS_REALM_VAL" ] && set_env_value POLARIS_REALM "$POLARIS_REALM_VAL"
 [ -n "$POLARIS_DEFAULT_CATALOG" ] && set_env_value POLARIS_CATALOG_NAME "$POLARIS_DEFAULT_CATALOG"
+[ -n "$POLARIS_SYSTEM_CATALOG" ] && set_env_value POLARIS_SYSTEM_CATALOG "$POLARIS_SYSTEM_CATALOG"
 [ -n "$POLARIS_S3_ENDPOINT" ] && set_env_value S3_ENDPOINT "$POLARIS_S3_ENDPOINT"
 [ -n "$POLARIS_S3_REGION" ] && set_env_value S3_REGION "$POLARIS_S3_REGION"
 
 # Valeurs par défaut pour toute clé restée vide.
-for var in POLARIS_URI POLARIS_CATALOG_NAME POLARIS_REALM S3_ENDPOINT S3_REGION TRINO_PORT; do
+for var in POLARIS_URI POLARIS_CATALOG_NAME POLARIS_SYSTEM_CATALOG POLARIS_REALM S3_ENDPOINT S3_REGION TRINO_PORT; do
     ensure_from_example "$var"
 done
 
 POLARIS_CATALOG_NAME=$(get_env_value POLARIS_CATALOG_NAME)
+POLARIS_SYSTEM_CATALOG=$(get_env_value POLARIS_SYSTEM_CATALOG)
+
+# Génère catalog/<nom>.properties : le nom du fichier (donc du catalogue Trino)
+# est le nom du catalogue Polaris, et le warehouse pointe sur ce même catalogue
+# — on requête `SELECT … FROM dev.<schéma>…`, pas `FROM polaris…`. Le contenu
+# reprend lib/lakehouse.ts (trinoBindingFileContent) : seuls l'URI, le realm et
+# les credentials restent substitués par l'environnement du conteneur.
+generate_binding() {
+    name="$1"
+    mkdir -p "$SCRIPT_DIR/catalog"
+    cat > "$SCRIPT_DIR/catalog/$name.properties" <<PROPS
+#
+# Catalogue Trino "$name" : Iceberg REST -> Polaris (généré par setup.sh).
+# Redémarrer Trino pour le prendre en compte : sh run.sh restart
+#
+connector.name=iceberg
+iceberg.catalog.type=rest
+iceberg.rest-catalog.uri=\${ENV:POLARIS_URI}
+iceberg.rest-catalog.security=OAUTH2
+iceberg.rest-catalog.oauth2.credential=\${ENV:CLIENT_ID}:\${ENV:CLIENT_SECRET}
+iceberg.rest-catalog.oauth2.scope=PRINCIPAL_ROLE:ALL
+iceberg.rest-catalog.warehouse=$name
+iceberg.rest-catalog.vended-credentials-enabled=true
+iceberg.rest-catalog.http-headers=Polaris-Realm: \${ENV:POLARIS_REALM}
+fs.s3.enabled=true
+s3.endpoint=\${ENV:S3_ENDPOINT}
+s3.path-style-access=true
+s3.region=\${ENV:S3_REGION}
+PROPS
+    echo "    binding '$name' généré (catalog/$name.properties)"
+}
+
+echo "===> Génération des bindings de catalogues..."
+rm -f "$SCRIPT_DIR/catalog/polaris.properties" # ancien binding générique
+if [ -n "$POLARIS_SYSTEM_CATALOG" ]; then
+    generate_binding "$POLARIS_SYSTEM_CATALOG"
+else
+    echo "    POLARIS_SYSTEM_CATALOG vide : aucun binding système généré"
+fi
+if [ -n "$POLARIS_CATALOG_NAME" ]; then
+    generate_binding "$POLARIS_CATALOG_NAME"
+else
+    echo "    POLARIS_CATALOG_NAME vide : aucun binding par défaut généré"
+fi
 
 if [ "$SKIP_START" = "1" ]; then
     echo ""
@@ -150,14 +202,16 @@ echo "===> Démarrage de la stack Trino..."
 docker compose up -d --wait
 echo "    trino est démarré et sain"
 
-echo "===> Test de bout en bout (schémas du catalogue '$POLARIS_CATALOG_NAME' via Polaris)..."
-docker compose exec -T trino trino --execute "SHOW SCHEMAS FROM polaris"
+echo "===> Test de bout en bout (schémas de chaque catalogue via Polaris)..."
+for catalog in $POLARIS_SYSTEM_CATALOG $POLARIS_CATALOG_NAME; do
+    docker compose exec -T trino trino --execute "SHOW SCHEMAS FROM $catalog"
+done
 
 echo ""
 echo "Trino est prêt."
 echo "  UI web + API HTTP   : http://localhost:$(get_env_value TRINO_PORT)"
-echo "  Catalogue Trino     : polaris (warehouse Polaris : $POLARIS_CATALOG_NAME)"
+echo "  Catalogues Trino    : $POLARIS_SYSTEM_CATALOG (système), $POLARIS_CATALOG_NAME (environnement)"
 echo "  CLI SQL             : sh run.sh cli"
 echo ""
 echo "Exemple :"
-echo "  docker compose exec -T trino trino --execute \"SELECT 1\""
+echo "  docker compose exec -T trino trino --execute \"SELECT * FROM $POLARIS_CATALOG_NAME.information_schema.tables\""

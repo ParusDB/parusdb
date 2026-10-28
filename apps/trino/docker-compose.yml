@@ -37,16 +37,19 @@ services:
       # UI web + API HTTP
       - "${TRINO_PORT:-8080}:8080"
     environment:
-      # Injectées dans catalog/polaris.properties (substitution ${ENV:VAR}).
+      # Injectées par substitution ${ENV:VAR} dans les bindings générés
+      # (catalog/<catalogue>.properties : un fichier par catalogue Polaris,
+      # généré par setup.sh ou par l'application — le nom du fichier Trino est
+      # le nom du catalogue Polaris).
       POLARIS_URI: "${POLARIS_URI:-http://polaris:8181/api/catalog}"
-      POLARIS_CATALOG_NAME: "${POLARIS_CATALOG_NAME:-dev}"
       POLARIS_REALM: "${POLARIS_REALM:-POLARIS}"
       CLIENT_ID: "${POLARIS_CLIENT_ID:?POLARIS_CLIENT_ID manquant dans .env}"
       CLIENT_SECRET: "${POLARIS_CLIENT_SECRET:?POLARIS_CLIENT_SECRET manquant dans .env}"
       S3_ENDPOINT: "${S3_ENDPOINT:-http://rustfs:9000}"
       S3_REGION: "${S3_REGION:-us-east-1}"
     volumes:
-      # Catalogue `polaris` : Iceberg REST → Polaris.
+      # Catalogues iceberg : Iceberg REST -> Polaris (un .properties par
+      # catalogue, généré — plus aucun fichier statique commité).
       - ./catalog:/etc/trino/catalog:ro
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8080/v1/info"]

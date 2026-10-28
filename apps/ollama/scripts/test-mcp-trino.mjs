@@ -17,7 +17,7 @@
  *   node scripts/test-mcp-trino.mjs
  *   node scripts/test-mcp-trino.mjs --question "..." --model gemma4:e2b --think
  *
- * Données de test : le script recrée (idempotent) la table `polaris.sales.orders`
+ * Données de test : le script recrée (idempotent) la table `${CATALOG}.sales.orders`
  * dans le lakehouse et y insère des commandes sur les 6 derniers mois. Le total
  * mensuel est constant, donc toute fenêtre de 3 mois donne le même chiffre
  * d'affaires attendu — le script vérifie que le LLM le restitue.
@@ -66,6 +66,7 @@ if (args.help) {
 
 const ollamaEnv = readEnv(path.join(here, "..", ".env"));
 const mcpEnv = readEnv(path.join(here, "..", "..", "mcp-trino", ".env"));
+const trinoEnv = readEnv(path.join(here, "..", "..", "trino", ".env"));
 
 const OLLAMA_BASE = `http://localhost:${ollamaEnv.OLLAMA_PORT || "11434"}`;
 const MCP_ENDPOINT = `http://localhost:${mcpEnv.MCP_TRINO_HTTP_PORT || "8185"}/mcp`;
@@ -78,6 +79,9 @@ const MAX_STEPS = 8;
 // ---------------------------------------------------------------------------
 
 const TRINO_CONTAINER = "parus-trino";
+// Catalogue d'environnement par défaut du lakehouse (le nom du catalogue
+// Trino est le nom du catalogue Polaris — AGENTS.md §10).
+const CATALOG = trinoEnv.POLARIS_CATALOG_NAME || "dev";
 const AMOUNT_A = 1320.4; // deux commandes par mois, total mensuel constant
 const AMOUNT_B = 770.85;
 const MONTHLY_TOTAL = AMOUNT_A + AMOUNT_B; // 2091.25
@@ -109,15 +113,15 @@ function seedOrders() {
     rows.push(`(${id++}, DATE '${isoDate(d)}', ${AMOUNT_B.toFixed(2)})`);
   }
 
-  trino(`CREATE SCHEMA IF NOT EXISTS polaris.sales`);
-  trino(`DROP TABLE IF EXISTS polaris.sales.orders`);
-  trino(`CREATE TABLE polaris.sales.orders (
+  trino(`CREATE SCHEMA IF NOT EXISTS ${CATALOG}.sales`);
+  trino(`DROP TABLE IF EXISTS ${CATALOG}.sales.orders`);
+  trino(`CREATE TABLE ${CATALOG}.sales.orders (
     order_id INTEGER,
     order_date DATE,
     amount DECIMAL(12,2)
   )`);
-  trino(`INSERT INTO polaris.sales.orders VALUES ${rows.join(", ")}`);
-  console.log(`    polaris.sales.orders : ${rows.length} commandes sur 6 mois, total mensuel ${MONTHLY_TOTAL.toFixed(2)} €`);
+  trino(`INSERT INTO ${CATALOG}.sales.orders VALUES ${rows.join(", ")}`);
+  console.log(`    ${CATALOG}.sales.orders : ${rows.length} commandes sur 6 mois, total mensuel ${MONTHLY_TOTAL.toFixed(2)} €`);
 }
 
 // ---------------------------------------------------------------------------

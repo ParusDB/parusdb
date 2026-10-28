@@ -15,7 +15,7 @@ jamais écrire dans le lakehouse.
 | Transport | MCP Streamable HTTP, endpoint `/mcp` (legacy `/sse` conservé) |
 | Outils | `list_catalogs`, `list_schemas`, `list_tables`, `get_table_schema`, `execute_query`, `explain_query` |
 | Cible | Trino (`apps/trino`) sur le réseau externe `supabase_default`, catalogue `polaris` |
-| Politique | lecture seule (`TRINO_ALLOW_WRITE_QUERIES=false`), schémas autorisés `polaris.sales` |
+| Politique | lecture seule (`TRINO_ALLOW_WRITE_QUERIES=false`), schémas autorisés `dev.sales` |
 | État | sans état ; aucune donnée stockée |
 
 ## Cycle de vie

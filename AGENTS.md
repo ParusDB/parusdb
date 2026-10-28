@@ -135,8 +135,9 @@ parusdb/
 │   └── CONFIG.md                 # Référence des variables d'environnement self-hosted
 └── apps/trino/                   # Trino — moteur SQL du lakehouse (Iceberg REST → Polaris)
     ├── docker-compose.yml        # trino (réseau externe supabase_default)
-    ├── catalog/polaris.properties # Catalogue iceberg : Polaris + credentials vendus
-    │                              # (les bindings des autres catalogues sont générés par l'app, cf. §10)
+    ├── catalog/                  # Bindings iceberg : un <catalogue>.properties par catalogue Polaris,
+    │                              # générés par setup.sh (catalogues par défaut + système) ou l'app
+    │                              # (aucun fichier statique commité, cf. §10)
     └── run.sh / setup.sh / reset.sh / update.sh  # Cycle de vie (cf. §5)
 ```
 
@@ -460,10 +461,22 @@ revient en Envoy.
   sert de filet de sécurité le temps de la correction ; un changement d'`environment`
   du compose n'est effectif qu'après **recréation** du conteneur (`sh run.sh start`),
   pas un simple restart.
-- **Bindinds Trino** : un catalogue Polaris = un fichier `catalog/<nom>.properties`
-  (`polaris.properties` pour le catalogue par défaut). L'app génère le fichier des
-  nouveaux catalogues (`TRINO_CATALOG_DIR`) mais **Trino ne le charge qu'au
-  redémarrage** (`cd apps/trino && sh run.sh restart`) — l'UI doit l'indiquer.
+- **Bindings Trino** : un catalogue Polaris = un fichier `catalog/<nom>.properties` —
+  le nom du fichier (donc du catalogue Trino) est **toujours le nom du catalogue
+  Polaris** : on requête `SELECT … FROM dev.<schéma>.<table>`, jamais
+  `FROM polaris…`. Aucun fichier statique commité (`apps/trino/catalog/*.properties`
+  est gitignoré) : le setup de Trino génère les bindings du catalogue système
+  (`POLARIS_SYSTEM_CATALOG`, ex. `parusdb`) et du catalogue par défaut
+  (`POLARIS_CATALOG_NAME`, ex. `dev`) ; l'app génère celui des nouveaux catalogues
+  (`TRINO_CATALOG_DIR`) mais **Trino ne le charge qu'au redémarrage**
+  (`cd apps/trino && sh run.sh restart`) — l'UI doit l'indiquer.
+- **Catalogues d'installation** : `apps/polaris/setup.sh` crée le catalogue
+  **système** (`parusdb` — usage libre : administration de la plateforme,
+  l'équivalent de la base `snowflake` de Snowflake) **puis** le catalogue
+  d'**environnement** par défaut (`dev`). Leurs descriptions et le RBAC vivent
+  dans le seed `apps/supabase/sql/02-lakehouse-catalogs.sql` (appliqué par le
+  `setup.sh` racine, idempotent) — Polaris reste la source de vérité des
+  catalogues, le registre applicatif ne porte que description et accès.
 - **Métriques disque** : tailles et nombres de fichiers via les tables metadata Iceberg
   `"<catalog>"."<schéma>"."<table>$files"` (identifiants à quoter).
 - **RBAC applicatif par catalogue** : `lakehouse.catalog_access` (rôles ↔ catalogues,

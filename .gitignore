@@ -1,1 +1,4 @@
 .vibe/
+
+# Bindings Trino générés (un fichier par catalogue Polaris — cf. AGENTS.md §10)
+apps/trino/catalog/*.properties

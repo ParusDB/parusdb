@@ -18,15 +18,17 @@ export interface CatalogView {
   isDefault: boolean;
 }
 
-// Catalogue Trino lié à un catalogue Polaris : le binding par défaut
-// (apps/trino/catalog/polaris.properties, warehouse = catalogue par défaut)
-// ou un fichier <catalogue>.properties généré à la création.
+// Catalogue Trino lié à un catalogue Polaris : le binding porte toujours le
+// nom du catalogue (catalog/<catalogue>.properties — le fichier du catalogue
+// par défaut et du catalogue système est généré par apps/trino/setup.sh, les
+// autres le sont à la création par l'app).
 export function trinoBindingFor(catalog: string): string | null {
-  const defaultBinding =
-    process.env.TRINO_DEFAULT_CATALOG_BINDING ?? "polaris";
-  if (catalog === DEFAULT_CATALOG) return defaultBinding;
   const dir = process.env.TRINO_CATALOG_DIR;
-  if (!dir) return null;
+  if (!dir) {
+    // Sans dossier accessible, seul le catalogue par défaut est réputé lié
+    // (son binding est posé par le setup de Trino, hors de portée du BFF).
+    return catalog === DEFAULT_CATALOG ? catalog : null;
+  }
   return existsSync(path.join(dir, `${catalog}.properties`)) ? catalog : null;
 }
 
@@ -60,9 +62,10 @@ export async function loadCatalogViews(
   );
 }
 
-// Contenu du fichier de binding Trino d'un catalogue Polaris. Reprend
-// catalog/polaris.properties : seuls l'URI et le realm restent substitués par
-// l'environnement du conteneur ; le warehouse est le catalogue cible.
+// Contenu du fichier de binding Trino d'un catalogue Polaris. Reprend le
+// format généré par apps/trino/setup.sh : seuls l'URI et le realm restent
+// substitués par l'environnement du conteneur ; le warehouse est le catalogue
+// cible.
 export function trinoBindingFileContent(catalog: string): string {
   return `#
 # Catalogue Trino "${catalog}" : Iceberg REST -> Polaris (généré par ParusDB).

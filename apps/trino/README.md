@@ -10,7 +10,7 @@ vendus par Polaris. Trino ne stocke aucun secret d'infrastructure.
 | Brique | Choix |
 |---|---|
 | Image | `trinodb/trino:484` |
-| Catalogue | `polaris` (fichier `catalog/polaris.properties`) : connecteur Iceberg REST → `http://polaris:8181/api/catalog`, OAuth2 client credentials, realm `POLARIS`, warehouse = catalogue d'environnement (`dev` par défaut) |
+| Catalogues | un fichier `catalog/<catalogue>.properties` par catalogue Polaris (généré par `setup.sh` : `dev` par défaut + `parusdb` système) : connecteur Iceberg REST → `http://polaris:8181/api/catalog`, OAuth2 client credentials, realm `POLARIS`, warehouse = le catalogue du même nom |
 | Credentials S3 | vendus par Polaris (`iceberg.rest-catalog.vended-credentials-enabled=true`) — aucun secret statique côté Trino |
 | Réseau | externe `supabase_default` (stacks Supabase et Polaris démarrées) |
 | État | sans état ; les requêtes passent par le principal root Polaris. Le RBAC applicatif (rôle actif, permissions par catalogue) est implémenté **côté application** (table `lakehouse.catalog_access`) : il borne la visibilité des catalogues et l'accès aux pages, pas les droits Trino — tout s'exécute sous l'utilisateur Trino unique (limitation assumée) |
@@ -33,7 +33,7 @@ Prérequis : stack Supabase (avec RustFS) puis Polaris démarrées
 
 - UI web + API HTTP : `http://localhost:8080`
 - CLI SQL : `sh run.sh cli`
-- Catalogue Trino : `polaris` (ex. `SHOW SCHEMAS FROM polaris`)
+- Catalogues Trino : `dev` (environnement) et `parusdb` (système), au nom de leur catalogue Polaris (ex. `SHOW SCHEMAS FROM dev`)
 
 ## Notes opérationnelles
 

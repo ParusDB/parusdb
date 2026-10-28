@@ -15,8 +15,9 @@
 #   4. création du bucket RustFS du lakehouse ;
 #   5. génération des clés RSA du token broker (volumes/token-keys) ;
 #   6. démarrage de la stack compose (polaris-bootstrap puis polaris) ;
-#   7. création du catalogue d'environnement par défaut (ex. `dev`) via l'API
-#      d'administration, avec grant CATALOG_MANAGE_CONTENT sur catalog_admin ;
+#   7. création du catalogue système (`parusdb`) puis du catalogue
+#      d'environnement par défaut (ex. `dev`) via l'API d'administration,
+#      avec grant CATALOG_MANAGE_CONTENT sur catalog_admin ;
 #
 # Usage :
 #   sh setup.sh               # bootstrap complet puis démarrage
@@ -141,8 +142,8 @@ fi
 # Valeurs par défaut pour toute clé restée vide.
 for var in POLARIS_DB_HOST POLARIS_DB_NAME POLARIS_DB_USER POLARIS_REALM \
            POLARIS_ROOT_CLIENT_ID POLARIS_API_PORT POLARIS_MANAGEMENT_PORT \
-           POLARIS_DEFAULT_CATALOG S3_REGION POLARIS_S3_BUCKET S3_ENDPOINT \
-           S3_ENDPOINT_INTERNAL; do
+           POLARIS_DEFAULT_CATALOG POLARIS_SYSTEM_CATALOG S3_REGION \
+           POLARIS_S3_BUCKET S3_ENDPOINT S3_ENDPOINT_INTERNAL; do
     ensure_from_example "$var"
 done
 
@@ -156,6 +157,7 @@ POLARIS_REALM=$(get_env_value POLARIS_REALM)
 POLARIS_ROOT_CLIENT_ID=$(get_env_value POLARIS_ROOT_CLIENT_ID)
 POLARIS_ROOT_CLIENT_SECRET=$(get_env_value POLARIS_ROOT_CLIENT_SECRET)
 POLARIS_DEFAULT_CATALOG=$(get_env_value POLARIS_DEFAULT_CATALOG)
+POLARIS_SYSTEM_CATALOG=$(get_env_value POLARIS_SYSTEM_CATALOG)
 POLARIS_S3_BUCKET=$(get_env_value POLARIS_S3_BUCKET)
 S3_ACCESS_KEY_ID=$(get_env_value S3_ACCESS_KEY_ID)
 S3_SECRET_ACCESS_KEY=$(get_env_value S3_SECRET_ACCESS_KEY)
@@ -213,11 +215,11 @@ echo "===> Démarrage de la stack Polaris..."
 docker compose up -d --wait
 echo "    polaris est démarré et sain"
 
-if [ -z "$POLARIS_DEFAULT_CATALOG" ]; then
-    echo "===> Aucun catalogue par défaut défini (POLARIS_DEFAULT_CATALOG vide)"
+if [ -z "$POLARIS_DEFAULT_CATALOG" ] && [ -z "$POLARIS_SYSTEM_CATALOG" ]; then
+    echo "===> Aucun catalogue à créer (POLARIS_DEFAULT_CATALOG et POLARIS_SYSTEM_CATALOG vides)"
     echo "    les catalogues seront créés par l'application (spec §Data Lakehouse)"
 else
-    echo "===> Création du catalogue '$POLARIS_DEFAULT_CATALOG'..."
+    echo "===> Création des catalogues ('${POLARIS_SYSTEM_CATALOG}', puis '${POLARIS_DEFAULT_CATALOG:-<aucun>}')..."
     API="http://localhost:${POLARIS_API_PORT}"
     TOKEN=$(curl -s --max-time 30 -X POST "$API/api/catalog/v1/oauth/tokens" \
         -d grant_type=client_credentials \
@@ -226,51 +228,66 @@ else
         -d scope=PRINCIPAL_ROLE:ALL | jq -r '.access_token // empty')
     [ -n "$TOKEN" ] || fail "impossible d'obtenir un jeton OAuth2 auprès de Polaris (vérifiez POLARIS_ROOT_CLIENT_ID et POLARIS_ROOT_CLIENT_SECRET dans .env)"
 
-    CODE=$(curl -s --max-time 30 -o /dev/null -w '%{http_code}' \
-        "$API/api/management/v1/catalogs/$POLARIS_DEFAULT_CATALOG" \
-        -H "Authorization: Bearer $TOKEN" \
-        -H "Polaris-Realm: $POLARIS_REALM")
+    # Crée un catalogue s'il n'existe pas encore (idempotent) + grant
+    # d'administration sur catalog_admin.
+    create_catalog() {
+        name="$1"
+        CODE=$(curl -s --max-time 30 -o /dev/null -w '%{http_code}' \
+            "$API/api/management/v1/catalogs/$name" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Polaris-Realm: $POLARIS_REALM")
 
-    if [ "$CODE" = "404" ]; then
-        # polaris.config.drop-with-purge.enabled : les moteurs (Trino) émettent
-        # leurs DROP avec purgeRequested=true ; sans cette propriété catalogue,
-        # Polaris les refuse (HTTP 403) et les fichiers Iceberg restent orphelins.
-        PAYLOAD=$(cat <<JSON
-{"catalog": {"name": "$POLARIS_DEFAULT_CATALOG", "type": "INTERNAL", "readOnly": false, "properties": {"default-base-location": "s3://$POLARIS_S3_BUCKET/$POLARIS_DEFAULT_CATALOG", "polaris.config.drop-with-purge.enabled": "true"}, "storageConfigInfo": {"storageType": "S3", "allowedLocations": ["s3://$POLARIS_S3_BUCKET/$POLARIS_DEFAULT_CATALOG"], "endpoint": "$S3_ENDPOINT", "endpointInternal": "$S3_ENDPOINT_INTERNAL", "pathStyleAccess": true, "region": "$S3_REGION"}}}
+        if [ "$CODE" = "404" ]; then
+            # polaris.config.drop-with-purge.enabled : les moteurs (Trino) émettent
+            # leurs DROP avec purgeRequested=true ; sans cette propriété catalogue,
+            # Polaris les refuse (HTTP 403) et les fichiers Iceberg restent orphelins.
+            PAYLOAD=$(cat <<JSON
+{"catalog": {"name": "$name", "type": "INTERNAL", "readOnly": false, "properties": {"default-base-location": "s3://$POLARIS_S3_BUCKET/$name", "polaris.config.drop-with-purge.enabled": "true"}, "storageConfigInfo": {"storageType": "S3", "allowedLocations": ["s3://$POLARIS_S3_BUCKET/$name"], "endpoint": "$S3_ENDPOINT", "endpointInternal": "$S3_ENDPOINT_INTERNAL", "pathStyleAccess": true, "region": "$S3_REGION"}}}
 JSON
 )
-        RESP=$(curl -s --max-time 30 -w '\n%{http_code}' \
-            -X POST "$API/api/management/v1/catalogs" \
+            RESP=$(curl -s --max-time 30 -w '\n%{http_code}' \
+                -X POST "$API/api/management/v1/catalogs" \
+                -H "Authorization: Bearer $TOKEN" \
+                -H "Polaris-Realm: $POLARIS_REALM" \
+                -H "Content-Type: application/json" \
+                -d "$PAYLOAD")
+            CODE=$(printf '%s' "$RESP" | tail -n 1)
+            BODY=$(printf '%s' "$RESP" | sed '$d')
+            case "$CODE" in
+                200|201) echo "    catalogue '$name' créé" ;;
+                *) fail "échec de la création du catalogue '$name' (HTTP $CODE) : $BODY" ;;
+            esac
+        elif [ "$CODE" = "200" ]; then
+            echo "    le catalogue '$name' existe déjà"
+        else
+            fail "réponse inattendue de l'API Polaris (HTTP $CODE) lors de la vérification du catalogue '$name'"
+        fi
+
+        # Grant d'administration au rôle catalog_admin du catalogue (idempotent) :
+        # sans CATALOG_MANAGE_CONTENT, la création de tables avec délégation
+        # d'écriture (CREATE_TABLE_STAGED_WITH_WRITE_DELEGATION) est refusée,
+        # même au principal root. Étape « extra grants » du guide officiel.
+        CODE=$(curl -s --max-time 30 -o /dev/null -w '%{http_code}' \
+            -X PUT "$API/api/management/v1/catalogs/$name/catalog-roles/catalog_admin/grants" \
             -H "Authorization: Bearer $TOKEN" \
             -H "Polaris-Realm: $POLARIS_REALM" \
             -H "Content-Type: application/json" \
-            -d "$PAYLOAD")
-        CODE=$(printf '%s' "$RESP" | tail -n 1)
-        BODY=$(printf '%s' "$RESP" | sed '$d')
+            -d '{"type": "catalog", "privilege": "CATALOG_MANAGE_CONTENT"}')
         case "$CODE" in
-            200|201) echo "    catalogue '$POLARIS_DEFAULT_CATALOG' créé" ;;
-            *) fail "échec de la création du catalogue '$POLARIS_DEFAULT_CATALOG' (HTTP $CODE) : $BODY" ;;
+            200|201|204) echo "    grant CATALOG_MANAGE_CONTENT confirmé sur catalog_admin ('$name')" ;;
+            *) fail "échec du grant CATALOG_MANAGE_CONTENT sur '$name' (HTTP $CODE)" ;;
         esac
-    elif [ "$CODE" = "200" ]; then
-        echo "    le catalogue '$POLARIS_DEFAULT_CATALOG' existe déjà"
-    else
-        fail "réponse inattendue de l'API Polaris (HTTP $CODE) lors de la vérification du catalogue"
-    fi
+    }
 
-    # Grant d'administration au rôle catalog_admin du catalogue (idempotent) :
-    # sans CATALOG_MANAGE_CONTENT, la création de tables avec délégation
-    # d'écriture (CREATE_TABLE_STAGED_WITH_WRITE_DELEGATION) est refusée,
-    # même au principal root. Étape « extra grants » du guide officiel.
-    CODE=$(curl -s --max-time 30 -o /dev/null -w '%{http_code}' \
-        -X PUT "$API/api/management/v1/catalogs/$POLARIS_DEFAULT_CATALOG/catalog-roles/catalog_admin/grants" \
-        -H "Authorization: Bearer $TOKEN" \
-        -H "Polaris-Realm: $POLARIS_REALM" \
-        -H "Content-Type: application/json" \
-        -d '{"type": "catalog", "privilege": "CATALOG_MANAGE_CONTENT"}')
-    case "$CODE" in
-        200|201|204) echo "    grant CATALOG_MANAGE_CONTENT confirmé sur catalog_admin" ;;
-        *) fail "échec du grant CATALOG_MANAGE_CONTENT (HTTP $CODE)" ;;
-    esac
+    # Catalogue système d'abord, puis catalogue d'environnement (spec
+    # §Data Lakehouse : le premier est librement utilisable par les
+    # utilisateurs, le second porte les données des pipelines ELT).
+    if [ -n "$POLARIS_SYSTEM_CATALOG" ]; then
+        create_catalog "$POLARIS_SYSTEM_CATALOG"
+    fi
+    if [ -n "$POLARIS_DEFAULT_CATALOG" ]; then
+        create_catalog "$POLARIS_DEFAULT_CATALOG"
+    fi
 fi
 
 echo ""
@@ -281,8 +298,11 @@ echo "  Santé / métriques  : http://localhost:$POLARIS_MANAGEMENT_PORT/q/healt
 echo "  Realm              : $POLARIS_REALM (client root : $POLARIS_ROOT_CLIENT_ID, secret dans .env)"
 echo "  Persistance        : base '$POLARIS_DB_NAME' du Postgres Supabase"
 echo "  Object storage     : bucket '$POLARIS_S3_BUCKET' (RustFS)"
+if [ -n "$POLARIS_SYSTEM_CATALOG" ]; then
+    echo "  Catalogue système  : $POLARIS_SYSTEM_CATALOG (base s3://$POLARIS_S3_BUCKET/$POLARIS_SYSTEM_CATALOG)"
+fi
 if [ -n "$POLARIS_DEFAULT_CATALOG" ]; then
-    echo "  Catalogue          : $POLARIS_DEFAULT_CATALOG (base s3://$POLARIS_S3_BUCKET/$POLARIS_DEFAULT_CATALOG)"
+    echo "  Catalogue env.     : $POLARIS_DEFAULT_CATALOG (base s3://$POLARIS_S3_BUCKET/$POLARIS_DEFAULT_CATALOG)"
 fi
 echo ""
 echo "Étape suivante : configurer et démarrer Trino (cd ../trino && sh setup.sh)."

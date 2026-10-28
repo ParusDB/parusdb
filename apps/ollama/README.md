@@ -58,7 +58,7 @@ sh reset.sh   # tout réinitialiser (conteneurs + modèles + .env)
   « Quel est mon chiffre d'affaire sur 3 mois ? » au modèle, qui explore le
   lakehouse et exécute son SQL via mcp-trino, puis restitue la réponse.
   Le script (`scripts/test-mcp-trino.mjs`, Node >= 18 sans dépendance) crée
-  les données de test `polaris.sales.orders` et vérifie le montant attendu.
+  les données de test `dev.sales.orders` et vérifie le montant attendu.
 
 ## Notes opérationnelles
 

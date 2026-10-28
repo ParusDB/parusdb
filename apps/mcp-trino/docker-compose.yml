@@ -54,7 +54,7 @@ services:
       TRINO_QUERY_TIMEOUT: "${TRINO_QUERY_TIMEOUT:-60}"
       # Schémas exposés aux LLM (liste catalog.schéma séparés par des
       # virgules) : borne l'exploration et les requêtes.
-      TRINO_ALLOWED_SCHEMAS: "${TRINO_ALLOWED_SCHEMAS:-polaris.sales}"
+      TRINO_ALLOWED_SCHEMAS: "${TRINO_ALLOWED_SCHEMAS:-dev.sales}"
       # Transport MCP : Streamable HTTP sur /mcp (legacy /sse conservé).
       MCP_TRANSPORT: "http"
       MCP_HOST: "0.0.0.0"
