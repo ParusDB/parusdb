@@ -112,6 +112,7 @@ export function RoleGrantsDialog({
         privileges: [...next],
       });
       if (result.ok) {
+        if (result.warning) toast.warning(result.warning);
         router.refresh();
       } else {
         toast.error(result.error ?? "L'enregistrement a échoué.");

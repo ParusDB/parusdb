@@ -9,6 +9,15 @@ import {
   discoverProviderModels,
   type ProviderApiKind,
 } from "@/lib/providers";
+import {
+  assignPrincipalRole,
+  createPolarisPrincipal,
+  deletePolarisPrincipal,
+  resetPolarisCredentials,
+  revokePrincipalRole,
+  syncRoleCatalogAccess,
+  type ParusPrivilege,
+} from "@/lib/polaris";
 
 // ---------------------------------------------------------------------------
 // Utilisateurs (spec §Administration — Utilisateurs)
@@ -130,6 +139,263 @@ export async function deleteUser(
   await requireAdmin();
   const admin = createAdminClient();
   const { error } = await admin.auth.admin.deleteUser(userId);
+  if (error) {
+    return { ok: false, error: `La suppression a échoué : ${error.message}` };
+  }
+  revalidatePath("/admin/users");
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// Utilisateurs applicatifs (comptes service pour les outils data : dbt,
+// Power BI, Airbyte… — rbac_refonte.md §2.2/§4). Credentials Polaris
+// affichées UNE FOIS : jamais stockées côté applicatif.
+// ---------------------------------------------------------------------------
+
+const APP_USER_NAME_PATTERN = /^[a-z][a-z0-9-]{2,63}$/;
+
+export interface AppUserCredentials {
+  clientId: string;
+  clientSecret: string;
+}
+
+// Droits de catalogue actuels d'un rôle, pour le miroir Polaris.
+async function roleCatalogGrants(
+  admin: ReturnType<typeof createAdminClient>,
+  roleId: string,
+): Promise<{ catalog: string; privileges: ParusPrivilege[] }[]> {
+  const { data } = await admin
+    .schema("iam")
+    .from("grants")
+    .select("resource_id, privileges")
+    .eq("role_id", roleId)
+    .eq("resource_type", "catalog");
+  return (data ?? []).map(
+    (g: { resource_id: string; privileges: ParusPrivilege[] }) => ({
+      catalog: g.resource_id,
+      privileges: g.privileges,
+    }),
+  );
+}
+
+export async function createAppUser(input: {
+  name: string;
+  note: string;
+  roleId: string;
+}): Promise<{ ok: boolean; error?: string; credentials?: AppUserCredentials }> {
+  const session = await requireAdmin();
+  const admin = createAdminClient();
+  const name = input.name.trim().toLowerCase();
+  if (!APP_USER_NAME_PATTERN.test(name)) {
+    return {
+      ok: false,
+      error:
+        "Nom invalide : minuscules, chiffres et tirets, 3 caractères minimum (ex. airbyte-prod).",
+    };
+  }
+  const { data: role } = await admin
+    .schema("iam")
+    .from("roles")
+    .select("id, key, is_system")
+    .eq("id", input.roleId)
+    .maybeSingle();
+  if (!role) {
+    return { ok: false, error: "Rôle introuvable." };
+  }
+  if (role.key === "admin") {
+    return {
+      ok: false,
+      error:
+        "Le rôle admin hérite de tout sans grants explicites : choisissez un rôle avec des droits distribués via /admin/roles.",
+    };
+  }
+
+  // 1-4. Principal Polaris + rôles + miroir des grants de catalogue du rôle.
+  let credentials: AppUserCredentials;
+  try {
+    credentials = await createPolarisPrincipal(name);
+    const sync = await syncRoleCatalogAccess({
+      roleKey: role.key,
+      catalogGrants: await roleCatalogGrants(admin, role.id),
+    });
+    if (!sync.ok) {
+      // Le principal est créé : le nettoyer pour rester cohérent.
+      await deletePolarisPrincipal(name).catch(() => undefined);
+      return {
+        ok: false,
+        error: `Le miroir Polaris a échoué : ${sync.error}`,
+      };
+    }
+    // Le principal porte le principal-role nommé comme le rôle ParusDB.
+    await assignPrincipalRole(name, role.key);
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "La création a échoué.",
+    };
+  }
+
+  // 5. Registre applicatif (clientId seulement — jamais le secret).
+  const { error: insertError } = await admin
+    .schema("iam")
+    .from("app_users")
+    .insert({
+      name,
+      note: input.note.trim() || null,
+      role_id: role.id,
+      polaris_client_id: credentials.clientId,
+      credentials_rotated_at: new Date().toISOString(),
+      created_by: session.userId,
+    });
+  if (insertError) {
+    await deletePolarisPrincipal(name).catch(() => undefined);
+    if (insertError.code === "23505") {
+      return {
+        ok: false,
+        error: `Un utilisateur applicatif nommé « ${name} » existe déjà.`,
+      };
+    }
+    return { ok: false, error: `L'enregistrement a échoué : ${insertError.message}` };
+  }
+  revalidatePath("/admin/users");
+  return { ok: true, credentials };
+}
+
+// Réinitialisation : nouveau secret (l'ancien est invalidé), retourné une
+// seule fois. Le clientId reste inchangé.
+export async function rotateAppUserCredentials(
+  appUserId: string,
+): Promise<{ ok: boolean; error?: string; credentials?: AppUserCredentials }> {
+  await requireAdmin();
+  const admin = createAdminClient();
+  const { data: appUser } = await admin
+    .schema("iam")
+    .from("app_users")
+    .select("name")
+    .eq("id", appUserId)
+    .maybeSingle();
+  if (!appUser) {
+    return { ok: false, error: "Utilisateur applicatif introuvable." };
+  }
+  try {
+    const credentials = await resetPolarisCredentials(appUser.name);
+    const { error } = await admin
+      .schema("iam")
+      .from("app_users")
+      .update({ credentials_rotated_at: new Date().toISOString() })
+      .eq("id", appUserId);
+    if (error) {
+      return { ok: false, error: `La mise à jour a échoué : ${error.message}` };
+    }
+    revalidatePath("/admin/users");
+    return { ok: true, credentials };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "La réinitialisation a échoué.",
+    };
+  }
+}
+
+// Changement de rôle : réassignation du principal-role Polaris + resync des
+// accès catalogue.
+export async function updateAppUserRole(
+  appUserId: string,
+  roleId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+  const admin = createAdminClient();
+  const [{ data: appUser }, { data: role }] = await Promise.all([
+    admin
+      .schema("iam")
+      .from("app_users")
+      .select("name, role_id")
+      .eq("id", appUserId)
+      .maybeSingle(),
+    admin
+      .schema("iam")
+      .from("roles")
+      .select("id, key")
+      .eq("id", roleId)
+      .maybeSingle(),
+  ]);
+  if (!appUser || !role) {
+    return { ok: false, error: "Utilisateur applicatif ou rôle introuvable." };
+  }
+  if (role.key === "admin") {
+    return {
+      ok: false,
+      error:
+        "Le rôle admin hérite de tout sans grants explicites : choisissez un rôle avec des droits distribués via /admin/roles.",
+    };
+  }
+  if (appUser.role_id === role.id) return { ok: true };
+
+  // Rôle Polaris de l'ancien rôle ParusDB (pour le retrait).
+  const { data: previousRole } = await admin
+    .schema("iam")
+    .from("roles")
+    .select("key")
+    .eq("id", appUser.role_id)
+    .maybeSingle();
+
+  try {
+    if (previousRole) {
+      await revokePrincipalRole(appUser.name, previousRole.key);
+    }
+    const sync = await syncRoleCatalogAccess({
+      roleKey: role.key,
+      catalogGrants: await roleCatalogGrants(admin, role.id),
+    });
+    if (!sync.ok) {
+      return { ok: false, error: `Le miroir Polaris a échoué : ${sync.error}` };
+    }
+    await assignPrincipalRole(appUser.name, role.key);
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "La mise à jour a échoué.",
+    };
+  }
+  const { error } = await admin
+    .schema("iam")
+    .from("app_users")
+    .update({ role_id: role.id })
+    .eq("id", appUserId);
+  if (error) {
+    return { ok: false, error: `La mise à jour a échoué : ${error.message}` };
+  }
+  revalidatePath("/admin/users");
+  return { ok: true };
+}
+
+export async function deleteAppUser(
+  appUserId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+  const admin = createAdminClient();
+  const { data: appUser } = await admin
+    .schema("iam")
+    .from("app_users")
+    .select("name")
+    .eq("id", appUserId)
+    .maybeSingle();
+  if (!appUser) {
+    return { ok: false, error: "Utilisateur applicatif introuvable." };
+  }
+  try {
+    await deletePolarisPrincipal(appUser.name);
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "La suppression Polaris a échoué.",
+    };
+  }
+  const { error } = await admin
+    .schema("iam")
+    .from("app_users")
+    .delete()
+    .eq("id", appUserId);
   if (error) {
     return { ok: false, error: `La suppression a échoué : ${error.message}` };
   }
@@ -284,7 +550,7 @@ export async function setRoleGrant(input: {
   resourceType: GrantResourceType;
   resourceId: string;
   privileges: GrantPrivilege[];
-}): Promise<{ ok: boolean; error?: string }> {
+}): Promise<{ ok: boolean; error?: string; warning?: string }> {
   await requireAdmin();
   const admin = createAdminClient();
   if (!GRANT_RESOURCE_TYPES.includes(input.resourceType)) {
@@ -328,10 +594,52 @@ export async function setRoleGrant(input: {
       return { ok: false, error: `L'enregistrement a échoué : ${error.message}` };
     }
   }
+  // Miroir Polaris (comptes applicatifs du rôle) : best effort — un échec
+  // est renvoyé en avertissement sans bloquer l'édition applicative
+  // (synchronisation éventuellement cohérente, rbac_refonte.md §7).
+  if (input.resourceType === "catalog") {
+    const sync = await mirrorRoleCatalogAccess(input.roleId);
+    if (!sync.ok) {
+      return {
+        ok: true,
+        warning: `Droit enregistré, mais la synchronisation Polaris a échoué : ${sync.error}`,
+      };
+    }
+  }
   revalidatePath("/admin/roles");
   return { ok: true };
 }
 
+// Rejoue le miroir Polaris d'un rôle : ne touche Polaris que si des
+// utilisateurs applicatifs portent ce rôle.
+async function mirrorRoleCatalogAccess(
+  roleId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const admin = createAdminClient();
+  const [{ data: role }, { count: appUserCount }, { data: grants }] =
+    await Promise.all([
+      admin.schema("iam").from("roles").select("key").eq("id", roleId).maybeSingle(),
+      admin
+        .schema("iam")
+        .from("app_users")
+        .select("id", { count: "exact", head: true })
+        .eq("role_id", roleId),
+      admin
+        .schema("iam")
+        .from("grants")
+        .select("resource_id, privileges")
+        .eq("role_id", roleId)
+        .eq("resource_type", "catalog"),
+    ]);
+  if ((appUserCount ?? 0) === 0 || !role) return { ok: true };
+  const catalogGrants = (grants ?? []).map(
+    (g: { resource_id: string; privileges: ParusPrivilege[] }) => ({
+      catalog: g.resource_id,
+      privileges: g.privileges,
+    }),
+  );
+  return syncRoleCatalogAccess({ roleKey: role.key, catalogGrants });
+}
 // ---------------------------------------------------------------------------
 // Fournisseurs LLM (spec §Administration — Fournisseurs LLM)
 // ---------------------------------------------------------------------------

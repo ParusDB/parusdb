@@ -297,3 +297,304 @@ export async function polarisPing(): Promise<boolean> {
     return false;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Utilisateurs applicatifs — principals Polaris (RBAC refonte,
+// docs/functional/rbac_refonte.md §4). Endpoints validés sur Polaris 1.8.0 :
+// le secret n'est JAMAIS stocké côté applicatif, il est retourné une seule
+// fois à la création (POST /principals) ou à la réinitialisation
+// (POST /principals/{name}/reset, réservé au client root ; /rotate est
+// refusé pour root — bug #624, contourné par /reset).
+// ---------------------------------------------------------------------------
+
+export interface PolarisCredentials {
+  clientId: string;
+  clientSecret: string;
+}
+
+interface PrincipalWithCredentials {
+  credentials?: PolarisCredentials;
+}
+
+// Privilèges Polaris couvrant chaque privilège ParusDB sur un catalogue.
+// `manage` = CATALOG_MANAGE_CONTENT (englobe table/namespace + data).
+export const CATALOG_GRANT_PRIVILEGES = {
+  read: [
+    "CATALOG_READ_PROPERTIES",
+    "NAMESPACE_LIST",
+    "NAMESPACE_READ_PROPERTIES",
+    "TABLE_LIST",
+    "TABLE_READ_PROPERTIES",
+    "TABLE_READ_DATA",
+  ],
+  write: [
+    "CATALOG_READ_PROPERTIES",
+    "NAMESPACE_LIST",
+    "NAMESPACE_READ_PROPERTIES",
+    "NAMESPACE_CREATE",
+    "NAMESPACE_WRITE_PROPERTIES",
+    "TABLE_LIST",
+    "TABLE_READ_PROPERTIES",
+    "TABLE_CREATE",
+    "TABLE_WRITE_PROPERTIES",
+    "TABLE_READ_DATA",
+    "TABLE_WRITE_DATA",
+  ],
+  manage: ["CATALOG_MANAGE_CONTENT"],
+} as const;
+
+export type ParusPrivilege = keyof typeof CATALOG_GRANT_PRIVILEGES;
+
+// Privilèges Polaris effectifs pour un ensemble de privilèges ParusDB.
+export function polarisCatalogPrivileges(
+  privileges: ParusPrivilege[],
+): string[] {
+  const set = new Set<string>();
+  for (const p of privileges) {
+    for (const pol of CATALOG_GRANT_PRIVILEGES[p]) set.add(pol);
+  }
+  return [...set];
+}
+
+export async function createPolarisPrincipal(
+  name: string,
+): Promise<PolarisCredentials> {
+  const res = await management<PrincipalWithCredentials>("/principals", {
+    method: "POST",
+    body: { principal: { name, type: "SERVICE", properties: {} } },
+  });
+  if (!res.ok || !res.data?.credentials) {
+    if (res.status === 409) {
+      throw new Error(
+        `Un principal Polaris nommé « ${name} » existe déjà.`,
+      );
+    }
+    throw new Error(
+      `La création du compte applicatif Polaris a échoué (HTTP ${res.status}) : ${res.raw.slice(0, 300)}`,
+    );
+  }
+  return res.data.credentials;
+}
+
+// Nouveau secret (l'ancien est invalidé). Le clientId reste inchangé —
+// seul le clientSecret est régénéré.
+export async function resetPolarisCredentials(
+  name: string,
+): Promise<PolarisCredentials> {
+  const res = await management<PrincipalWithCredentials>(
+    `/principals/${encodeURIComponent(name)}/reset`,
+    { method: "POST", body: {} },
+  );
+  if (!res.ok || !res.data?.credentials) {
+    throw new Error(
+      `La réinitialisation des credentials a échoué (HTTP ${res.status}) : ${res.raw.slice(0, 300)}`,
+    );
+  }
+  return res.data.credentials;
+}
+
+export async function deletePolarisPrincipal(name: string): Promise<void> {
+  const res = await management(`/principals/${encodeURIComponent(name)}`, {
+    method: "DELETE",
+  });
+  // 404 : principal déjà absent — suppression idempotente.
+  if (!res.ok && res.status !== 404) {
+    throw new Error(
+      `La suppression du principal Polaris a échoué (HTTP ${res.status}) : ${res.raw.slice(0, 300)}`,
+    );
+  }
+}
+
+async function ensurePrincipalRole(name: string): Promise<void> {
+  const res = await management("/principal-roles", {
+    method: "POST",
+    body: { principalRole: { name, properties: {} } },
+  });
+  if (!res.ok && res.status !== 409) {
+    throw new Error(
+      `La création du rôle Polaris « ${name} » a échoué (HTTP ${res.status}) : ${res.raw.slice(0, 300)}`,
+    );
+  }
+}
+
+export async function assignPrincipalRole(
+  principal: string,
+  principalRole: string,
+): Promise<void> {
+  const res = await management(
+    `/principals/${encodeURIComponent(principal)}/principal-roles`,
+    { method: "PUT", body: { principalRole: { name: principalRole } } },
+  );
+  if (!res.ok && res.status !== 201 && res.status !== 200) {
+    throw new Error(
+      `L'attribution du rôle « ${principalRole} » au compte applicatif a échoué (HTTP ${res.status}).`,
+    );
+  }
+}
+
+export async function revokePrincipalRole(
+  principal: string,
+  principalRole: string,
+): Promise<void> {
+  const res = await management(
+    `/principals/${encodeURIComponent(principal)}/principal-roles/${encodeURIComponent(principalRole)}`,
+    { method: "DELETE" },
+  );
+  if (!res.ok && res.status !== 404) {
+    throw new Error(
+      `Le retrait du rôle « ${principalRole} » a échoué (HTTP ${res.status}).`,
+    );
+  }
+}
+
+// Nom du catalog-role dédié au miroir d'un rôle ParusDB dans un catalogue.
+export function mirrorCatalogRoleName(roleKey: string): string {
+  return `${roleKey}_access`;
+}
+
+async function ensureCatalogRole(
+  catalog: string,
+  catalogRole: string,
+): Promise<void> {
+  const res = await management(
+    `/catalogs/${encodeURIComponent(catalog)}/catalog-roles`,
+    { method: "POST", body: { catalogRole: { name: catalogRole, properties: {} } } },
+  );
+  if (!res.ok && res.status !== 409) {
+    throw new Error(
+      `La création du rôle de catalogue « ${catalogRole} » a échoué (HTTP ${res.status}) : ${res.raw.slice(0, 300)}`,
+    );
+  }
+}
+
+// Alignement des grants d'un catalog-role sur un ensemble de privilèges
+// Polaris (PUT par privilège à ajouter, POST = révocation d'un privilège).
+async function setCatalogRoleGrants(
+  catalog: string,
+  catalogRole: string,
+  privileges: string[],
+): Promise<void> {
+  const res = await management<{ grants?: { privilege?: string }[] }>(
+    `/catalogs/${encodeURIComponent(catalog)}/catalog-roles/${encodeURIComponent(catalogRole)}/grants`,
+  );
+  if (!res.ok) {
+    throw new Error(
+      `La lecture des grants Polaris a échoué (HTTP ${res.status}).`,
+    );
+  }
+  const current = new Set(
+    (res.data?.grants ?? [])
+      .map((g) => g.privilege)
+      .filter((p): p is string => Boolean(p)),
+  );
+  for (const privilege of privileges) {
+    if (!current.has(privilege)) {
+      const add = await management(
+        `/catalogs/${encodeURIComponent(catalog)}/catalog-roles/${encodeURIComponent(catalogRole)}/grants`,
+        { method: "PUT", body: { grant: { type: "catalog", privilege } } },
+      );
+      if (!add.ok) {
+        throw new Error(
+          `L'attribution du privilège ${privilege} a échoué (HTTP ${add.status}).`,
+        );
+      }
+      current.add(privilege);
+    }
+  }
+  for (const privilege of [...current]) {
+    if (!privileges.includes(privilege)) {
+      const revoke = await management(
+        `/catalogs/${encodeURIComponent(catalog)}/catalog-roles/${encodeURIComponent(catalogRole)}/grants`,
+        { method: "POST", body: { grant: { type: "catalog", privilege } } },
+      );
+      if (!revoke.ok) {
+        throw new Error(
+          `La révocation du privilège ${privilege} a échoué (HTTP ${revoke.status}).`,
+        );
+      }
+    }
+  }
+}
+
+async function assignCatalogRoleToPrincipalRole(
+  principalRole: string,
+  catalog: string,
+  catalogRole: string,
+): Promise<void> {
+  const res = await management(
+    `/principal-roles/${encodeURIComponent(principalRole)}/catalog-roles/${encodeURIComponent(catalog)}`,
+    { method: "PUT", body: { catalogRole: { name: catalogRole } } },
+  );
+  if (!res.ok && res.status !== 201 && res.status !== 200) {
+    throw new Error(
+      `L'attribution du rôle de catalogue sur « ${catalog} » a échoué (HTTP ${res.status}).`,
+    );
+  }
+}
+
+async function revokeCatalogRoleFromPrincipalRole(
+  principalRole: string,
+  catalog: string,
+  catalogRole: string,
+): Promise<void> {
+  const res = await management(
+    `/principal-roles/${encodeURIComponent(principalRole)}/catalog-roles/${encodeURIComponent(catalog)}/${encodeURIComponent(catalogRole)}`,
+    { method: "DELETE" },
+  );
+  if (!res.ok && res.status !== 404 && res.status !== 204) {
+    throw new Error(
+      `Le retrait du rôle de catalogue sur « ${catalog} » a échoué (HTTP ${res.status}).`,
+    );
+  }
+}
+
+// Miroir complet de l'accès aux catalogues pour un rôle ParusDB : un
+// catalog-role dédié par catalogue porte les privilèges Polaris issus des
+// grants du rôle (iam.grants, resource_type 'catalog'), assigné au
+// principal-role portant le nom du rôle. Tous les principals Polaris avec ce
+// rôle en bénéficient. Les catalogues sans grant sont retirés.
+export async function syncRoleCatalogAccess(input: {
+  roleKey: string;
+  catalogGrants: { catalog: string; privileges: ParusPrivilege[] }[];
+}): Promise<{ ok: boolean; error?: string }> {
+  const catalogRole = mirrorCatalogRoleName(input.roleKey);
+  const desired = new Map(
+    input.catalogGrants.map((g) => [g.catalog, g.privileges]),
+  );
+  try {
+    await ensurePrincipalRole(input.roleKey);
+    // L'ensemble des catalogues réels couvre les ajouts ET les retraits.
+    const catalogs = await listCatalogs();
+    for (const catalog of catalogs) {
+      const privileges = desired.get(catalog.name);
+      if (privileges && privileges.length > 0) {
+        await ensureCatalogRole(catalog.name, catalogRole);
+        await setCatalogRoleGrants(
+          catalog.name,
+          catalogRole,
+          polarisCatalogPrivileges(privileges),
+        );
+        await assignCatalogRoleToPrincipalRole(
+          input.roleKey,
+          catalog.name,
+          catalogRole,
+        );
+      } else {
+        await revokeCatalogRoleFromPrincipalRole(
+          input.roleKey,
+          catalog.name,
+          catalogRole,
+        );
+      }
+    }
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "La synchronisation Polaris a échoué.",
+    };
+  }
+}
