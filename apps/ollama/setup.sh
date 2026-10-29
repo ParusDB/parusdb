@@ -110,7 +110,10 @@ echo ""
 DEFAULT_MODEL=$(get_env_value OLLAMA_DEFAULT_MODEL)
 if [ -n "$DEFAULT_MODEL" ]; then
     echo "===> Test de génération sur '$DEFAULT_MODEL' (premier chargement : peut prendre quelques dizaines de secondes)..."
-    docker compose exec -T ollama ollama run "$DEFAULT_MODEL" "Réponds uniquement par le mot OK."
+    # stdin redirigé sur /dev/null : sans TTY, `ollama run` attend un EOF sur
+    # stdin avant d'envoyer la requête — le pipe de `exec -T` ne se ferme
+    # jamais et le setup reste bloqué indéfiniment.
+    docker compose exec -T ollama ollama run "$DEFAULT_MODEL" "Réponds uniquement par le mot OK." < /dev/null
     echo ""
     echo "===> Modèle chargé en mémoire (colonne GPU = part sur la carte) :"
     docker compose exec -T ollama ollama ps
