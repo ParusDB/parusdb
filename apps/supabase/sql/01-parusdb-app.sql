@@ -227,6 +227,13 @@ $$;
 -- Décision d'accès central : vrai si le rôle ACTIF du compte est admin
 -- (hérite de tout), propriétaire de la ressource (owner_role_id), ou bénéficie
 -- d'un grant couvrant le privilège demandé (hiérarchie des privilèges).
+-- PLPGSQL et non SQL : une fonction SQL est validée à la création, or les
+-- tables lakehouse.catalog_registry / agents.agents / connectors.pipelines
+-- sont créées plus bas dans ce fichier — sur une base fraîche (reset +
+-- setup), la validation à la création ferait échouer tout le script
+-- (transaction unique : rien ne serait appliqué, PostgREST resterait
+-- unhealthy faute de schémas). PLPGSQL ne valide le corps qu'à la première
+-- exécution, quand les tables existent.
 create or replace function iam.has_grant(
   p_user uuid,
   p_resource_type text,
@@ -234,47 +241,58 @@ create or replace function iam.has_grant(
   p_privilege text
 )
 returns boolean
-language sql
+language plpgsql
 stable
 security definer
 set search_path = iam, pg_catalog
 as $$
-  select iam.is_admin(p_user)
-  or (
-    iam.active_role_id(p_user) is not null
-    and (
-      case p_resource_type
-        when 'catalog' then exists (
-          select 1
-            from lakehouse.catalog_registry cr
-           where cr.catalog_name = p_resource_id
-             and cr.owner_role_id = iam.active_role_id(p_user)
-        )
-        when 'agent' then exists (
-          select 1
-            from agents.agents a
-           where a.id::text = p_resource_id
-             and a.owner_role_id = iam.active_role_id(p_user)
-        )
-        when 'pipeline' then exists (
-          select 1
-            from connectors.pipelines p
-           where p.id::text = p_resource_id
-             and p.owner_role_id = iam.active_role_id(p_user)
-        )
-        else false
-      end
-      or exists (
-        select 1
-          from iam.grants g
-          cross join unnest(g.privileges) gp
-         where g.role_id = iam.active_role_id(p_user)
-           and g.resource_type = p_resource_type
-           and g.resource_id = p_resource_id
-           and iam.privilege_rank(gp) >= iam.privilege_rank(p_privilege)
-      )
-    )
+declare
+  v_role uuid;
+begin
+  if iam.is_admin(p_user) then
+    return true;
+  end if;
+
+  v_role := iam.active_role_id(p_user);
+  if v_role is null then
+    return false;
+  end if;
+
+  -- Propriétaire du rôle actif : tous les privilèges.
+  if p_resource_type = 'catalog' and exists (
+       select 1
+         from lakehouse.catalog_registry cr
+        where cr.catalog_name = p_resource_id
+          and cr.owner_role_id = v_role
+     ) then
+    return true;
+  elsif p_resource_type = 'agent' and exists (
+       select 1
+         from agents.agents a
+        where a.id::text = p_resource_id
+          and a.owner_role_id = v_role
+     ) then
+    return true;
+  elsif p_resource_type = 'pipeline' and exists (
+       select 1
+         from connectors.pipelines p
+        where p.id::text = p_resource_id
+          and p.owner_role_id = v_role
+     ) then
+    return true;
+  end if;
+
+  -- Grant explicite couvrant le privilège demandé (hiérarchie).
+  return exists (
+    select 1
+      from iam.grants g
+      cross join unnest(g.privileges) gp
+     where g.role_id = v_role
+       and g.resource_type = p_resource_type
+       and g.resource_id = p_resource_id
+       and iam.privilege_rank(gp) >= iam.privilege_rank(p_privilege)
   );
+end;
 $$;
 
 revoke all on function iam.is_admin(uuid) from public;

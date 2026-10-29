@@ -116,9 +116,14 @@ log "[supabase] démarrage de la stack..."
 echo "    stack démarrée et saine"
 
 log "[supabase] application du schéma applicatif (01-parusdb-app.sql)..."
-docker exec -i supabase-db psql -U supabase_admin -d postgres \
-    < "apps/supabase/sql/01-parusdb-app.sql" >/dev/null
-echo "    schéma applicatif applié (idempotent)"
+# ON_ERROR_STOP + code de sortie vérifié : un échec silencieux laisserait la
+# base sans schémas métier et PostgREST unhealthy (incident réel).
+if ! docker exec -i supabase-db psql -U supabase_admin -d postgres \
+        -v ON_ERROR_STOP=1 \
+        < "apps/supabase/sql/01-parusdb-app.sql" >/dev/null; then
+    fail "l'application du schéma applicatif a échoué — installation interrompue"
+fi
+echo "    schéma applicatif appliqué (idempotent)"
 
 log "[supabase] exposition PostgREST des schémas métier (PGRST_DB_SCHEMAS)..."
 # Le .env régénéré par un reset ne contient que public,graphql_public : sans

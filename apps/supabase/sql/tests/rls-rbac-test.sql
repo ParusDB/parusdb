@@ -21,20 +21,40 @@ insert into auth.users (id, aud, role, email, email_confirmed_at, raw_app_meta_d
 values ('00000000-0000-4000-8000-000000000001','authenticated','authenticated','rls-owner@test.local',now(),'{}','{}'),
        ('00000000-0000-4000-8000-000000000002','authenticated','authenticated','rls-member@test.local',now(),'{}','{}');
 
+-- Le trigger on_auth_user_created attribue `admin` au PREMIER compte d'une
+-- base fraîche : sur un reset + setup, u1 l'absorberait et fausserait les
+-- assertions (is_admin = capacité du compte, quelle que soit le rôle actif).
+-- Normalisation : les users de test ne portent QUE public (+ sales_test).
+delete from iam.user_active_role where user_id in ('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000002');
+delete from iam.user_roles where user_id in ('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000002');
+
 -- Le trigger on_auth_user_created crée le profil, attribue le rôle public
 -- (non-premier compte) et le pose en rôle actif : pas de fixture manuelle ici.
 -- Les deux users de test portent en plus le rôle sales_test.
 insert into iam.user_roles (user_id, role_id)
+select u.id, r.id from auth.users u join iam.roles r on r.key = 'public'
+where u.id in ('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000002');
+insert into iam.user_roles (user_id, role_id)
 select u.id, r.id from auth.users u join iam.roles r on r.key = 'sales_test'
-where u.id in ('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000002')
-on conflict (user_id, role_id) do nothing;
+where u.id in ('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000002');
+insert into iam.user_active_role (user_id, role_id)
+select u.id, r.id from auth.users u join iam.roles r on r.key = 'public'
+where u.id in ('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000002');
 
 -- catalogue de test, possédé par le rôle admin
 insert into lakehouse.catalog_registry (catalog_name, description, owner_role_id, created_by)
 select 'test_catalog_rls', 'test', r.id, null from iam.roles r where r.key = 'admin'
 on conflict (catalog_name) do update set owner_role_id = excluded.owner_role_id;
 
-select ur.user_id as admin_uid from iam.user_roles ur join iam.roles r on r.id = ur.role_id where r.key = 'admin' limit 1 \gset
+-- Compte admin pour T7/T8b : sur une base fraîche (onboarding non fait),
+-- aucun compte ne porte le rôle admin — la section est SAUTÉE, sinon \gset
+-- ne définit rien et :'admin_uid' plante en syntax error.
+select exists (
+  select 1
+    from iam.user_roles ur
+    join iam.roles r on r.id = ur.role_id
+   where r.key = 'admin'
+) as has_admin \gset
 
 -- ---------------------------------------------------------------------------
 -- 1. Rôle public : aucun accès (le user ne voit ni catalogue ni agent)
@@ -207,6 +227,8 @@ commit;
 -- ---------------------------------------------------------------------------
 -- 7. Admin : hérite de tout, indépendamment du rôle actif
 -- ---------------------------------------------------------------------------
+\if :has_admin
+select ur.user_id as admin_uid from iam.user_roles ur join iam.roles r on r.id = ur.role_id where r.key = 'admin' limit 1 \gset
 begin;
 set role authenticated;
 select set_config('request.jwt.claims', '{"sub":"' || :'admin_uid' || '","role":"authenticated"}', false);
@@ -237,6 +259,9 @@ select 'app-user-test', 'test', id, 'client-id-test' from iam.roles where key = 
 select 'T8b app_user créé par l admin (attendu 1)' as test, count(*) as n from iam.app_users;
 reset role;
 commit;
+\else
+select 'T7/T8b sautés : base fraîche sans compte admin (onboarding non fait) — relancer après création du compte' as test;
+\endif
 
 -- ---------------------------------------------------------------------------
 -- 9. Nettoyage des fixtures
