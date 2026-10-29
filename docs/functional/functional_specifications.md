@@ -663,8 +663,12 @@ formulaire d'agent.
 ### Évolutions Futures
 
 - [ ]  Intégration de nouveaux connecteurs
+- [ ]  Durcissement Trino : HTTPS + authentification par mot de passe +
+       access control généré depuis les grants RBAC (refus réel sur le chemin
+       SQL — spécification de référence :
+       `docs/functional/rbac_refonte.md` §9)
 - [ ]  Fonctionnalités avancées de gouvernance
 
 ---
 
-*Dernière mise à jour : 28 octobre 2026*
+*Dernière mise à jour : 29 octobre 2026*

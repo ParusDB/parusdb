@@ -1,10 +1,12 @@
-# Refonte RBAC & Utilisateurs Applicatifs — Spécification de l'évolution
+# Refonte RBAC & Utilisateurs Applicatifs — Spécification de référence
 
 > Branche : `feat/rbac_remake`
-> Statut : spécification de référence de l'évolution. La spec fonctionnelle
-> (`functional_specifications.md`, §7 « Rôles et Permissions ») sera mise à jour
-> pour refléter ce modèle une fois l'évolution livrée ; en cas de divergence
-> pendant le développement, ce document fait foi pour la brique RBAC.
+> Statut : **LIVRÉE** (commits `9105c44` → `1d71a03`, voir §8) et vérifiée
+> (lint/tsc/build, tests RLS, e2e chat, `sh run.sh verify` dlt, installation
+> complète rejouée sur base fraîche après reset).
+> Ce document reste la source de vérité de la brique RBAC (le §9 spécifie
+> l'évolution suivante : durcissement Trino) ; en cas de divergence, il fait
+> foi pour cette brique.
 
 ---
 
@@ -261,14 +263,15 @@ Contenu :
 
 ---
 
-## 7. Limitations assumées (à documenter dans la PR)
+## 7. Limitations assumées
 
 1. **RBAC applicatif vs RBAC réel** : le RBAC des catalogues s'applique à
-   l'application (Trino est interrogé sous un utilisateur unique) ; le RBAC
-   réel Polaris ne protège que le chemin Iceberg REST (Spark, Flink, pyiceberg,
-   Airbyte, comptes applicatifs). **Trino reste sans authentification** : un
-   outil connecté en direct à Trino voit tous les catalogues — le durcissement
-   (password authenticator + access control Trino) est un chantier séparé.
+   l'application (l'éditeur SQL exige Lecture/Écriture via `iam.has_grant`,
+   requêtes exécutées sous le compte de service du BFF) ; le RBAC réel
+   Polaris protège le chemin Iceberg REST (Spark, Flink, pyiceberg, Airbyte,
+   comptes applicatifs — 403 vérifié). **Trino reste sans authentification** :
+   un outil connecté en direct au port Trino voit tous les catalogues —
+   le durcissement Trino est spécifié au §9 et **décidé (option A)**.
 2. La synchronisation des grants vers Polaris est éventuellement cohérente.
 3. Les conversations partagées sont en lecture seule (pas d'envoi de message
    dans une conversation partagée).
@@ -277,18 +280,206 @@ Contenu :
 
 ---
 
-## 8. Étapes de livraison (une PR par étape sur `feat/rbac_remake`)
+## 8. État de livraison — inventaire de ce qui est en place
 
-1. **SQL** : tables, fonctions, RLS, seed, migration — vérifié par requêtes de
-   test RLS.
-2. **Session & pages** : `lib/session.ts`, fin de `requirePermission`,
-   visibilité par rôle actif sur toutes les pages/actions.
-3. **Chat** : partage de conversation (lecture seule).
-4. **`/admin/roles`** : éditeur de rôles et de grants.
-5. **`/admin/users`** : onglet Applicatifs + lib Polaris (principals,
-   credentials, miroir des grants).
-6. **`/admin/informations`** : page de connexion des outils.
-7. **Docs & env** : spec fonctionnelle §7 + §Administration, AGENTS.md,
-   synchronisation des clés S3, `PARUSDB_PUBLIC_HOST`.
-8. **Vérification** : `npm run lint`, `npx tsc --noEmit`, `npm run build`,
-   test e2e chat, `sh run.sh verify` dlt, tests RLS rejoués.
+### 8.1 Base de données (`apps/supabase/sql/01-parusdb-app.sql`, idempotent)
+
+- **Tables** : `iam.grants` (PK role_id × resource_type × resource_id,
+  privileges `text[]` ⊆ {read, write, manage}) ; `iam.app_users` (clientId
+  sans secret, `credentials_rotated_at`, FK rôle `ON DELETE RESTRICT`) ;
+  `chat.conversation_shares`.
+- **Propriété** : `owner_role_id` (FK `ON DELETE RESTRICT` vers `iam.roles`)
+  sur `agents.agents`, `connectors.pipelines`, `lakehouse.catalog_registry` ;
+  posées **tôt** dans le fichier (les fonctions y font référence).
+- **Supprimé** : `iam.roles.permissions`, `lakehouse.catalog_access`,
+  `iam.has_permission`.
+- **Fonctions** : `iam.is_admin`, `iam.privilege_rank`,
+  `iam.has_grant` — **PLPGSQL** (leçon d'incident : une fonction SQL est
+  validée à la création et référençait des tables créées plus bas ; sur base
+  fraîche la transaction unique avortait, PostgREST restait unhealthy),
+  `chat.can_manage_share` (SECURITY DEFINER — les politiques des partages ne
+  doivent JAMAIS référencer `chat.conversations` directement : récursion RLS).
+- **RLS** entièrement réécrite sur le rôle actif : listes filtrées par
+  `iam.has_grant`, conversations partagées lisibles mais non modifiables
+  (écriture/suppression réservées au propriétaire), **destination
+  d'ingestion exigeant `write` sur le catalogue dans le WITH CHECK** des
+  pipelines, suppression = `manage`.
+- **Trigger** `on_auth_user_created` : `admin` au premier compte, `public`
+  ensuite (l'onboarding attribue explicitement le rôle).
+- **Seed** `02-lakehouse-catalogs.sql` : descriptions des catalogues
+  d'installation + propriété `admin` (backfill `owner_role_id`) — plus de
+  `catalog_access`.
+- **Migration** : users technique/metier → `public` ; objets existants →
+  propriété `admin` (redistribution manuelle ensuite).
+- **Tests** : `apps/supabase/sql/tests/rls-rbac-test.sql` — 26 assertions,
+  rejouable sur base fraîche (rôle admin du trigger neutralisé pour les
+  fixtures ; section admin T7/T8b sautée tant qu'aucun compte n'existe).
+- `setup.sh` racine : application du schéma en fail-fast (`ON_ERROR_STOP` +
+  code de sortie) — un échec ne s'affiche plus comme un succès.
+
+### 8.2 Serveur TypeScript (`apps/nextjs`)
+
+- `lib/session.ts` : `requireSession`, `requireAdmin`, `requireGrant` /
+  `hasGrant` (RPC `iam.has_grant`, schéma `iam` explicite) — fin de
+  `requirePermission`.
+- `lib/rbac.ts` : grants du rôle actif, calcul des capacités par objet,
+  catalogues lisibles / destinations d'ingestion (`write`).
+- `lib/permissions.ts` : métadonnées ressources × privilèges (labels FR).
+- `lib/polaris.ts` : principals Polaris (création / **`/reset`** /
+  suppression — secret retourné une seule fois), principal-roles,
+  catalog-roles, grants (spec 1.8 : **un PUT par privilège singulier**),
+  `syncRoleCatalogAccess` (miroir complet, ajouts ET retraits).
+- `lib/connection-info.ts` : adresses publiques (Trino, Polaris REST +
+  OAuth2, S3 path-style) dérivées de `PARUSDB_PUBLIC_HOST` (défaut
+  localhost) ; clés S3 optionnelles.
+- Pages/actions : création pose `owner_role_id` = rôle actif ; éditeur SQL :
+  Lecture pour un SELECT (`select|show|describe|desc|explain` en tête),
+  Écriture pour toute requête modifiante ; listes et boutons selon les
+  privilèges effectifs ; destination de pipeline limitée aux catalogues
+  `write`.
+
+### 8.3 Interface
+
+- Sidebar : menus fonctionnels visibles par tous, contenu filtré par rôle
+  actif ; Administration si rôle `admin` (ordre : Informations, Utilisateurs,
+  Rôles, Fournisseurs LLM) ; sélecteur de rôle actif conservé ; actions
+  contextuelles selon les privilèges.
+- `/admin/roles` : rôles + **éditeur de grants** (onglets Catalogues /
+  Agents IA / Pipelines × Lecture / Écriture / Gestion ; hiérarchie à la
+  saisie et serveur ; resynchronisation Polaris best effort avec
+  avertissement).
+- `/admin/users` : onglets **Humains** (rôles multiples, rôle actif toujours
+  valide après retrait) / **Applicatifs** (création → credentials Polaris
+  affichées une fois, réinitialisation, changement de rôle avec resync,
+  suppression avec ressaisie ; rôle `admin` refusé).
+- `/chat/[id]` : bouton Partager à côté du crayon, partages révocables,
+  conversations partagées en lecture seule (badge, composer masqué, refus
+  403 côté route de stream).
+- `/admin/informations` : avertissement réseau privé, sélecteurs compte
+  applicatif × catalogue (limités aux droits du rôle), sections dbt / JDBC /
+  Power BI / Spark / Flink / pyiceberg / Airbyte avec snippets copiables
+  préremplis du scope `PRINCIPAL_ROLE:<rôle>` — le secret apparaît en
+  marqueur, jamais stocké ni réaffiché.
+
+### 8.4 Miroir Polaris — pièges API validés en live (1.8.0)
+
+- Création : `POST /api/management/v1/principals` →
+  `{principal, credentials}` (secret UNE fois) ; **rotation : `/reset`**
+  (`Content-Type: application/json` requis même avec body vide) — `/rotate`
+  est refusé au client root (bug #624) ;
+- grants : **un PUT par privilège singulier** (`{grant:{type:"catalog",
+  privilege:"…"}}`) ; POST sur le même chemin = RÉVOCATION ;
+- assignations par **PUT sur la collection avec body**
+  (`/principals/{n}/principal-roles`, `/principal-roles/{r}/catalog-roles/{cat}`) ;
+- mapping privilèges : Lecture → `CATALOG_READ_PROPERTIES`, `NAMESPACE_LIST`,
+  `NAMESPACE_READ_PROPERTIES`, `TABLE_LIST`, `TABLE_READ_PROPERTIES`,
+  `TABLE_READ_DATA` ; Écriture → + `NAMESPACE_CREATE`,
+  `NAMESPACE_WRITE_PROPERTIES`, `TABLE_CREATE`, `TABLE_WRITE_PROPERTIES`,
+  `TABLE_WRITE_DATA` ; Gestion → `CATALOG_MANAGE_CONTENT` ;
+- conventions : principal = nom du compte applicatif, principal-role = key
+  du rôle ParusDB, catalog-role = `<roleKey>_access` (décrit au §4).
+
+### 8.5 Documentation & environnement
+
+- Spec fonctionnelle §7 + menus + §Administration à jour ; README racine,
+  `apps/nextjs/README.md`, `apps/trino/README.md` alignés ; AGENTS.md
+  §6/§7/§9/§10 à jour.
+- `setup.sh` : sync `S3_ACCESS_KEY_ID`/`S3_SECRET_ACCESS_KEY` vers
+  `.env.local` ; `.env.example` documenté (`PARUSDB_PUBLIC_HOST`, clés S3).
+
+---
+
+## 9. Évolution suivante — Durcissement Trino (option A, VALIDÉE)
+
+> Objectif : rendre le refus réel sur le **chemin Trino** (dbt, Power BI,
+> clients JDBC/ODBC), qui aujourd'hui contourne le RBAC. Décidé : HTTPS +
+> password file + file access control **généré depuis `iam.grants`** —
+> l'admin ne change pas d'UX, Trino devient un artefact dérivé (comme les
+> bindings de catalogues). Principe : **les humains ne reçoivent pas de
+> compte Trino** — ils passent par l'UI (le BFF applique `iam.has_grant`
+> côté éditeur SQL) ; seuls les comptes applicatifs parlent à Trino.
+
+### 9.1 Briques Trino (config vérifiée sur la doc officielle)
+
+| Brique | Configuration |
+|---|---|
+| **HTTPS** | `http-server.https.enabled=true`, `http-server.https.port=8443`, keystore self-signed généré au setup (`apps/trino/setup.sh`, chemin/secret dans `.env` — jamais commités). Obligatoire : Trino refuse le password sur HTTP. |
+| **Authentification** | `http-server.authentication.type=PASSWORD` ; `etc/password-authenticator.properties` : `password-authenticator.name=file`, `file.password-file`, `file.refresh-period` (défaut 5 s — **rechargement sans redémarrage**). Format : `user:bcrypt` (`$2y$`, cost ≥ 8, `htpasswd -B -C 10`). |
+| **Access control** | `etc/access-control.properties` : `access-control.name=file`, `security.config-file=…`, `security.refresh-period` (rechargement sans redémarrage). JSON de règles : `catalogs` (`user`/`catalog` regex + `allow: all|read-only|none`), `schemas` et `tables` (`privileges`: `SELECT`, `INSERT`, `DELETE`, `UPDATE`, `OWNERSHIP`). **Première règle qui matche s'applique ; sans correspondance = refus.** |
+
+### 9.2 Génération depuis `iam.grants` (source de vérité unique)
+
+Un compte applicatif `X` de rôle `R` reçoit **à sa création** : ses
+credentials Polaris (existant) **ET** une ligne `X:<bcrypt>` dans le fichier
+de mots de passe Trino. Le JSON de règles est régénéré à chaque modification
+de grants (même déclencheur que la resync Polaris) :
+
+| Grant ParusDB sur le catalogue C | Règles Trino pour l'utilisateur X |
+|---|---|
+| `read` | `catalogs`: `{user: X, catalog: C, allow: read-only}` + `tables`: `SELECT` sur `C.*.*` |
+| `write` | `catalogs`: `allow: all` + `tables`: `SELECT`, `INSERT`, `DELETE`, `UPDATE` sur `C.*.*` |
+| `manage` | idem write + `schemas`: `OWNERSHIP` sur `C.*` (créer/supprimer des schémas et tables) |
+
+- Le **BFF** garde son compte de service (user `TRINO_USER` + nouveau
+  `TRINO_PASSWORD` env, droits larges : les règles ne le contraignent pas —
+  l'UI applique elle-même `iam.has_grant`).
+- La rotation des credentials applicatives régénère **Polaris + Trino**
+  ensemble (même parcours `/admin/users`).
+- `/admin/informations` : snippets passent de `method: none` à
+  authentification par mot de passe (dbt : `method: ldap` + `cert` /
+  `TRINO_SSL_CERT` ; Power BI : `AllowSelfSignedServerCert=1` ; JDBC :
+  `SSL=true`). Port public Trino : 8443 (via `PARUSDB_PUBLIC_HOST`).
+- Révocation d'un grant → règles régénérées → refus immédiat (refresh
+  périodique, sans redémarrage Trino).
+
+### 9.3 Limites assumées (inchangées par rapport à l'analyse)
+
+1. Granularité **schéma/table** seulement : masques de colonnes et filtres
+   de lignes = Trino/Starburst Enterprise uniquement. La granularité fine
+   (agents, chat, partages) reste portée par le RBAC applicatif.
+2. HTTPS self-signed : friction client documentée dans
+   `/admin/informations`.
+3. Deux secrets par compte applicatif (Polaris + Trino), créés et rotés
+   ensemble dans le même parcours.
+4. `SHOW CATALOGS` reste autorisé (visible) mais l'accès aux données est
+   refusé par les règles — à vérifier en dev et documenter si besoin.
+
+### 9.4 Points d'implémentation à traiter en dev
+
+- `apps/trino/docker-compose.yml` + `setup.sh` : port 8443 exposé,
+  génération du keystore (openssl/keytool), écriture de
+  `etc/config.properties` (auth), `password-authenticator.properties`,
+  `access-control.properties` ; fichiers mots de passe + règles générés par
+  l'app (répertoire dédié, monté en bind comme `TRINO_CATALOG_DIR`).
+- `lib/polaris.ts` / actions admin : à la création/rotation/suppression
+  d'un compte applicatif et à chaque `setRoleGrant` catalogue → générer
+  password.db (bcrypt) + rules.json.
+- `lib/trino.ts` : trino-js-client en HTTPS + basic auth
+  (`server: https://…`, credentials `TRINO_USER`/`TRINO_PASSWORD`) —
+  vérifier le support TLS self-signed du client Node.
+- La suppression de compte applicatif retire sa ligne du password.db
+  (révocation immédiate).
+- Tests : 403 réel sur un catalogue non accordé via un compte applicatif
+  Trino ; requête SELECT/DDL conforme au mapping ; refresh sans redémarrage.
+- Vérification complète : `npm run lint`, `npx tsc --noEmit`,
+  `npm run build`, tests RLS rejoués, test e2e chat (`apps/ollama
+  sh run.sh test`), `sh run.sh verify` dlt.
+
+---
+
+## 10. Reste à faire — checklist de passation
+
+- [ ] **Durcissement Trino** (§9, option A validée) — à développer dans une
+      nouvelle conversation sur la même branche ou une suite de PR.
+- [ ] **Passage UI manuel** : `cd apps/nextjs && npm run dev` puis vérifier
+      onboarding (premier compte admin), création d'un compte applicatif,
+      distribution de droits dans /admin/roles, /admin/informations,
+      partage de conversation. (Jamais testé en conditions réelles : le
+      serveur Next n'était pas joignable pendant la refonte.)
+- [ ] **Prompt socle du chat** (`lib/agent-runner.ts`) : renforcer l'indice
+      sur les dates relatives — le modèle boucle parfois sur `INTERVAL
+      'n months'` (syntaxe rejetée par Trino) ; exiger
+      `date_add('month', -3, current_date)` (4 échecs e2e sur 5 runs du
+      29/10, succès au rejeu).
+- [ ] **PR de la branche** `feat/rbac_remake` vers `main` (une PR par étape
+      ou une PR de refonte avec le présent document en description).

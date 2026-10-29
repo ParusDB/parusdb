@@ -547,7 +547,10 @@ revient en Envoy.
   catalogue de leur rôle en **vrais grants Polaris** (catalog-roles +
   privilèges, `syncRoleCatalogAccess` de `lib/polaris.ts`, spec 1.8 :
   privilege **singulier** par grant, `/reset` et non `/rotate` — bug root) ;
-  les secrets ne sont jamais stockés, affichés une seule fois.
+  les secrets ne sont jamais stockés, affichés une seule fois. **Durcissement
+  Trino décidé (option A)** : HTTPS + password file + file access control
+  générés depuis `iam.grants` — spec complète et statut dans
+  `docs/functional/rbac_refonte.md` §9/§10.
 
 ## 11. Chat IA — Ollama + mcp-trino
 
