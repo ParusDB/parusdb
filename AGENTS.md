@@ -56,7 +56,8 @@ et **techniques** (RBAC, catalogues, pipelines).
 Data Lakehouse (Apache Polaris + Trino) et infrastructure du Chat IA (Ollama GPU +
 mcp-trino, test e2e « question → SQL → réponse » validé). **L'interface produit est
 implémentée** (charte « Mésange Charbonnière » : Tailwind v4, tokens, polices) : auth,
-shell + RBAC (rôles applicatifs, rôle actif), Chat IA fonctionnel (diffusion temps
+shell + RBAC à grants (rôles multiples, rôle actif, droits par objet,
+comptes applicatifs pour les outils data), Chat IA fonctionnel (diffusion temps
 réel via Supabase Realtime,
 Ollama + mcp-trino), Agents IA, Data Lakehouse (catalogues Polaris + éditeur SQL
 Trino), Administration (utilisateurs, rôles, fournisseurs LLM). **Les pipelines ELT sont fonctionnels** (apps/dlt : dlt + destination
@@ -201,7 +202,9 @@ lockfiles à la main.
 - Le frontend lit aussi des variables **serveur uniquement** :
   `SUPABASE_SERVICE_ROLE_KEY`, `PARUSDB_ENCRYPTION_KEY`, `TRINO_URL`,
   `TRINO_USER`, `TRINO_CATALOG_DIR`, `POLARIS_API_URL`,
-  `POLARIS_ROOT_CLIENT_ID/SECRET`, `OLLAMA_URL`, `MCP_TRINO_URL`… — la liste
+  `POLARIS_ROOT_CLIENT_ID/SECRET`, `S3_ACCESS_KEY_ID/SECRET_ACCESS_KEY`
+  (affichage masqué dans /admin/informations), `PARUSDB_PUBLIC_HOST`
+  (adresse publique des outils data), `OLLAMA_URL`, `MCP_TRINO_URL`… — la liste
   commentée vit dans `apps/nextjs/.env.example`. Les secrets s'importent des
   `.env` des stacks **sans jamais les afficher** (une commande `sed`/`grep`
   qui copie la valeur aveuglément, pas un copier-coller dans un terminal).
@@ -283,10 +286,11 @@ l'app.
   page silencieusement vide (cas réel : `/chat` affichait « aucune conversation »
   alors que l'embedding cross-schema échouait en 400).
 - **Session et RBAC** : helpers de `lib/session.ts` (`requireSession`,
-  `requirePermission` → redirection serveur) ; les Server Actions sont colocalisées
-  par feature (`actions.ts`), valident les entrées et `revalidate` explicitement.
-  Le client administrateur (`lib/supabase/admin.ts`, service_role) reste serveur
-  uniquement.
+  `requireAdmin` → redirection serveur, `requireGrant`/`hasGrant` →
+  decisions d'accès RBAC via la fonction SQL `iam.has_grant`) ; les Server
+  Actions sont colocalisées par feature (`actions.ts`), valident les entrées
+  et `revalidate` explicitement. Le client administrateur
+  (`lib/supabase/admin.ts`, service_role) reste serveur uniquement.
 - **Onboarding premier démarrage** (`/auth/onboarding`, spec §Onboarding) : tant
   qu'aucun compte n'existe (`lib/onboarding.ts` → `isFirstInstall()`), login et
   sign-up redirigent vers l'onboarding ; la Server Action
@@ -418,17 +422,25 @@ revient en Envoy.
 - **RLS partout** : chaque table d'un schéma exposé (dont `public`) active RLS + politiques
   réelles. `TO authenticated` seul ne suffit pas (BOLA) : toujours combiner avec un prédicat
   d'appartenance. `UPDATE` requiert une politique `SELECT` + `WITH CHECK`. `auth.role()` est
-  déprécié → clause `TO`. Vues : `security_invoker = true`. Les permissions applicatives
-  s'évaluent via `iam.has_permission(auth.uid(), '<permission>')` (SECURITY DEFINER, dans un
-  schéma non exposé à l'anonyme) ; les fonctions SQL standard sont validées **à la
-  création** — les définir après les tables qu'elles lisent.
+  déprécié → clause `TO`. Vues : `security_invoker = true`. Les accès applicatifs
+  s'évaluent via `iam.has_grant(auth.uid(), '<type>', '<id>', '<privilege>')` et
+  `iam.is_admin(auth.uid())` (SECURITY DEFINER, dans un schéma non exposé à l'anonyme) ;
+  les fonctions SQL standard sont validées **à la création** — les définir après les
+  tables qu'elles lisent (et les colonnes `owner_role_id` sont posées tôt dans
+  `01-parusdb-app.sql` pour cette raison). Les politiques des partages de conversation
+  ne doivent JAMAIS référencer `chat.conversations` directement : récursion RLS —
+  passer par `chat.can_manage_share` (SECURITY DEFINER).
 - **Autorisation** : jamais `raw_user_meta_data` (éditable par l'utilisateur) pour des décisions
-  d'autorisation → `raw_app_meta_data`. Les rôles applicatifs ParusDB (admin/technique/métier,
-  rôles multiples, rôle actif) vivent dans des tables applicatives (`iam.roles`,
-  `iam.user_roles`, `iam.user_active_role`), pas dans les JWT claims éditables. Le trigger
-  `iam.on_auth_user_created` attribue `admin` au premier compte créé, `metier` aux suivants — le
-  parcours nominal du premier compte est l'onboarding (§7), qui attribue explicitement le rôle
-  sans lien de confirmation email ; le trigger reste le filet de sécurité des sign-up normaux.
+  d'autorisation → `raw_app_meta_data`. Le RBAC applicatif est un modèle **à grants**
+  calqué sur Polaris (`docs/functional/rbac_refonte.md` = spec de référence) : rôles
+  multiples + **rôle actif** (`iam.roles`, `iam.user_roles`, `iam.user_active_role`),
+  grants par objet (`iam.grants` : catalogues/agents/pipelines × read/write/manage,
+  hiérarchiques), propriété par rôle (`owner_role_id`), `admin` qui hérite de tout,
+  `public` (nouveaux comptes) sans aucun accès. Jamais de permissions statiques de
+  menu. Le trigger `iam.on_auth_user_created` attribue `admin` au premier compte
+  créé, `public` aux suivants — le parcours nominal du premier compte est
+  l'onboarding (§7), qui attribue explicitement le rôle sans lien de
+  confirmation email ; le trigger reste le filet de sécurité des sign-up normaux.
 - **Clés** : côté client uniquement la **publishable key**. La clé `service_role` (et tout
   secret) ne sort jamais du serveur. Jetons d'accès scopés pour scripts/CI.
 - **Vérifier après correction** : une modification SQL se vérifie par une requête de test ;
@@ -522,14 +534,20 @@ revient en Envoy.
   catalogues, le registre applicatif ne porte que description et accès.
 - **Métriques disque** : tailles et nombres de fichiers via les tables metadata Iceberg
   `"<catalog>"."<schéma>"."<table>$files"` (identifiants à quoter).
-- **RBAC applicatif par catalogue** : `lakehouse.catalog_access` (rôles ↔ catalogues,
-  alimenté à la création pour les rôles ayant la permission `lakehouse`). L'éditeur SQL
-  s'exécute sous l'utilisateur Trino unique : le RBAC porte sur la visibilité des
-  catalogues et l'accès aux pages, pas sur des rôles Trino distincts (limitation
-  assumée, à documenter dans les PR concernées). **Fallback** : la page agent lit
-  `catalog_registry` + `catalog_access` ; si `catalog_access` est vide pour le rôle
-  actif (catalogues créés avant la mise en place de la table), tous les catalogues
-  du registre sont proposés.
+- **RBAC applicatif par catalogue** : grants `iam.grants` (resource_type
+  `catalog`) + propriété par rôle (`catalog_registry.owner_role_id`).
+  L'éditeur SQL s'exécute sous l'utilisateur Trino unique : le RBAC porte sur
+  la visibilité des catalogues et l'accès aux pages (requêtes de lecture =
+  `read`, toute requête modifiante = `write`), pas sur des rôles Trino
+  distincts (limitation assumée, à documenter dans les PR concernées). Les
+  helpers de `lib/rbac.ts` filtrent les listes (catalogues lisibles /
+  destination d'ingestion en `write`) et calculent les capacités par objet
+  depuis les grants du rôle actif. Les **utilisateurs applicatifs**
+  (`iam.app_users`, `/admin/users` → Applicatifs) répliquent les grants de
+  catalogue de leur rôle en **vrais grants Polaris** (catalog-roles +
+  privilèges, `syncRoleCatalogAccess` de `lib/polaris.ts`, spec 1.8 :
+  privilege **singulier** par grant, `/reset` et non `/rotate` — bug root) ;
+  les secrets ne sont jamais stockés, affichés une seule fois.
 
 ## 11. Chat IA — Ollama + mcp-trino
 

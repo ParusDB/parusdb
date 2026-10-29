@@ -71,23 +71,31 @@ L'interface propose une **barre de navigation latérale gauche** avec les sectio
 ├─────────────────────────────────────┤
 │ 💬 Chat                             │
 │   ├── Nouveau Chat                  │
-│   └── [Liste des conversations]     │
+│   └── [Conversations accessibles]   │
 │                                     │
 │ 🤖 Agents IA                        │
 │   ├── Nouvel Agent IA               │
-│   └── [Liste des agents]            │
+│   └── [Agents accessibles]          │
 │                                     │
 │ 🗃️ Data Lakehouse                   │
 │                                     │
 │ 🔌 Connecteurs                      │
 │                                     │
 │ ⚙️ Administration                   │
+│   (rôle admin uniquement)           │
+│   ├── Informations                  │
 │   ├── Utilisateurs                  │
+│   │   ├── Humains                   │
+│   │   └── Applicatifs               │
 │   ├── Rôles                         │
 │   └── Fournisseurs LLM              │
 │                                     │
 └─────────────────────────────────────┘
 ```
+
+Tous les menus fonctionnels sont visibles par les comptes authentifiés : le
+**contenu** de chaque section dépend du rôle actif (RBAC à grants, §Rôles
+et Permissions).
 
 **Logo** : le logo officiel occupe le haut du menu latéral (plein cadre) et sert de
 bouton « Accueil » (retour au Chat).
@@ -271,20 +279,46 @@ parusdb.<schéma>.<table>`.
 
 ## 👤 Rôles et Permissions
 
-### Rôles par Défaut
+> Modèle RBAC à **grants**, calqué sur Apache Polaris
+> (`docs/functional/rbac_refonte.md` en fait la spécification de référence
+> détaillée pour cette brique).
 
-| Rôle | Permissions | Description |
-| --- | --- | --- |
-| **Administrateur** | Chat, Agents, Bases, RBAC, Configuration | Accès complet à toutes les fonctionnalités |
-| **Profil Technique** | Chat, Agents, Bases | Accès aux données et configuration des agents |
-| **Profil Métier** | Chat | Accès uniquement au chat avec les agents autorisés |
+### Concepts
+
+| Concept | Description |
+| --- | --- |
+| **Rôle** | Groupement de comptes (ex. `data_engineer`, `sales`), créé par un administrateur |
+| **Rôle actif** | Un compte peut cumuler plusieurs rôles et **sélectionne son rôle actif** ; tous les accès aux objets s'évaluent sur le rôle actif |
+| **Ressource** | Catalogue, agent IA ou pipeline — les objets de la plateforme |
+| **Privilèges** | `Lecture` ⊂ `Écriture` ⊂ `Gestion` (hiérarchiques) |
+| **Propriété** | Le rôle actif qui **crée** un objet en devient propriétaire : tous les comptes portant ce rôle le voient avec tous les droits |
+| **Grant** | Droit distribué par l'administrateur à un rôle sur une ressource (cross-rôle) |
+
+**Rôles système** :
+
+| Rôle | Description |
+| --- | --- |
+| **Administrateur** (`admin`) | Hérite de tout : accès complet implicite à toutes les ressources, quelle que soit la table des grants |
+| **Public** (`public`) | Attribué automatiquement aux nouveaux comptes : **aucun accès aux objets**. Un administrateur leur attribue des rôles via Utilisateurs |
 
 **Fonctionnalités RBAC** :
 
-- ✅ Création de **nouveaux rôles** personnalisés
-- ✅ Attribution de **permissions granulaires**
-- ✅ Association de **multiples rôles** à un utilisateur
-- ✅ **Rôle actif** : Sélection par l'utilisateur dans l'interface
+- ✅ Création de **rôles personnalisés** et distribution des **droits par objet**
+  (matrice Catalogues / Agents IA / Pipelines × Lecture / Écriture / Gestion)
+- ✅ Association de **multiples rôles** à un compte et choix du **rôle actif**
+- ✅ Menus visibles par tous les comptes authentifiés : le **contenu** dépend du
+  rôle actif (listes vides si aucun objet accessible)
+- ✅ Section **Administration** visible et accessible uniquement aux comptes
+  portant le rôle `admin`
+
+**Chats** : les conversations appartiennent au **compte**, pas au rôle. Le
+propriétaire peut **partager** une conversation en **lecture seule** aux
+comptes partageant l'un de ses rôles (bouton « Partager » à côté du crayon de
+renommage), et révoquer l'accès à tout moment.
+
+**Comptes applicatifs** : des comptes service (dbt, Power BI, Airbyte, Spark…)
+connectés au catalogue Iceberg Polaris — voir §Administration / Utilisateurs
+et §Administration / Informations.
 
 ---
 
@@ -463,9 +497,35 @@ soumission, jamais sur la seule décision de la page.
 
 ### ⚙️ Administration
 
+Visible et accessible uniquement aux comptes portant le rôle `admin`.
+
+### Informations
+
+**Objectif** : rendre le lakehouse consommable par des outils data externes
+(dbt, Power BI, Airbyte, Spark, Flink, pyiceberg, clients JDBC/ODBC…), avec
+les credentials d'un **compte applicatif** — jamais le compte root.
+
+**Contenu** :
+
+- Avertissement : connexions en HTTP, Trino sans authentification — usage
+  réservé au réseau privé
+- Sélecteurs : **compte applicatif** × **catalogue** (limité aux catalogues
+  accessibles au rôle du compte)
+- **Adresses de la plateforme** : Trino (hôte/port), Polaris (API Iceberg
+  REST, jetons OAuth2), S3 (endpoint path-style, bucket, région) ; clés S3
+  masquées, révélation ponctuelle
+- **Sections par outil** : snippets copiables préremplis (profiles.yml dbt,
+  URL JDBC, fiche Power BI/ODBC Starburst, configuration Spark, `CREATE
+  CATALOG` Flink, pyiceberg, champs de la destination Airbyte « S3 Data
+  Lake »)
+- Le **client secret** n'est jamais stocké ni réaffiché : il apparaît une
+  seule fois, à la création ou à la réinitialisation du compte applicatif
+
 ### Utilisateurs
 
-**Tableau des utilisateurs** :
+**Deux onglets : Humains / Applicatifs.**
+
+**Humains — tableau des utilisateurs** :
 
 | Champ | Type | Description |
 | --- | --- | --- |
@@ -473,13 +533,37 @@ soumission, jamais sur la seule décision de la page.
 | Nom | Texte | Nom de famille |
 | Email | Email | Identifiant de connexion |
 | Téléphone | Texte | Numéro de contact |
-| Rôles | Tags | Rôles attribués |
+| Rôles | Tags | Rôles attribués (multiples) |
 | Statut | Badge | Actif / Désactivé |
 | Actions | Icônes | Désactiver, Modifier, Supprimer |
 
 **Actions** :
 
-- ➕ **Ajouter** : Création d'un nouvel utilisateur
+- ➕ **Ajouter** : Création d'un nouvel utilisateur (rôle `public` par défaut,
+  ajusté par l'administrateur)
+
+**Applicatifs — comptes service pour les outils data** :
+
+| Champ | Type | Description |
+| --- | --- | --- |
+| Nom | Texte | ex. `airbyte-prod` |
+| Note d'usage | Texte | Rappel de l'outil concerné |
+| Rôle | Sélecteur | Droits répliqués en grants Polaris réels |
+| Client ID | Texte | Identifiant public du principal Polaris |
+| Dernière rotation | Date | Dernière réinitialisation des credentials |
+
+**Actions** :
+
+- ➕ **Créer** : principal Polaris + rôles + miroir des droits du rôle, puis
+  **credentials affichées une seule fois** (copie)
+- 🔑 **Réinitialiser** : nouveau secret (l'ancien est invalidé), affiché une
+  seule fois
+- ✏️ **Changer de rôle** : réassignation + resynchronisation Polaris
+- 🗑️ **Supprimer** : confirmation par ressaisie du nom ; le principal
+  Polaris est supprimé
+
+Le rôle `admin` est refusé : il hérite de tout sans grants explicites à
+répliquer.
 
 ---
 
@@ -490,8 +574,15 @@ soumission, jamais sur la seule décision de la page.
 | Champ | Type | Description |
 | --- | --- | --- |
 | Nom | Texte | Nom du rôle |
-| Permissions | Liste | Fonctionnalités autorisées |
-| Actions | Icônes | Modifier, Supprimer |
+| Description | Texte | Usage du rôle |
+| Droits | Résumé | Nombre d'objets accessibles (lien vers l'éditeur) |
+| Utilisateurs | Nombre | Comptes portant ce rôle |
+| Actions | Icônes | Droits, Modifier, Supprimer |
+
+**Éditeur des droits** (bouton « Droits ») : matrice
+**Catalogues / Agents IA / Pipelines × Lecture / Écriture / Gestion** —
+privilèges hiérarchiques, enregistrés serveur et répliqués en grants Polaris
+réels pour les comptes applicatifs portant le rôle.
 
 **Rôles par défaut** : Voir Rôles et Permissions
 
