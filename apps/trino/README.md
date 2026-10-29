@@ -13,7 +13,7 @@ vendus par Polaris. Trino ne stocke aucun secret d'infrastructure.
 | Catalogues | un fichier `catalog/<catalogue>.properties` par catalogue Polaris (généré par `setup.sh` : `dev` par défaut + `parusdb` système) : connecteur Iceberg REST → `http://polaris:8181/api/catalog`, OAuth2 client credentials, realm `POLARIS`, warehouse = le catalogue du même nom |
 | Credentials S3 | vendus par Polaris (`iceberg.rest-catalog.vended-credentials-enabled=true`) — aucun secret statique côté Trino |
 | Réseau | externe `supabase_default` (stacks Supabase et Polaris démarrées) |
-| État | sans état ; les requêtes passent par le principal root Polaris. Le RBAC applicatif (rôle actif, permissions par catalogue) est implémenté **côté application** (table `lakehouse.catalog_access`) : il borne la visibilité des catalogues et l'accès aux pages, pas les droits Trino — tout s'exécute sous l'utilisateur Trino unique (limitation assumée) |
+| État | sans état ; les requêtes passent par le principal root Polaris. Le RBAC applicatif (rôle actif, grants `iam.grants` + propriété `owner_role_id`) est implémenté **côté application** : il borne la visibilité des catalogues et l'accès aux pages (l'éditeur SQL exige Lecture pour une requête de lecture, Écriture pour toute requête modifiante), pas les droits Trino — tout s'exécute sous l'utilisateur Trino unique (limitation assumée) |
 
 ## Cycle de vie
 

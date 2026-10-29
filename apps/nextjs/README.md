@@ -57,11 +57,18 @@ afficher** (copie par `sed`/`grep`, pas de copier-coller dans un terminal).
   `lib/supabase/` (`client.ts` navigateur, `server.ts` RSC/actions,
   `admin.ts` clé service_role — serveur uniquement). Le refresh de session est
   assuré par `proxy.ts` → `lib/supabase/proxy.ts`.
-- **RBAC** : rôles applicatifs et permissions dans PostgreSQL (schéma `iam`,
-  tables `roles`, `user_roles`, `user_active_role`, fonction
-  `iam.has_permission`). Le rôle actif se change en bas de sidebar sans se
-  déconnecter. Les permissions filtrent la navigation ET l'accès serveur
-  (`lib/session.ts` : `requirePermission`).
+- **RBAC (modèle à grants, refonte)** : rôles multiples + **rôle actif** dans
+  PostgreSQL (schéma `iam` : tables `roles`, `user_roles`, `user_active_role`,
+  `grants`, `app_users`, fonctions `iam.has_grant` / `iam.is_admin`). Les
+  droits — Lecture ⊂ Écriture ⊂ Gestion — portent sur les **objets**
+  (catalogues, agents, pipelines) ; le rôle actif qui crée un objet en
+  devient propriétaire. Les menus sont visibles par tous les comptes : le
+  contenu est filtré par le rôle actif via la RLS, l'administration exige le
+  rôle `admin` (`lib/session.ts` : `requireAdmin`, `requireGrant`). Les
+  conversations appartiennent au compte (partage en lecture seule à un rôle) ;
+  les comptes applicatifs (outils data, `/admin/users` → Applicatifs)
+  répliquent leurs droits de catalogue en grants Polaris réels
+  (`lib/polaris.ts`).
 - **Schémas métier PostgreSQL** : `iam`, `agents`, `chat`, `lakehouse`,
   `connectors`, `admin` — DDL versionné et idempotent dans
   `apps/supabase/sql/01-parusdb-app.sql` (RLS partout, TO authenticated +

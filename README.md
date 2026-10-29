@@ -31,7 +31,7 @@ agents IA, où le déploiement se fait **en minutes, pas en mois**, et où vos d
 | **Agents IA personnalisables** | Pré-instructions, sources associées, LLM au choix par agent : modèles open source exécutés en local (Mistral, Qwen…) ou propriétaires via clé API. Un agent par usage : ventes, support, finance. |
 | **Data Lakehouse intégré** | Object Storage S3 (RustFS) + catalogue Iceberg (Apache Polaris) + moteur SQL (Trino). La puissance d'une stack moderne, sans l'assembler. |
 | **40+ connecteurs ELT** | Snowflake, PostgreSQL, Salesforce, HubSpot, Notion, Stripe, Shopify, S3… Ingestion incrémentale, ordonnancement CRON, glisser-déposer. Extensibles par la communauté. |
-| **RBAC & gouvernance** | Profils métiers, techniques, admin. Permissions granulaires par catalogue, rôles multiples, rôle actif au switch. |
+| **RBAC & gouvernance** | Modèle à grants calqué sur Apache Polaris : rôles multiples, rôle actif, droits Lecture/Écriture/Gestion par catalogue, agent et pipeline. Comptes applicatifs dédiés pour les outils data (dbt, Power BI, Airbyte…) — jamais le compte root. |
 
 Brique transversale : le tout est **open source, auditable et transparent** (licence
 Apache 2.0).
