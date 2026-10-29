@@ -1,8 +1,8 @@
 -- ---------------------------------------------------------------------------
 -- ParusDB — seed applicatif des catalogues créés au setup.
 --
--- Enregistre dans le registre applicatif (descriptions, RBAC) les catalogues
--- Polaris créés par apps/polaris/setup.sh :
+-- Enregistre dans le registre applicatif (descriptions, propriété par rôle)
+-- les catalogues Polaris créés par apps/polaris/setup.sh :
 --   - le catalogue système de la plateforme (POLARIS_SYSTEM_CATALOG, ex.
 --     `parusdb` — catalogue par défaut de la plateforme, premier créé, non
 --     supprimable : usage libre, administration de ParusDB, données
@@ -12,10 +12,15 @@
 --     librement n'importe quel catalogue du lakehouse).
 --
 -- Polaris reste la source de vérité des catalogues : ce seed ne crée rien côté
--- Iceberg, il ne fait que décrire et ouvrir l'accès.
+-- Iceberg, il ne fait que décrire et attribuer la propriété.
+--
+-- RBAC refonte (docs/functional/rbac_refonte.md) : l'accès par rôle vit dans
+-- iam.grants (distribué par l'admin via /admin/roles) et la propriété dans
+-- catalog_registry.owner_role_id — les catalogues d'installation appartiennent
+-- au rôle système `admin`, qui hérite de tout : aucun grant à seed-er.
 --
 -- Idempotent : relançable sans risque (les descriptions sont resynchronisées,
--- les accès existants ignorés).
+-- la propriété conservée si déjà posée).
 --
 -- Exécution (à appliquer après 01-parusdb-app.sql, avec les noms réels) :
 --   docker exec -i supabase-db psql -U supabase_admin -d postgres \
@@ -23,7 +28,9 @@
 --     < apps/supabase/sql/02-lakehouse-catalogs.sql
 -- ---------------------------------------------------------------------------
 
--- Description applicative des deux catalogues d'installation.
+-- Description applicative et propriété des deux catalogues d'installation
+-- (rôle système `admin`, hérite de tout — backfill pour les installations
+-- existantes dont owner_role_id serait vide).
 insert into lakehouse.catalog_registry (catalog_name, description)
 values
   (:'system_catalog',
@@ -34,11 +41,9 @@ on conflict (catalog_name) do update
   set description = excluded.description,
       updated_at = now();
 
--- Accès aux catalogues d'installation pour tous les rôles disposant de la
--- permission `lakehouse` (même règle que la création d'un catalogue par l'app).
-insert into lakehouse.catalog_access (role_id, catalog_name)
-select r.id, c.catalog_name
-from iam.roles r
-cross join (values (:'system_catalog'), (:'default_catalog')) as c(catalog_name)
-where 'lakehouse' = any (r.permissions)
-on conflict (role_id, catalog_name) do nothing;
+update lakehouse.catalog_registry cr
+   set owner_role_id = r.id
+  from iam.roles r
+ where r.key = 'admin'
+   and cr.catalog_name in (:'system_catalog', :'default_catalog')
+   and cr.owner_role_id is null;
