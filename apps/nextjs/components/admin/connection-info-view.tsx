@@ -16,10 +16,14 @@ import {
 import { CharbonPanel } from "@/components/parus/charbon-panel";
 import type { ConnectionEndpoints } from "@/lib/connection-info";
 
-// Informations de connexion du lakehouse pour les outils data
-// (rbac_refonte.md §5.3). Les snippets sont préremplis avec le compte
-// applicatif sélectionné et son scope dédié ; le clientSecret n'est jamais
-// stocké — il est affiché une seule fois à la création/réinitialisation.
+// Informations de connexion du lakehouse pour les outils data externes
+// (rbac_refonte.md §5.3). La page est **agnostique des outils** : elle
+// décrit les protocoles d'accès (SQL, catalogue Iceberg REST, stockage
+// objet S3) avec leurs paramètres factuels et un profil de connexion
+// structuré par protocole — aucune section par outil (dbt, Power BI,
+// Airbyte…), qui périmait à chaque évolution de la stack. Les secrets ne
+// sont jamais stockés : ils apparaissent en marqueurs, affichés une seule
+// fois à la création/réinitialisation du compte applicatif.
 
 export interface AppUserConnection {
   id: string;
@@ -31,7 +35,8 @@ export interface AppUserConnection {
 }
 
 const SECRET_PLACEHOLDER = "<votre client secret>";
-const TRINO_PASSWORD_PLACEHOLDER = "<votre mot de passe Trino>";
+const TRINO_PASSWORD_PLACEHOLDER = "<votre mot de passe SQL>";
+const NO_ACCOUNT = "<créez un compte applicatif>";
 
 function CodeBlock({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
@@ -112,90 +117,41 @@ export function ConnectionInfoView({
     return selected?.catalogs[0] ?? "";
   }, [selected, catalog]);
 
-  const credential = selected
-    ? `${selected.clientId}:${SECRET_PLACEHOLDER}`
-    : `un compte applicatif (${SECRET_PLACEHOLDER})`;
+  const warehouse = effectiveCatalog || "<catalogue>";
+
+  // Identifiants du compte applicatif : le nom sert d'utilisateur SQL, le
+  // clientId:secret de credential OAuth2. Les secrets sont en marqueurs.
+  const sqlUser = selected?.name ?? NO_ACCOUNT;
+  const clientId = selected?.clientId ?? NO_ACCOUNT;
   const scope = selected
     ? `PRINCIPAL_ROLE:${selected.roleKey}`
     : "PRINCIPAL_ROLE:<votre rôle>";
 
-  const warehouse = effectiveCatalog || "<catalogue>";
-  // Utilisateur Trino des outils SQL : le compte applicatif sélectionné (le
-  // compte de service BFF ne quitte jamais le serveur).
-  const trinoSqlUser = selected?.name ?? "<compte applicatif>";
-  const trinoCertNote = "/chemin/vers/parus-trino.crt";
+  // Profils de connexion par protocole : tout client compatible avec le
+  // protocole se configure à partir de ces valeurs, quel que soit l'outil.
+  const sqlProfile = `# Accès SQL — tout client compatible (protocole HTTPS, basic auth)
+protocol: https
+host: ${endpoints.trinoHost}
+port: ${endpoints.trinoPort}
+auth: basic
+user: ${sqlUser}
+password: ${TRINO_PASSWORD_PLACEHOLDER}
+catalog: ${warehouse}`;
 
-  const dbtSnippet = `# ~/.dbt/profiles.yml  (pip install dbt-trino)
-parusdb:
-  target: parus
-  outputs:
-    parus:
-      type: trino
-      method: ldap           # authentification par mot de passe (durcissement)
-      user: ${trinoSqlUser}
-      password: ${TRINO_PASSWORD_PLACEHOLDER}
-      host: ${endpoints.trinoHost}
-      port: ${endpoints.trinoPort}
-      http_scheme: https     # certificat autosigné : réseau privé
-      database: ${warehouse}  # le catalogue Polaris
-      schema: analytics      # le schéma (namespace) cible
-      threads: 4
-      # Certificat autosigné : copiez apps/trino/etc/keystore.crt côté client
-      # et indiquez son chemin (sinon la validation TLS échoue) :
-      # cert: ${trinoCertNote}`;
+  const catalogProfile = `# Catalogue de tables (Iceberg REST) — client OAuth2
+uri: ${endpoints.polarisRestUri}
+oauth2_server_uri: ${endpoints.polarisTokenUri}
+warehouse: ${warehouse}
+credential: ${clientId}:${SECRET_PLACEHOLDER}
+scope: ${scope}`;
 
-  const jdbcSnippet = `jdbc:trino://${endpoints.trinoHost}:${endpoints.trinoPort}/${warehouse}?user=${trinoSqlUser}&password=${TRINO_PASSWORD_PLACEHOLDER}&SSL=true&SSLVerification=NONE
-# SSLVerification=NONE : certificat autosigné (réseau privé). Alternative
-# recommandée si le client sort du réseau privé : SSLTrustStorePath avec un
-# truststore contenant apps/trino/etc/keystore.crt.`;
-
-  const powerbiSnippet = `Host: ${endpoints.trinoHost}
-Port: ${endpoints.trinoPort}
-Catalog: ${warehouse}
-Authentification: nom d'utilisateur et mot de passe
-Utilisateur: ${trinoSqlUser}
-Mot de passe: ${TRINO_PASSWORD_PLACEHOLDER}
-
-# Propriétés ODBC (chaîne de connexion) — certificat autosigné :
-#   SSL=1;AllowSelfSignedServerCert=1`;
-
-  const sparkSnippet = `bin/spark-sql \\
-    --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.12.0,org.apache.iceberg:iceberg-aws-bundle:1.12.0 \\
-    --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions \\
-    --conf spark.sql.catalog.parusdb=org.apache.iceberg.spark.SparkCatalog \\
-    --conf spark.sql.catalog.parusdb.type=rest \\
-    --conf spark.sql.catalog.parusdb.uri=${endpoints.polarisRestUri} \\
-    --conf spark.sql.catalog.parusdb.oauth2-server-uri=${endpoints.polarisTokenUri} \\
-    --conf spark.sql.catalog.parusdb.warehouse=${warehouse} \\
-    --conf spark.sql.catalog.parusdb.credential=${credential} \\
-    --conf spark.sql.catalog.parusdb.scope=${scope} \\
-    --conf spark.sql.catalog.parusdb.header.X-Iceberg-Access-Delegation=vended-credentials`;
-
-  const flinkSnippet = `-- Flink SQL
-CREATE CATALOG parusdb WITH (
-  'type'='iceberg',
-  'catalog-type'='rest',
-  'uri'='${endpoints.polarisRestUri}',
-  'warehouse'='${warehouse}',
-  'credential'='${credential}',
-  'scope'='${scope}',
-  'oauth2-server-uri'='${endpoints.polarisTokenUri}',
-  'header.X-Iceberg-Access-Delegation'='vended-credentials'
-);`;
-
-  const pyicebergSnippet = `from pyiceberg.catalog.rest import RestCatalog
-
-catalog = RestCatalog(
-    name="parusdb",
-    **{
-        "uri": "${endpoints.polarisRestUri}",
-        "warehouse": "${warehouse}",
-        "credential": "${credential}",
-        "scope": "${scope}",
-        "oauth2-server-uri": "${endpoints.polarisTokenUri}",
-        "header.X-Iceberg-Access-Delegation": "vended-credentials",
-    },
-)`;
+  const s3Profile = `# Stockage de données (API S3)
+endpoint: ${endpoints.s3Endpoint}
+path_style: true
+bucket: ${endpoints.s3Bucket}
+region: ${endpoints.s3Region}
+access_key_id: ${s3Keys ? (showS3Keys ? s3Keys.accessKeyId : "<afficher ci-dessous>") : "<absentes de la configuration serveur>"}
+secret_access_key: ${s3Keys ? (showS3Keys ? s3Keys.secretAccessKey : "<afficher ci-dessous>") : "<absentes de la configuration serveur>"}`;
 
   return (
     <div className="space-y-6">
@@ -203,12 +159,10 @@ catalog = RestCatalog(
       <div className="flex items-start gap-3 rounded-2xl border border-jaune/40 bg-jaune/10 px-4 py-3">
         <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-charbon" strokeWidth={1.8} />
         <p className="text-sm text-charbon">
-          Trino est durci (HTTPS + mot de passe) mais le certificat est
-          autosigné et les connexions restent non chiffrées côté Polaris :
-          réservez ces adresses au réseau privé. Chaque compte applicatif
-          reçoit deux secrets — client Polaris (Iceberg REST) et mot de
-          passe Trino (SQL) — limités aux droits de son rôle : un outil ne
-          voit que les catalogues accordés.
+          Ces adresses sont réservées au réseau privé (certificat autosigné
+          côté SQL). Chaque compte applicatif reçoit des credentials dédiées,
+          limitées aux droits de son rôle : un outil ne voit que les
+          catalogues qui lui sont accordés.
         </p>
       </div>
 
@@ -263,7 +217,7 @@ catalog = RestCatalog(
           ) : (
             <p className="text-sm text-muted-foreground">
               {selected
-                ? "Le rôle de ce compte n'a accès à aucun catalogue : distribuez des droits via /admin/roles."
+                ? "Le rôle de ce compte n&apos;a accès à aucun catalogue : distribuez des droits via /admin/roles."
                 : "—"}
             </p>
           )}
@@ -276,21 +230,60 @@ catalog = RestCatalog(
         ) : null}
       </div>
 
-      {/* Endpoints */}
+      {/* Accès SQL */}
       <Section
-        title="Adresses de la plateforme"
-        description="Moteur SQL (Trino), catalogue Iceberg (Polaris REST + OAuth2) et object storage (RustFS S3, path-style)."
+        title="Accès SQL"
+        description="Requêtage du lakehouse : tout client SQL capable de HTTPS + authentification par nom d'utilisateur et mot de passe (pilote du dialecte ci-dessous)."
       >
         <div>
-          <Field label="Trino (SQL, HTTPS + mot de passe)" value={`${endpoints.trinoHost}:${endpoints.trinoPort}`} />
-          <Field label="Polaris — API Iceberg REST" value={endpoints.polarisRestUri} />
-          <Field label="Polaris — jetons OAuth2" value={endpoints.polarisTokenUri} />
-          <Field label="S3 (endpoint, path-style)" value={endpoints.s3Endpoint} />
-          <Field label="Bucket lakehouse" value={`s3://${endpoints.s3Bucket}`} />
-          <Field label="Région S3" value={endpoints.s3Region} />
-          <Field label="Certificat Trino (autosigné)" value="apps/trino/etc/keystore.crt" />
+          <Field label="Hôte" value={endpoints.trinoHost} />
+          <Field label="Port" value={endpoints.trinoPort} />
+          <Field label="Chiffrement" value="HTTPS (certificat autosigné : apps/trino/etc/keystore.crt)" />
+          <Field label="Authentification" value="nom d'utilisateur + mot de passe" />
+          <Field label="Utilisateur" value={sqlUser} />
+          <Field label="Mot de passe" value={selected ? TRINO_PASSWORD_PLACEHOLDER : NO_ACCOUNT} />
+          <Field label="Dialecte SQL" value="Trino" />
+          <Field label="Catalogue par défaut" value={warehouse} />
         </div>
-        <div className="flex items-center gap-3 pt-2">
+        <CodeBlock code={sqlProfile} />
+      </Section>
+
+      {/* Catalogue REST */}
+      <Section
+        title="Catalogue de tables (Iceberg REST)"
+        description="Inventaire des bases, schémas et tables : tout client capable d'un flux OAuth2 client credentials (clientId + secret). Polaris vends des credentials de stockage temporaires aux clients compatibles — aucune clé statique à configurer."
+      >
+        <div>
+          <Field label="URI du catalogue" value={endpoints.polarisRestUri} />
+          <Field label="Jetons OAuth2" value={endpoints.polarisTokenUri} />
+          <Field label="Credential" value={selected ? `${clientId}:${SECRET_PLACEHOLDER}` : NO_ACCOUNT} />
+          <Field label="Scope" value={scope} />
+          <Field label="Warehouse" value={warehouse} />
+          <Field label="Délégation d'accès" value="vended-credentials (en-tête X-Iceberg-Access-Delegation)" />
+        </div>
+        <CodeBlock code={catalogProfile} />
+      </Section>
+
+      {/* Stockage objet */}
+      <Section
+        title="Stockage de données (API S3)"
+        description="Fichiers de données sous-jacents. Nécessaire uniquement aux outils qui écrivent directement dans le stockage — les clients du catalogue REST reçoivent des credentials temporaires."
+      >
+        <div>
+          <Field label="Endpoint" value={endpoints.s3Endpoint} />
+          <Field label="Adressage" value="path-style" />
+          <Field label="Bucket" value={endpoints.s3Bucket} />
+          <Field label="Région" value={endpoints.s3Region} />
+          <Field
+            label="Clé d'accès"
+            value={s3Keys ? (showS3Keys ? s3Keys.accessKeyId : "••••••••") : "<absentes de la configuration serveur>"}
+          />
+          <Field
+            label="Clé secrète"
+            value={s3Keys ? (showS3Keys ? s3Keys.secretAccessKey : "••••••••") : "<absentes de la configuration serveur>"}
+          />
+        </div>
+        <div className="flex items-center gap-3">
           <Button
             variant="outline"
             size="sm"
@@ -310,87 +303,37 @@ catalog = RestCatalog(
               </div>
             ) : (
               <span className="text-xs text-muted-foreground">
-                Nécessaires uniquement aux outils qui écrivent directement
-                dans S3 (ex. Airbyte) — les clients Iceberg REST reçoivent
-                des credentials temporaires de Polaris.
+                Révélation ponctuelle — les clients du catalogue REST n&apos;en
+                ont pas besoin.
               </span>
             )
           ) : (
             <span className="text-xs text-muted-foreground">
-              Clés S3 absentes de la configuration serveur
+              Clés absentes de la configuration serveur
               (S3_ACCESS_KEY_ID/S3_SECRET_ACCESS_KEY) : relancez le setup
               racine pour les importer.
             </span>
           )}
         </div>
+        <CodeBlock code={s3Profile} />
       </Section>
 
-      {/* dbt */}
+      {/* Secrets : rappel */}
       <Section
-        title="dbt (dbt-trino)"
-        description="Transformation des données via Trino : profils dbt, une cible par catalogue. L'utilisateur est le compte applicatif — ses droits Trino suivent les grants de son rôle."
+        title="Secrets du compte applicatif"
+        description="Le client secret et le mot de passe SQL ne sont jamais stockés ni réaffichés : ils apparaissent une seule fois, à la création ou à la réinitialisation des credentials."
       >
-        <CodeBlock code={dbtSnippet} />
-      </Section>
-
-      {/* JDBC */}
-      <Section
-        title="JDBC générique"
-        description="Pilote JDBC Trino : DBeaver, DataGrip, Superset et tout client SQL. Basic auth (durcissement)."
-      >
-        <CodeBlock code={jdbcSnippet} />
-      </Section>
-
-      {/* Power BI */}
-      <Section
-        title="Power BI"
-        description="Pas de connecteur natif : driver ODBC Starburst + connecteur « Starburst » dans « Obtenir des données ». L'authentification LDAP (mot de passe) active automatiquement SSL."
-      >
-        <CodeBlock code={powerbiSnippet} />
-      </Section>
-
-      {/* Spark */}
-      <Section
-        title="Spark"
-        description="Catalogue Iceberg REST : Polaris vends des credentials S3 temporaires au chargement des tables (aucune clé statique à configurer)."
-      >
-        <CodeBlock code={sparkSnippet} />
-      </Section>
-
-      {/* Flink */}
-      <Section
-        title="Flink"
-        description="Catalogue Iceberg REST, mêmes credentials que Spark."
-      >
-        <CodeBlock code={flinkSnippet} />
-      </Section>
-
-      {/* pyiceberg */}
-      <Section
-        title="pyiceberg"
-        description="Lecture/écriture des tables Iceberg depuis Python."
-      >
-        <CodeBlock code={pyicebergSnippet} />
-      </Section>
-
-      {/* Airbyte */}
-      <Section
-        title="Airbyte (destination « S3 Data Lake »)"
-        description="Le connecteur supporte Polaris nativement : il écrit les fichiers Iceberg dans S3 et enregistre les métadonnées dans le catalogue."
-      >
-        <div>
-          <Field label="Catalog" value="REST → Polaris" />
-          <Field label="Polaris Server URI" value={endpoints.polarisRestUri} />
-          <Field label="Catalog Name" value={warehouse} />
-          <Field label="Client ID" value={selected?.clientId ?? "<créez un compte applicatif>"} />
-          <Field label="Client Secret" value={SECRET_PLACEHOLDER} />
-          <Field label="OAuth Scope" value={scope} />
-          <Field label="OAuth2 Server URI" value={endpoints.polarisTokenUri} />
-          <Field label="Default namespace" value="analytics" />
-          <Field label="Warehouse location" value={`s3://${endpoints.s3Bucket}/${warehouse}`} />
-          <Field label="S3 Endpoint" value={endpoints.s3Endpoint} />
-          <Field label="S3 Key ID / Access Key" value={s3Keys ? (showS3Keys ? s3Keys.accessKeyId : "•••••••• (afficher ci-dessus)") : "<absentes>"} />
-          <Field label="S3 Secret Access Key" value={s3Keys ? (showS3Keys ? s3Keys.secretAccessKey : "••••••••") : "<absentes>"} />
+        <div className="flex items-center gap-3">
+          <Button asChild variant="outline" size="sm">
+            <a href="/admin/users">
+              <ExternalLink className="h-4 w-4" strokeWidth={1.6} /> Gérer les
+              comptes applicatifs
+            </a>
+          </Button>
+          <span className="text-xs text-muted-foreground">
+            Utilisateurs → Applicatifs → « Réinitialiser les credentials »
+            pour de nouveaux secrets.
+          </span>
         </div>
       </Section>
 

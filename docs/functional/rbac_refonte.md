@@ -221,30 +221,37 @@ root, utilisé uniquement côté serveur BFF pour l'API Management).
 ### 5.3 Nouvelle page : `/admin/informations`
 
 Objectif : rendre le lakehouse consommable par des outils data externes, avec
-les credentials applicatives (jamais le client root).
+les credentials applicatives (jamais le client root). La page est
+**agnostique des outils** (refonte post-livraison : les sections par outil —
+dbt, Power BI, Airbyte… — périmaient à chaque évolution de la stack) : elle
+décrit les **protocoles d'accès** et leurs paramètres factuels, chaque
+protocole étant accompagné d'un profil de connexion YAML copiable que tout
+client compatible peut exploiter.
 
 Contenu :
 
-1. Avertissement : connexions en HTTP, Trino sans authentification — usage
-   réservé au réseau privé.
-2. Utilisateurs applicatifs : sélecteur du compte applicatif → tous les
-   snippets sont préremplis avec ses credentials et son scope.
-3. Informations générales : URLs Trino (`host:8080`), Polaris
-   (`/api/catalog`, `/api/catalog/v1/oauth/tokens`), endpoint S3 RustFS
-   **public** (dérivé : `localhost` par défaut, variable `PARUSDB_PUBLIC_HOST`
-   en surcharge — `POLARIS_S3_ENDPOINT=http://rustfs:9000` étant interne au
-   réseau Docker), bucket, région, clés S3 (masquées, révélation ponctuelle).
-4. Sections par outil (snippets copiables) :
-   - **dbt** (`dbt-trino`) : `profiles.yml` (host, port, user, database =
-     catalogue, schema, `http_scheme: http`, `method: none`) ;
-   - **Power BI** : connecteur Starburst/ODBC (Host, Port, Catalog) ;
-   - **JDBC générique** : `jdbc:trino://host:8080/catalog` ;
-   - **Spark / Flink / pyiceberg** : catalogue REST Polaris (`uri`,
-     `oauth2-server-uri`, `warehouse`, `credential`, `scope`,
-     `X-Iceberg-Access-Delegation: vended-credentials`) ;
-   - **Airbyte** (destination « S3 Data Lake ») : champ par champ (Polaris
-     Server URI, Catalog Name, Client ID/Secret, OAuth Scope, OAuth2 Server
-     URI, Default namespace, Warehouse location, S3 Endpoint + clés S3).
+1. Avertissement : réseau privé (certificat autosigné côté SQL, chiffrement
+   HTTPS + mot de passe) ; chaque compte applicatif reçoit deux secrets
+   (client du catalogue + mot de passe SQL) limités aux droits de son rôle.
+2. Sélecteurs : compte applicatif × catalogue (limité aux droits du rôle).
+3. **Accès SQL** : hôte, port, chiffrement (HTTPS, certificat autosigné),
+   authentification (utilisateur = nom du compte + mot de passe, affiché une
+   seule fois), dialecte, catalogue par défaut + profil YAML.
+4. **Catalogue de tables (Iceberg REST)** : URI du catalogue, jetons OAuth2,
+   credential (`clientId:secret`), scope `PRINCIPAL_ROLE:<rôle>`, warehouse,
+   délégation d'accès (vended-credentials) + profil YAML. Polaris vends des
+   credentials de stockage temporaires aux clients compatibles.
+5. **Stockage de données (API S3)** : endpoint **public** (dérivé :
+   `localhost` par défaut, variable `PARUSDB_PUBLIC_HOST` en surcharge —
+   l'endpoint interne `http://rustfs:9000` n'étant joignable que dans le
+   réseau Docker), path-style, bucket, région, clés (masquées, révélation
+   ponctuelle) + profil YAML.
+6. **Secrets du compte applicatif** : rappel d'affichage unique et lien vers
+   la réinitialisation (Utilisateurs → Applicatifs).
+
+Toutes les valeurs viennent de l'environnement serveur
+(`lib/connection-info.ts`) : la page survit à un changement de moteur ou
+de stack — seuls les libellés factuels (ex. dialecte SQL) suivent.
 
 ---
 
@@ -356,10 +363,10 @@ Contenu :
   conversations partagées en lecture seule (badge, composer masqué, refus
   403 côté route de stream).
 - `/admin/informations` : avertissement réseau privé, sélecteurs compte
-  applicatif × catalogue (limités aux droits du rôle), sections dbt / JDBC /
-  Power BI / Spark / Flink / pyiceberg / Airbyte avec snippets copiables
-  préremplis du scope `PRINCIPAL_ROLE:<rôle>` — le secret apparaît en
-  marqueur, jamais stocké ni réaffiché.
+  applicatif × catalogue (limités aux droits du rôle) — page devenue
+  **agnostique des outils** (post-livraison, cf. §5.3) : une fiche par
+  protocole d'accès (SQL, catalogue REST, stockage S3) avec profil YAML
+  copiable, secrets en marqueurs, jamais stockés ni réaffichés.
 
 ### 8.4 Miroir Polaris — pièges API validés en live (1.8.0)
 
@@ -430,10 +437,10 @@ de grants (même déclencheur que la resync Polaris) :
   l'UI applique elle-même `iam.has_grant`).
 - La rotation des credentials applicatives régénère **Polaris + Trino**
   ensemble (même parcours `/admin/users`).
-- `/admin/informations` : snippets passent de `method: none` à
-  authentification par mot de passe (dbt : `method: ldap` + `cert` /
-  `TRINO_SSL_CERT` ; Power BI : `AllowSelfSignedServerCert=1` ; JDBC :
-  `SSL=true`). Port public Trino : 8443 (via `PARUSDB_PUBLIC_HOST`).
+- `/admin/informations` : la fiche « Accès SQL » reflète l'authentification
+  par mot de passe (utilisateur = nom du compte, secret en marqueur) et le
+  chiffrement HTTPS avec certificat autosigné. Port public Trino : 8453
+  (via `PARUSDB_PUBLIC_HOST`).
 - Révocation d'un grant → règles régénérées → refus immédiat (refresh
   périodique, sans redémarrage Trino).
 

@@ -501,27 +501,31 @@ Visible et accessible uniquement aux comptes portant le rôle `admin`.
 
 ### Informations
 
-**Objectif** : rendre le lakehouse consommable par des outils data externes
-(dbt, Power BI, Airbyte, Spark, Flink, pyiceberg, clients JDBC/ODBC…), avec
-les credentials d'un **compte applicatif** — jamais le compte root.
+**Objectif** : rendre le lakehouse consommable par des outils data externes,
+avec les credentials d'un **compte applicatif** — jamais le compte root.
+La page est **agnostique des outils** : elle décrit les protocoles d'accès
+et leurs paramètres, pas des configurations par outil (qui périmaient à
+chaque évolution de la stack).
 
 **Contenu** :
 
-- Avertissement : Trino est durci (HTTPS + mot de passe, certificat
-  autosigné) et Polaris reste en HTTP — usage réservé au réseau privé ;
-  chaque compte applicatif reçoit deux secrets (client Polaris + mot de
-  passe Trino) limités aux droits de son rôle
+- Avertissement : réseau privé (certificat autosigné côté SQL) ; chaque
+  compte applicatif reçoit deux secrets (client du catalogue + mot de
+  passe SQL) limités aux droits de son rôle
 - Sélecteurs : **compte applicatif** × **catalogue** (limité aux catalogues
   accessibles au rôle du compte)
-- **Adresses de la plateforme** : Trino (hôte/port), Polaris (API Iceberg
-  REST, jetons OAuth2), S3 (endpoint path-style, bucket, région) ; clés S3
-  masquées, révélation ponctuelle
-- **Sections par outil** : snippets copiables préremplis (profiles.yml dbt,
-  URL JDBC, fiche Power BI/ODBC Starburst, configuration Spark, `CREATE
-  CATALOG` Flink, pyiceberg, champs de la destination Airbyte « S3 Data
-  Lake »)
-- Le **client secret** n'est jamais stocké ni réaffiché : il apparaît une
-  seule fois, à la création ou à la réinitialisation du compte applicatif
+- **Accès SQL** : hôte, port, chiffrement (HTTPS), authentification
+  (utilisateur + mot de passe), dialecte, catalogue par défaut + profil
+  de connexion YAML copiable
+- **Catalogue de tables (Iceberg REST)** : URI du catalogue, jetons OAuth2,
+  credential, scope, warehouse + profil YAML copiable
+- **Stockage de données (API S3)** : endpoint path-style, bucket, région,
+  clés masquées (révélation ponctuelle) + profil YAML copiable
+- **Secrets du compte applicatif** : rappel d'affichage unique et accès à
+  la réinitialisation (Utilisateurs → Applicatifs)
+- Le **client secret** et le **mot de passe SQL** ne sont jamais stockés ni
+  réaffichés : ils apparaissent une seule fois, à la création ou à la
+  réinitialisation du compte applicatif
 
 ### Utilisateurs
 
