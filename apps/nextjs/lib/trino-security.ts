@@ -242,12 +242,23 @@ export async function syncTrinoRules(): Promise<{ ok: boolean; error?: string }>
   }
 }
 
-// Resynchronisation complète (rattrapage de dérive, paresseux avant une
-// requête BFF) : rules.json uniquement — les mots de passe applicatifs ne
-// sont pas re-générables (jamais stockés).
+// Resynchronisation paresseuse (rattrapage de dérive, appelée avant une
+// requête BFF) : rules.json uniquement, une fois par processus — les mots de
+// passe applicatifs ne sont pas re-générables (jamais stockés). Les actions
+// admin déclenchent déjà la génération à chaque mutation.
+let ensuredOnce = false;
+let ensuring: Promise<void> | null = null;
 export async function ensureTrinoSecurity(): Promise<void> {
-  if (!trinoSecurityDir()) return;
-  await syncTrinoRules().catch(() => undefined);
+  if (ensuredOnce) return;
+  if (ensuring) return ensuring;
+  ensuring = (async () => {
+    if (!trinoSecurityDir()) return;
+    const result = await syncTrinoRules();
+    if (result.ok) ensuredOnce = true;
+  })().finally(() => {
+    ensuring = null;
+  });
+  return ensuring;
 }
 
 // Le nom d'un compte applicatif ne doit pas entrer en collision avec un
