@@ -13,7 +13,6 @@ export interface ConnectionEndpoints {
   s3Endpoint: string;
   s3Bucket: string;
   s3Region: string;
-  trinoUser: string;
 }
 
 // Hostname public : override explicite, sinon le hostname effectif des URLs
@@ -64,9 +63,6 @@ export function getConnectionEndpoints(): ConnectionEndpoints {
     s3Endpoint,
     s3Bucket: process.env.POLARIS_S3_BUCKET ?? "parus-lakehouse",
     s3Region: process.env.POLARIS_S3_REGION ?? "us-east-1",
-    // Trino tourne sans authentification : le nom sert à la traçabilité des
-    // requêtes dans les logs du moteur.
-    trinoUser: process.env.TRINO_USER ?? "parus-app",
   };
 }
 

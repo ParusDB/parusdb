@@ -31,6 +31,7 @@ export interface AppUserConnection {
 }
 
 const SECRET_PLACEHOLDER = "<votre client secret>";
+const TRINO_PASSWORD_PLACEHOLDER = "<votre mot de passe Trino>";
 
 function CodeBlock({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
@@ -119,6 +120,10 @@ export function ConnectionInfoView({
     : "PRINCIPAL_ROLE:<votre rôle>";
 
   const warehouse = effectiveCatalog || "<catalogue>";
+  // Utilisateur Trino des outils SQL : le compte applicatif sélectionné (le
+  // compte de service BFF ne quitte jamais le serveur).
+  const trinoSqlUser = selected?.name ?? "<compte applicatif>";
+  const trinoCertNote = "/chemin/vers/parus-trino.crt";
 
   const dbtSnippet = `# ~/.dbt/profiles.yml  (pip install dbt-trino)
 parusdb:
@@ -126,15 +131,33 @@ parusdb:
   outputs:
     parus:
       type: trino
-      method: none            # Trino local sans authentification
+      method: ldap           # authentification par mot de passe (durcissement)
+      user: ${trinoSqlUser}
+      password: ${TRINO_PASSWORD_PLACEHOLDER}
       host: ${endpoints.trinoHost}
       port: ${endpoints.trinoPort}
-      user: parusdb-dbt       # traçabilité dans les requêtes Trino
+      http_scheme: https     # certificat autosigné : réseau privé
       database: ${warehouse}  # le catalogue Polaris
       schema: analytics      # le schéma (namespace) cible
-      threads: 4`;
+      threads: 4
+      # Certificat autosigné : copiez apps/trino/etc/keystore.crt côté client
+      # et indiquez son chemin (sinon la validation TLS échoue) :
+      # cert: ${trinoCertNote}`;
 
-  const jdbcSnippet = `jdbc:trino://${endpoints.trinoHost}:${endpoints.trinoPort}/${warehouse}`;
+  const jdbcSnippet = `jdbc:trino://${endpoints.trinoHost}:${endpoints.trinoPort}/${warehouse}?user=${trinoSqlUser}&password=${TRINO_PASSWORD_PLACEHOLDER}&SSL=true&SSLVerification=NONE
+# SSLVerification=NONE : certificat autosigné (réseau privé). Alternative
+# recommandée si le client sort du réseau privé : SSLTrustStorePath avec un
+# truststore contenant apps/trino/etc/keystore.crt.`;
+
+  const powerbiSnippet = `Host: ${endpoints.trinoHost}
+Port: ${endpoints.trinoPort}
+Catalog: ${warehouse}
+Authentification: nom d'utilisateur et mot de passe
+Utilisateur: ${trinoSqlUser}
+Mot de passe: ${TRINO_PASSWORD_PLACEHOLDER}
+
+# Propriétés ODBC (chaîne de connexion) — certificat autosigné :
+#   SSL=1;AllowSelfSignedServerCert=1`;
 
   const sparkSnippet = `bin/spark-sql \\
     --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.12.0,org.apache.iceberg:iceberg-aws-bundle:1.12.0 \\
@@ -180,10 +203,12 @@ catalog = RestCatalog(
       <div className="flex items-start gap-3 rounded-2xl border border-jaune/40 bg-jaune/10 px-4 py-3">
         <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-charbon" strokeWidth={1.8} />
         <p className="text-sm text-charbon">
-          Connexions en HTTP et Trino sans authentification : réservez ces
-          adresses au réseau privé. Le RBAC des catalogues s&apos;applique au
-          chemin Iceberg REST (comptes applicatifs) et dans l&apos;interface —
-          un outil connecté directement à Trino voit tous les catalogues.
+          Trino est durci (HTTPS + mot de passe) mais le certificat est
+          autosigné et les connexions restent non chiffrées côté Polaris :
+          réservez ces adresses au réseau privé. Chaque compte applicatif
+          reçoit deux secrets — client Polaris (Iceberg REST) et mot de
+          passe Trino (SQL) — limités aux droits de son rôle : un outil ne
+          voit que les catalogues accordés.
         </p>
       </div>
 
@@ -257,12 +282,13 @@ catalog = RestCatalog(
         description="Moteur SQL (Trino), catalogue Iceberg (Polaris REST + OAuth2) et object storage (RustFS S3, path-style)."
       >
         <div>
-          <Field label="Trino (SQL, JDBC/ODBC)" value={`${endpoints.trinoHost}:${endpoints.trinoPort}`} />
+          <Field label="Trino (SQL, HTTPS + mot de passe)" value={`${endpoints.trinoHost}:${endpoints.trinoPort}`} />
           <Field label="Polaris — API Iceberg REST" value={endpoints.polarisRestUri} />
           <Field label="Polaris — jetons OAuth2" value={endpoints.polarisTokenUri} />
           <Field label="S3 (endpoint, path-style)" value={endpoints.s3Endpoint} />
           <Field label="Bucket lakehouse" value={`s3://${endpoints.s3Bucket}`} />
           <Field label="Région S3" value={endpoints.s3Region} />
+          <Field label="Certificat Trino (autosigné)" value="apps/trino/etc/keystore.crt" />
         </div>
         <div className="flex items-center gap-3 pt-2">
           <Button
@@ -302,7 +328,7 @@ catalog = RestCatalog(
       {/* dbt */}
       <Section
         title="dbt (dbt-trino)"
-        description="Transformation des données via Trino : profils dbt, une cible par catalogue."
+        description="Transformation des données via Trino : profils dbt, une cible par catalogue. L'utilisateur est le compte applicatif — ses droits Trino suivent les grants de son rôle."
       >
         <CodeBlock code={dbtSnippet} />
       </Section>
@@ -310,7 +336,7 @@ catalog = RestCatalog(
       {/* JDBC */}
       <Section
         title="JDBC générique"
-        description="Pilote JDBC Trino : DBeaver, DataGrip, Superset et tout client SQL."
+        description="Pilote JDBC Trino : DBeaver, DataGrip, Superset et tout client SQL. Basic auth (durcissement)."
       >
         <CodeBlock code={jdbcSnippet} />
       </Section>
@@ -318,14 +344,9 @@ catalog = RestCatalog(
       {/* Power BI */}
       <Section
         title="Power BI"
-        description="Pas de connecteur natif : driver ODBC Starburst + connecteur « Starburst » dans « Obtenir des données ». La passerelle doit joindre le port Trino."
+        description="Pas de connecteur natif : driver ODBC Starburst + connecteur « Starburst » dans « Obtenir des données ». L'authentification LDAP (mot de passe) active automatiquement SSL."
       >
-        <div>
-          <Field label="Host" value={endpoints.trinoHost} />
-          <Field label="Port" value={endpoints.trinoPort} />
-          <Field label="Catalog" value={warehouse} />
-          <Field label="Utilisateur" value={endpoints.trinoUser} />
-        </div>
+        <CodeBlock code={powerbiSnippet} />
       </Section>
 
       {/* Spark */}
