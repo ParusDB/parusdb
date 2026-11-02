@@ -230,18 +230,29 @@ mkdir -p "$SCRIPT_DIR/etc" "$SCRIPT_DIR/security"
 # Keystore TLS autosigné (PEM clé + certificat, accepté nativement par
 # Trino). Conservé s'il existe : les clients ne valident pas le certificat
 # (réseau privé — friction documentée dans /admin/informations).
+# SANs obligatoires : les clients Go (mcp-trino) valident le certificat via
+# SSL_CERT_FILE et ne regardent que les SANs — DNS:trino (réseau Docker),
+# DNS:localhost (clients hôte), IP:127.0.0.1. Le certificat public seul est
+# exporté en etc/parus-trino.crt pour être monté dans mcp-trino (jamais la
+# clé).
 if [ ! -f "$SCRIPT_DIR/etc/keystore.pem" ]; then
     openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
         -subj "/CN=parus-trino" \
+        -addext "subjectAltName=DNS:parus-trino,DNS:trino,DNS:localhost,IP:127.0.0.1" \
         -keyout "$SCRIPT_DIR/etc/keystore.key" \
         -out "$SCRIPT_DIR/etc/keystore.crt" 2>/dev/null \
         || fail "la génération du keystore TLS a échoué (openssl requis)"
     cat "$SCRIPT_DIR/etc/keystore.key" "$SCRIPT_DIR/etc/keystore.crt" \
         > "$SCRIPT_DIR/etc/keystore.pem"
-    rm -f "$SCRIPT_DIR/etc/keystore.key" "$SCRIPT_DIR/etc/keystore.crt"
+    rm -f "$SCRIPT_DIR/etc/keystore.key"
     echo "    keystore TLS autosigné généré (etc/keystore.pem)"
+    # Le keystore est bind-monté en fichier unique : une régénération crée
+    # un nouvel inode que le conteneur existant ne voit pas (il continue de
+    # servir l'ancien certificat). Le conteneur sera recréé au démarrage.
+    KEYSTORE_REGENERATED=1
 fi
 chmod 600 "$SCRIPT_DIR/etc/keystore.pem"
+chmod 644 "$SCRIPT_DIR/etc/keystore.crt"
 
 # config.properties : base extraite de l'image (version épinglée du compose)
 # + propriétés de durcissement. Le secret interne est OBLIGATOIRE dès qu'une
@@ -326,7 +337,11 @@ if [ "$SKIP_START" = "1" ]; then
 fi
 
 echo "===> Démarrage de la stack Trino..."
-docker compose up -d --wait
+if [ "${KEYSTORE_REGENERATED:-0}" = "1" ]; then
+    docker compose up -d --force-recreate --no-deps --wait
+else
+    docker compose up -d --wait
+fi
 echo "    trino est démarré et sain"
 
 echo "===> Test de bout en bout (HTTPS + authentification, schémas de chaque catalogue)..."

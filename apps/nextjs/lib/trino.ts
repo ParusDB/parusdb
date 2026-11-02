@@ -3,10 +3,14 @@
 // @trinodb/trino-js-client ; le nom scopé exige Node 24, la machine tourne
 // en Node 22 — à renommer lors d'une montée de version de Node).
 // Aucune chaîne de connexion côté navigateur : tout passe par le serveur
-// Next.js, sans credentials (Trino local sans auth), avec un utilisateur
-// Trino applicatif tracé dans les logs du moteur.
+// Next.js, en HTTPS + authentification basic auth du compte de service BFF
+// (durcissement, rbac_refonte.md §9 — les règles d'access control ne
+// contraignent pas ce compte : le RBAC de l'éditeur SQL est applicatif via
+// iam.has_grant).
 
-import { Trino, type Columns } from "trino-client";
+import { BasicAuth, Trino, type Columns } from "trino-client";
+
+import { ensureTrinoSecurity } from "@/lib/trino-security";
 
 export interface TrinoColumn {
   name: string;
@@ -20,19 +24,27 @@ export interface TrinoQueryResult {
   durationMs: number;
 }
 
-const TRINO_URL = process.env.TRINO_URL ?? "http://localhost:8080";
+const TRINO_URL = process.env.TRINO_URL ?? "https://localhost:8453";
 const TRINO_USER = process.env.TRINO_USER ?? "parus-app";
+const TRINO_PASSWORD = process.env.TRINO_PASSWORD ?? "";
 const MAX_ROWS = 1000;
 
 function createTrino(): Trino {
   return Trino.create({
     server: TRINO_URL,
     source: "parusdb-app",
+    auth: new BasicAuth(TRINO_USER, TRINO_PASSWORD),
+    // Certificat autosigné généré par apps/trino/setup.sh (réseau privé,
+    // friction documentée dans /admin/informations).
+    ssl: { rejectUnauthorized: false },
   });
 }
 
 // Exécute une requête et agrège les pages de résultats (max MAX_ROWS lignes).
 export async function trinoQuery(sql: string): Promise<TrinoQueryResult> {
+  // Rattrapage de dérive éventuelle des fichiers de sécurité (rules.json)
+  // — génération paresseuse, une fois par cycle de vie du processus.
+  await ensureTrinoSecurity();
   const started = Date.now();
   const iter = await createTrino().query({ query: sql, user: TRINO_USER });
   let columns: Columns = [];

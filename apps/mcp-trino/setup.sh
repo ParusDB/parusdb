@@ -84,16 +84,42 @@ docker network inspect supabase_default >/dev/null 2>&1 \
 docker ps --filter name=parus-trino --format '{{.Names}}' 2>/dev/null | grep -q . \
     || fail "le conteneur parus-trino n'est pas démarré (cd ../trino && sh run.sh start)"
 
-TRINO_PORT_HOST=$(read_env_var "$SCRIPT_DIR/../trino/.env" TRINO_PORT)
-TRINO_PORT_HOST=${TRINO_PORT_HOST:-8080}
-curl -s --max-time 10 -o /dev/null -f "http://localhost:$TRINO_PORT_HOST/v1/info" \
-    || fail "l'API de Trino ne répond pas (http://localhost:$TRINO_PORT_HOST/v1/info) : démarrez Trino"
+TRINO_HTTPS_PORT_HOST=$(read_env_var "$SCRIPT_DIR/../trino/.env" TRINO_HTTPS_PORT)
+TRINO_HTTPS_PORT_HOST=${TRINO_HTTPS_PORT_HOST:-8453}
+curl -s --max-time 10 -o /dev/null -fk "https://localhost:$TRINO_HTTPS_PORT_HOST/v1/info" \
+    || fail "l'API de Trino ne répond pas (https://localhost:$TRINO_HTTPS_PORT_HOST/v1/info) : démarrez Trino"
 
 echo "===> Préparation de .env..."
 if [ ! -f "$LOCAL_ENV" ]; then
     cp "$SCRIPT_DIR/.env.example" "$LOCAL_ENV"
     echo "    .env créé depuis .env.example"
 fi
+
+# Comptes de service Trino durci (rbac_refonte.md §9) : toujours resynchronisés
+# depuis apps/trino/.env (générés par son setup).
+TRINO_MCP_USER_VAL=$(read_env_var "$SCRIPT_DIR/../trino/.env" TRINO_MCP_USER)
+TRINO_MCP_PASSWORD_VAL=$(read_env_var "$SCRIPT_DIR/../trino/.env" TRINO_MCP_PASSWORD)
+[ -n "$TRINO_MCP_USER_VAL" ] || fail "TRINO_MCP_USER absent de apps/trino/.env : relancez le setup de Trino"
+[ -n "$TRINO_MCP_PASSWORD_VAL" ] || fail "TRINO_MCP_PASSWORD absent de apps/trino/.env : relancez le setup de Trino"
+set_env_value() {
+    var="$1"
+    val=$(printf '%s' "$2" | sed 's/[&|]/\\&/g')
+    if grep -q "^${var}=" "$LOCAL_ENV"; then
+        sed -i.old -e "s|^${var}=.*$|${var}=${val}|" "$LOCAL_ENV"
+        rm -f "$LOCAL_ENV.old"
+    else
+        printf '%s=%s\n' "$var" "$2" >> "$LOCAL_ENV"
+    fi
+}
+set_env_value TRINO_USER "$TRINO_MCP_USER_VAL"
+set_env_value TRINO_PASSWORD "$TRINO_MCP_PASSWORD_VAL"
+# Clés structurelles du durcissement : toujours resynchronisées (un .env
+# antérieur au durcissement porterait encore HTTP/8080).
+set_env_value TRINO_PORT "8443"
+set_env_value TRINO_SCHEME "https"
+set_env_value TRINO_SSL "true"
+set_env_value TRINO_SSL_INSECURE "true"
+echo "    credentials Trino mcp-trino synchronisés (jamais affichés)"
 
 if [ "$SKIP_START" = "1" ]; then
     echo ""

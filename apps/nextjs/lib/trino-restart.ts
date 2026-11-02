@@ -18,11 +18,18 @@
 //
 // Contrainte d'exécution : le serveur Next.js doit pouvoir joindre le CLI
 // Docker (`docker restart <conteneur>`) — même accès que l'ordonnanceur dlt.
+//
+// Trino durci (rbac_refonte.md §9) : les sondes passent en HTTPS
+// (certificat autosigné) + basic auth du compte de service BFF — via
+// node:https (fetch/undici ne permet pas d'ignorer la validation TLS sans
+// dispatcher dédié).
 
 import { execFile } from "node:child_process";
+import { request as httpsRequest } from "node:https";
 
-const TRINO_URL = process.env.TRINO_URL ?? "http://localhost:8080";
+const TRINO_URL = process.env.TRINO_URL ?? "https://localhost:8453";
 const TRINO_USER = process.env.TRINO_USER ?? "parus-app";
+const TRINO_PASSWORD = process.env.TRINO_PASSWORD ?? "";
 const TRINO_CONTAINER = process.env.TRINO_CONTAINER_NAME ?? "parus-trino";
 
 const IDLE_POLL_MS = 2_000;
@@ -55,24 +62,52 @@ export function getTrinoRestartState(): TrinoRestartState {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// GET authentifié sur Trino (HTTPS autosigné, basic auth du compte BFF).
+function trinoGet(pathName: string): Promise<{ ok: boolean; status: number; body: string }> {
+  return new Promise((resolve, reject) => {
+    const url = new URL(TRINO_URL + pathName);
+    const req = httpsRequest(
+      {
+        hostname: url.hostname,
+        port: url.port,
+        path: url.pathname,
+        method: "GET",
+        rejectUnauthorized: false,
+        headers: {
+          Authorization: `Basic ${Buffer.from(`${TRINO_USER}:${TRINO_PASSWORD}`).toString("base64")}`,
+        },
+      },
+      (res) => {
+        let body = "";
+        res.on("data", (chunk) => {
+          body += chunk;
+        });
+        res.on("end", () =>
+          resolve({
+            ok: (res.statusCode ?? 0) >= 200 && (res.statusCode ?? 0) < 300,
+            status: res.statusCode ?? 0,
+            body,
+          }),
+        );
+      },
+    );
+    req.on("error", reject);
+    req.end();
+  });
+}
+
 // Requêtes SQL actives sur Trino. `/v1/query` liste les requêtes récentes de
 // toutes natures (FINISHED, FAILED inclus) : on ne compte que les états
 // actifs. La vérification elle-même n'est pas une requête SQL : elle ne
-// s'observe pas dans la liste. L'endpoint exige l'authentification de l'
-// utilisateur applicatif (Basic auth, mot de passe vide — Trino local sans
-// authentification par mot de passe).
+// s'observe pas dans la liste.
 async function activeQueryCount(): Promise<number> {
-  const auth = Buffer.from(`${TRINO_USER}:`).toString("base64");
-  const res = await fetch(`${TRINO_URL}/v1/query`, {
-    cache: "no-store",
-    headers: { Authorization: `Basic ${auth}` },
-  });
+  const res = await trinoGet("/v1/query");
   if (!res.ok) {
     throw new Error(
       `Trino : impossible de lister les requêtes en cours (HTTP ${res.status}).`,
     );
   }
-  const queries = (await res.json()) as { state?: string }[];
+  const queries = JSON.parse(res.body) as { state?: string }[];
   const active = new Set([
     "QUEUED",
     "PLANNING",
@@ -120,7 +155,7 @@ async function waitHealthy(): Promise<void> {
   const deadline = Date.now() + HEALTH_TIMEOUT_MS;
   for (;;) {
     try {
-      const res = await fetch(`${TRINO_URL}/v1/info`, { cache: "no-store" });
+      const res = await trinoGet("/v1/info");
       if (res.ok) return;
     } catch {
       // pas encore prêt : on continue de patienter

@@ -42,13 +42,23 @@ services:
       - "${MCP_TRINO_HTTP_PORT:-8185}:8080"
     environment:
       # Trino vu depuis le réseau `supabase_default` (alias compose du service
-      # `trino` de apps/trino). Trino local = HTTP, jamais HTTPS.
+      # `trino` de apps/trino). Durcissement (rbac_refonte.md §9) : HTTPS
+      # (certificat autosigné, validation ignorée) + basic auth du compte de
+      # service mcp-trino (règle read-only dans rules.json).
       TRINO_HOST: "${TRINO_HOST:-trino}"
-      TRINO_PORT: "${TRINO_PORT:-8080}"
+      TRINO_PORT: "${TRINO_PORT:-8443}"
       TRINO_USER: "${TRINO_USER:-parus-mcp}"
-      TRINO_CATALOG: "${TRINO_CATALOG:-polaris}"
+      TRINO_PASSWORD: "${TRINO_PASSWORD:?TRINO_PASSWORD manquant dans .env}"
+      TRINO_CATALOG: "${TRINO_CATALOG:-dev}"
       TRINO_SCHEMA: "${TRINO_SCHEMA:-sales}"
-      TRINO_SCHEME: "${TRINO_SCHEME:-http}"
+      TRINO_SCHEME: "${TRINO_SCHEME:-https}"
+      TRINO_SSL: "${TRINO_SSL:-true}"
+      TRINO_SSL_INSECURE: "${TRINO_SSL_INSECURE:-true}"
+      # Le runtime Go de mcp-trino valide le certificat autosigné de Trino
+      # (son transport custom ignore les DSN SSL/SSLInsecure) : le
+      # certificat public de Trino est monté et désigné comme autorité de
+      # confiance. Il doit porter le SAN DNS:trino (nom réseau utilisé ici).
+      SSL_CERT_FILE: /certs/parus-trino.pem
       # Lecture seule : le LLM ne peut pas écrire dans le lakehouse.
       TRINO_ALLOW_WRITE_QUERIES: "${TRINO_ALLOW_WRITE_QUERIES:-false}"
       TRINO_QUERY_TIMEOUT: "${TRINO_QUERY_TIMEOUT:-60}"
@@ -60,6 +70,9 @@ services:
       MCP_HOST: "0.0.0.0"
       MCP_PORT: "8080"
       MCP_URL: "${MCP_URL:-http://localhost:8185}"
+    volumes:
+      # Certificat public (jamais la clé) du keystore de apps/trino.
+      - ../trino/etc/keystore.crt:/certs/parus-trino.pem:ro
     healthcheck:
       # Endpoint de statut du serveur (voir internal/mcp/server.go).
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/status || exit 1"]

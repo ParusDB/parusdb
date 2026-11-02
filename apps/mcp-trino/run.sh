@@ -40,9 +40,9 @@ fi
 # Vérifie que Trino est joignable avant de démarrer mcp-trino
 # (le serveur s'arrête de lui-même si Trino est indisponible).
 check_trino() {
-    TRINO_PORT_HOST=$(grep '^TRINO_PORT=' ../trino/.env 2>/dev/null | head -n 1 | cut -d= -f2- | tr -d "\r\"'")
-    TRINO_PORT_HOST=${TRINO_PORT_HOST:-8080}
-    curl -s --max-time 10 -o /dev/null -f "http://localhost:$TRINO_PORT_HOST/v1/info" \
+    TRINO_HTTPS_PORT_HOST=$(grep '^TRINO_HTTPS_PORT=' ../trino/.env 2>/dev/null | head -n 1 | cut -d= -f2- | tr -d "\r\"'")
+    TRINO_HTTPS_PORT_HOST=${TRINO_HTTPS_PORT_HOST:-8453}
+    curl -s --max-time 10 -o /dev/null -fk "https://localhost:$TRINO_HTTPS_PORT_HOST/v1/info" \
         || { echo "ERREUR : l'API de Trino ne répond pas." >&2
              echo "Démarrez d'abord Trino (cd ../trino && sh run.sh start)." >&2
              exit 1; }
