@@ -34,7 +34,7 @@ export function ConfirmNameDialog({
   description: string;
   expectedName: string;
   confirmLabel?: string;
-  action: () => Promise<{ ok: boolean; error?: string }>;
+  action: () => Promise<{ ok: boolean; error?: string; warning?: string }>;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
@@ -51,6 +51,9 @@ export function ConfirmNameDialog({
       const result = await action();
       if (result.ok) {
         toast.success(`${expectedName} a été supprimé.`);
+        if ("warning" in result && result.warning) {
+          toast.warning(result.warning);
+        }
         setOpen(false);
         setName("");
         router.refresh();

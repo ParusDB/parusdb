@@ -18,6 +18,13 @@ import {
   syncRoleCatalogAccess,
   type ParusPrivilege,
 } from "@/lib/polaris";
+import {
+  generateTrinoPassword,
+  isReservedTrinoUserName,
+  removeTrinoPassword,
+  syncTrinoRules,
+  upsertTrinoPassword,
+} from "@/lib/trino-security";
 
 // ---------------------------------------------------------------------------
 // Utilisateurs (spec §Administration — Utilisateurs)
@@ -157,6 +164,8 @@ const APP_USER_NAME_PATTERN = /^[a-z][a-z0-9-]{2,63}$/;
 export interface AppUserCredentials {
   clientId: string;
   clientSecret: string;
+  /** Mot de passe Trino (HTTPS + basic auth) : affiché une seule fois. */
+  trinoPassword?: string;
 }
 
 // Droits de catalogue actuels d'un rôle, pour le miroir Polaris.
@@ -182,7 +191,12 @@ export async function createAppUser(input: {
   name: string;
   note: string;
   roleId: string;
-}): Promise<{ ok: boolean; error?: string; credentials?: AppUserCredentials }> {
+}): Promise<{
+  ok: boolean;
+  error?: string;
+  warning?: string;
+  credentials?: AppUserCredentials;
+}> {
   const session = await requireAdmin();
   const admin = createAdminClient();
   const name = input.name.trim().toLowerCase();
@@ -191,6 +205,12 @@ export async function createAppUser(input: {
       ok: false,
       error:
         "Nom invalide : minuscules, chiffres et tirets, 3 caractères minimum (ex. airbyte-prod).",
+    };
+  }
+  if (isReservedTrinoUserName(name)) {
+    return {
+      ok: false,
+      error: "Ce nom est réservé à un compte de service Trino (BFF ou mcp-trino).",
     };
   }
   const { data: role } = await admin
@@ -257,15 +277,40 @@ export async function createAppUser(input: {
     }
     return { ok: false, error: `L'enregistrement a échoué : ${insertError.message}` };
   }
+
+  // 6. Durcissement Trino (rbac_refonte.md §9.2) : mot de passe Trino du
+  // compte applicatif (affiché une seule fois, comme le clientSecret) +
+  // règles d'access control régénérées. Best effort : un échec n'annule pas
+  // la création (le compte reste utilisable via Polaris REST), il est
+  // renvoyé en avertissement.
+  const trinoPassword = generateTrinoPassword();
+  let warning: string | undefined;
+  const passwordSync = await upsertTrinoPassword(name, trinoPassword);
+  const rulesSync = await syncTrinoRules();
+  if (!passwordSync.ok || !rulesSync.ok) {
+    warning =
+      "Compte créé, mais le durcissement Trino a échoué " +
+      `(${passwordSync.error ?? rulesSync.error}) : la connexion Trino du ` +
+      "compte ne sera pas utilisable tant que TRINO_SECURITY_DIR n'est pas " +
+      "corrigé (réinitialisez alors les credentials).";
+  }
+  credentials.trinoPassword = trinoPassword;
+
   revalidatePath("/admin/users");
-  return { ok: true, credentials };
+  return { ok: true, credentials, warning };
 }
 
-// Réinitialisation : nouveau secret (l'ancien est invalidé), retourné une
-// seule fois. Le clientId reste inchangé.
+// Réinitialisation : nouveaux secrets Polaris ET Trino (rotés ensemble,
+// même parcours — rbac_refonte.md §9.2), retournés une seule fois. Le
+// clientId reste inchangé.
 export async function rotateAppUserCredentials(
   appUserId: string,
-): Promise<{ ok: boolean; error?: string; credentials?: AppUserCredentials }> {
+): Promise<{
+  ok: boolean;
+  error?: string;
+  warning?: string;
+  credentials?: AppUserCredentials;
+}> {
   await requireAdmin();
   const admin = createAdminClient();
   const { data: appUser } = await admin
@@ -278,7 +323,7 @@ export async function rotateAppUserCredentials(
     return { ok: false, error: "Utilisateur applicatif introuvable." };
   }
   try {
-    const credentials = await resetPolarisCredentials(appUser.name);
+    const credentials: AppUserCredentials = await resetPolarisCredentials(appUser.name);
     const { error } = await admin
       .schema("iam")
       .from("app_users")
@@ -287,8 +332,17 @@ export async function rotateAppUserCredentials(
     if (error) {
       return { ok: false, error: `La mise à jour a échoué : ${error.message}` };
     }
+    // Mot de passe Trino régénéré avec le secret Polaris.
+    const trinoPassword = generateTrinoPassword();
+    const passwordSync = await upsertTrinoPassword(appUser.name, trinoPassword);
+    let warning: string | undefined;
+    if (!passwordSync.ok) {
+      warning = `Secrets Polaris régénérés, mais le mot de passe Trino n'a pas pu être mis à jour (${passwordSync.error}).`;
+    } else {
+      credentials.trinoPassword = trinoPassword;
+    }
     revalidatePath("/admin/users");
-    return { ok: true, credentials };
+    return { ok: true, credentials, warning };
   } catch (error) {
     return {
       ok: false,
@@ -298,11 +352,11 @@ export async function rotateAppUserCredentials(
 }
 
 // Changement de rôle : réassignation du principal-role Polaris + resync des
-// accès catalogue.
+// accès catalogue + régénération des règles Trino (durcissement).
 export async function updateAppUserRole(
   appUserId: string,
   roleId: string,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; warning?: string }> {
   await requireAdmin();
   const admin = createAdminClient();
   const [{ data: appUser }, { data: role }] = await Promise.all([
@@ -365,13 +419,22 @@ export async function updateAppUserRole(
   if (error) {
     return { ok: false, error: `La mise à jour a échoué : ${error.message}` };
   }
+  // Règles d'access control Trino : elles suivent les grants du nouveau rôle
+  // (best effort, cf. miroir Polaris).
+  const trinoSync = await syncTrinoRules();
   revalidatePath("/admin/users");
+  if (!trinoSync.ok) {
+    return {
+      ok: true,
+      warning: `Rôle mis à jour, mais la régénération des règles Trino a échoué : ${trinoSync.error}`,
+    };
+  }
   return { ok: true };
 }
 
 export async function deleteAppUser(
   appUserId: string,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; warning?: string }> {
   await requireAdmin();
   const admin = createAdminClient();
   const { data: appUser } = await admin
@@ -399,7 +462,19 @@ export async function deleteAppUser(
   if (error) {
     return { ok: false, error: `La suppression a échoué : ${error.message}` };
   }
+  // Révocation immédiate côté Trino : retrait de la ligne bcrypt (refresh
+  // 5 s) + règles régénérées (best effort).
+  const passwordSync = await removeTrinoPassword(appUser.name);
+  const rulesSync = await syncTrinoRules();
   revalidatePath("/admin/users");
+  if (!passwordSync.ok || !rulesSync.ok) {
+    return {
+      ok: true,
+      warning:
+        "Compte supprimé, mais la révocation Trino a échoué " +
+        `(${passwordSync.error ?? rulesSync.error}) : vérifiez TRINO_SECURITY_DIR.`,
+    };
+  }
   return { ok: true };
 }
 
@@ -597,16 +672,23 @@ export async function setRoleGrant(input: {
   // Miroir Polaris (comptes applicatifs du rôle) : best effort — un échec
   // est renvoyé en avertissement sans bloquer l'édition applicative
   // (synchronisation éventuellement cohérente, rbac_refonte.md §7).
+  let warning: string | undefined;
   if (input.resourceType === "catalog") {
     const sync = await mirrorRoleCatalogAccess(input.roleId);
     if (!sync.ok) {
-      return {
-        ok: true,
-        warning: `Droit enregistré, mais la synchronisation Polaris a échoué : ${sync.error}`,
-      };
+      warning = `Droit enregistré, mais la synchronisation Polaris a échoué : ${sync.error}`;
+    }
+    // Durcissement Trino : rules.json régénéré depuis iam.grants (source de
+    // vérité unique) — refus effectif sur le chemin Trino (dbt, Power BI,
+    // JDBC) après refresh (5 s), sans redémarrage. Best effort identique.
+    const trinoSync = await syncTrinoRules();
+    if (!trinoSync.ok) {
+      const msg = `Droit enregistré, mais la régénération des règles Trino a échoué : ${trinoSync.error}`;
+      warning = warning ? `${warning} ${msg}` : msg;
     }
   }
   revalidatePath("/admin/roles");
+  if (warning) return { ok: true, warning };
   return { ok: true };
 }
 

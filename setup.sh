@@ -212,6 +212,9 @@ sync_var "$NEXTJS_ENV_LOCAL" POLARIS_ROOT_CLIENT_ID "apps/polaris/.env" POLARIS_
 sync_var "$NEXTJS_ENV_LOCAL" POLARIS_ROOT_CLIENT_SECRET "apps/polaris/.env" POLARIS_ROOT_CLIENT_SECRET
 sync_var "$NEXTJS_ENV_LOCAL" POLARIS_SYSTEM_CATALOG "apps/polaris/.env" POLARIS_SYSTEM_CATALOG
 sync_var "$NEXTJS_ENV_LOCAL" POLARIS_S3_BUCKET "apps/polaris/.env" POLARIS_S3_BUCKET
+# Mot de passe Trino du compte de service BFF (durcissement, rbac_refonte.md
+# §9) : TRINO_SERVICE_PASSWORD généré par apps/trino/setup.sh.
+sync_var "$NEXTJS_ENV_LOCAL" TRINO_PASSWORD "apps/trino/.env" TRINO_SERVICE_PASSWORD
 # Clés S3 (RustFS) : affichées côté administration (/admin/informations)
 # pour les outils qui écrivent directement dans l'object storage (Airbyte).
 sync_var "$NEXTJS_ENV_LOCAL" S3_ACCESS_KEY_ID "apps/polaris/.env" S3_ACCESS_KEY_ID

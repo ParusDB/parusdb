@@ -61,12 +61,17 @@ interface RoleOption {
   key: string;
 }
 
-// Modale credentials (affichage unique) : copie clientId + secret.
+// Modale credentials (affichage unique) : copie clientId + secret, et le
+// mot de passe Trino lorsqu'il est présent (rotation conjointe).
 function CredentialsDialog({
   credentials,
   onOpenChange,
 }: {
-  credentials: { clientId: string; clientSecret: string } | null;
+  credentials: {
+    clientId: string;
+    clientSecret: string;
+    trinoPassword?: string;
+  } | null;
   onOpenChange: (open: boolean) => void;
 }) {
   if (!credentials) return null;
@@ -76,8 +81,8 @@ function CredentialsDialog({
         <DialogHeader>
           <DialogTitle>Credentials du compte applicatif</DialogTitle>
           <DialogDescription>
-            Le secret n&apos;est affiché qu&apos;une seule fois : copiez-le
-            maintenant. Une réinitialisation sera nécessaire si vous le
+            Les secrets n&apos;est affichés qu&apos;une seule fois : copiez-les
+            maintenant. Une réinitialisation sera nécessaire si vous les
             perdez.
           </DialogDescription>
         </DialogHeader>
@@ -120,6 +125,31 @@ function CredentialsDialog({
               </Button>
             </div>
           </div>
+          {credentials.trinoPassword ? (
+            <div className="grid gap-2">
+              <Label>Mot de passe Trino (HTTPS)</Label>
+              <p className="text-sm text-muted-foreground">
+                Utilisateur Trino = nom du compte, mot de passe ci-dessous
+                (connexion SQL des outils data : dbt, Power BI, JDBC).
+              </p>
+              <div className="flex items-center gap-2">
+                <code className="mono min-w-0 flex-1 truncate rounded-lg border border-jaune/50 bg-jaune/10 px-3 py-2 text-sm text-charbon">
+                  {credentials.trinoPassword}
+                </code>
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  aria-label="Copier le mot de passe Trino"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(credentials.trinoPassword ?? "");
+                    toast.success("Mot de passe Trino copié.");
+                  }}
+                >
+                  <Copy className="h-4 w-4" strokeWidth={1.6} />
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </div>
         <DialogFooter>
           <Button onClick={() => onOpenChange(false)}>Fermer</Button>
@@ -145,6 +175,7 @@ export function AppUsersTable({
   const [credentials, setCredentials] = useState<{
     clientId: string;
     clientSecret: string;
+    trinoPassword?: string;
   } | null>(null);
 
 
@@ -159,6 +190,7 @@ export function AppUsersTable({
       const result = await createAppUser({ name, note, roleId });
       if (result.ok) {
         toast.success(`Compte applicatif « ${name.trim().toLowerCase()} » créé.`);
+        if (result.warning) toast.warning(result.warning);
         setCreateOpen(false);
         setName("");
         setNote("");
@@ -178,7 +210,8 @@ export function AppUsersTable({
   async function handleRotate(id: string) {
     const result = await rotateAppUserCredentials(id);
     if (result.ok) {
-      toast.success("Credentials réinitialisées : copiez le nouveau secret.");
+      toast.success("Credentials réinitialisées : copiez les nouveaux secrets.");
+      if (result.warning) toast.warning(result.warning);
       if (result.credentials) setCredentials(result.credentials);
       router.refresh();
     } else {
@@ -189,7 +222,8 @@ export function AppUsersTable({
   async function handleRoleChange(id: string, nextRoleId: string) {
     const result = await updateAppUserRole(id, nextRoleId);
     if (result.ok) {
-      toast.success("Rôle mis à jour : les accès Polaris sont resynchronisés.");
+      toast.success("Rôle mis à jour : les accès Polaris et Trino sont resynchronisés.");
+      if (result.warning) toast.warning(result.warning);
       router.refresh();
     } else {
       toast.error(result.error ?? "La mise à jour a échoué.");
