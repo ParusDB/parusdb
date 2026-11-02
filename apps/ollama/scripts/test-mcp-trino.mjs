@@ -88,10 +88,22 @@ const MONTHLY_TOTAL = AMOUNT_A + AMOUNT_B; // 2091.25
 const EXPECTED = MONTHLY_TOTAL * 3; // 3 mois glissants = 6273.75
 
 function trino(sql) {
+  // Trino durci (rbac_refonte.md §9) : HTTPS + authentification par mot de
+  // passe du compte de service BFF (apps/trino/.env).
   try {
     return execFileSync(
       "docker",
-      ["exec", TRINO_CONTAINER, "trino", "--execute", sql],
+      [
+        "exec",
+        "-e", `TRINO_PASSWORD=${trinoEnv.TRINO_SERVICE_PASSWORD ?? ""}`,
+        TRINO_CONTAINER,
+        "trino",
+        "--server", "https://localhost:8443",
+        "--user", trinoEnv.TRINO_SERVICE_USER || "parus-app",
+        "--password",
+        "--insecure",
+        "--execute", sql,
+      ],
       { encoding: "utf8" },
     );
   } catch (err) {
@@ -246,6 +258,15 @@ async function main() {
     "Tu accèdes au lakehouse uniquement via les outils MCP du serveur Trino fournis :",
     "explore d'abord les catalogues, schémas, puis les tables et leurs colonnes,",
     "puis écris et exécute une requête SQL via execute_query.",
+    "Le moteur est Trino. Dates relatives : utilise",
+    "date_add('month', -3, current_date) ou current_date - INTERVAL '3' DAY.",
+    "N'écris jamais l'unité dans la chaîne d'intervalle (INTERVAL '3 months'",
+    "est rejeté par Trino) et ne réessaie pas une syntaxe qui vient d'être",
+    "rejetée : change d'approche.",
+    "Pour une question « sur N mois » : compte les N derniers mois COMPLETS,",
+    "hors mois en cours —",
+    "order_date >= date_trunc('month', current_date) - INTERVAL 'N' MONTH",
+    "AND order_date < date_trunc('month', current_date).",
     "Restitue enfin la réponse chiffrée clairement, avec l'unité (euros).",
   ].join(" ");
 
