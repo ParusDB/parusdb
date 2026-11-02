@@ -228,9 +228,16 @@ export async function syncTrinoRules(): Promise<{ ok: boolean; error?: string }>
   }
 
   try {
+    // Piège Trino (vérifié empiriquement) : les clés "schemas" et "tables"
+    // présentes mais VIDES font échouer SHOW SCHEMAS pour tous les
+    // utilisateurs, y compris allow:all — une section sans règle doit être
+    // absente du JSON, jamais un tableau vide.
+    const file: Record<string, unknown> = { catalogs: rules.catalogs };
+    if (rules.schemas.length > 0) file.schemas = rules.schemas;
+    if (rules.tables.length > 0) file.tables = rules.tables;
     await fs.writeFile(
       path.join(dir, "rules.json"),
-      JSON.stringify(rules, null, 2) + "\n",
+      JSON.stringify(file, null, 2) + "\n",
       "utf-8",
     );
     return { ok: true };
