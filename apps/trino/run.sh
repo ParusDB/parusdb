@@ -77,8 +77,15 @@ case "$CMD" in
         exec docker compose logs -f "$@"
         ;;
     cli)
-        echo "Session SQL Trino — catalogue 'polaris' (warehouse Polaris). Ctrl-D pour sortir."
-        exec docker compose exec trino trino
+        # Session SQL en HTTPS + authentification (durcissement, rbac_refonte
+        # §9) : compte de service du BFF, mot de passe passé par variable
+        # d'environnement (jamais en argument de ligne de commande).
+        TRINO_SERVICE_USER=$(grep '^TRINO_SERVICE_USER=' .env | head -n 1 | cut -d= -f2- | tr -d '"' || echo parus-app)
+        TRINO_SERVICE_PASSWORD=$(grep '^TRINO_SERVICE_PASSWORD=' .env | head -n 1 | cut -d= -f2- | tr -d '"')
+        echo "Session SQL Trino (HTTPS, compte $TRINO_SERVICE_USER). Ctrl-D pour sortir."
+        exec docker compose exec -e TRINO_PASSWORD="$TRINO_SERVICE_PASSWORD" trino trino \
+            --server https://localhost:8443 --user "$TRINO_SERVICE_USER" \
+            --password --insecure
         ;;
     inspect)
         [ $# -eq 0 ] && { echo "Usage : $(basename "$0") inspect <service> [docker-inspect-args]" >&2; exit 1; }
@@ -101,7 +108,7 @@ case "$CMD" in
         exec docker compose config "$@"
         ;;
     secrets)
-        for var in POLARIS_CLIENT_ID POLARIS_CLIENT_SECRET; do
+        for var in POLARIS_CLIENT_ID POLARIS_CLIENT_SECRET TRINO_SERVICE_PASSWORD TRINO_MCP_PASSWORD TRINO_INTERNAL_SHARED_SECRET; do
             line=$(grep "^${var}=" .env | head -n 1)
             if [ -n "$line" ]; then
                 echo "$line"

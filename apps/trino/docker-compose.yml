@@ -34,12 +34,17 @@ services:
     networks:
       - supabase
     ports:
-      # UI web + API HTTP
-      - "${TRINO_PORT:-8080}:8080"
+      # API + UI web en HTTPS (durcissement, rbac_refonte.md §9). Le port
+      # interne du conteneur est toujours 8443 ; le port hôte par défaut
+      # (8453) évite la collision avec Kong (supabase-kong publie déjà
+      # 8443). Le port interne 8080 (HTTP) reste ouvert dans le conteneur
+      # pour la communication interne (discovery) mais n'est pas publié :
+      # l'authentification par mot de passe exige TLS.
+      - "${TRINO_HTTPS_PORT:-8453}:8443"
     environment:
       # Injectées par substitution ${ENV:VAR} dans les bindings générés
       # (catalog/<catalogue>.properties : un fichier par catalogue Polaris,
-      # généré par setup.sh ou par l'application — le nom du fichier Trino est
+      # générés par setup.sh ou par l'application — le nom du fichier Trino est
       # le nom du catalogue Polaris).
       POLARIS_URI: "${POLARIS_URI:-http://polaris:8181/api/catalog}"
       POLARIS_REALM: "${POLARIS_REALM:-POLARIS}"
@@ -47,12 +52,27 @@ services:
       CLIENT_SECRET: "${POLARIS_CLIENT_SECRET:?POLARIS_CLIENT_SECRET manquant dans .env}"
       S3_ENDPOINT: "${S3_ENDPOINT:-http://rustfs:9000}"
       S3_REGION: "${S3_REGION:-us-east-1}"
+      # Config copiée depuis l'image (config.properties généré par setup.sh
+      # reprend la valeur du catalogue management de l'image).
+      CATALOG_MANAGEMENT: "${CATALOG_MANAGEMENT:-static}"
     volumes:
       # Catalogues iceberg : Iceberg REST -> Polaris (un .properties par
       # catalogue, généré — plus aucun fichier statique commité).
       - ./catalog:/etc/trino/catalog:ro
+      # Durcissement (générés par setup.sh, jamais commités) :
+      # config (HTTPS + auth + secret interne), authenticator password
+      # file, access control, keystore TLS autosigné.
+      - ./etc/config.properties:/etc/trino/config.properties:ro
+      - ./etc/password-authenticator.properties:/etc/trino/password-authenticator.properties:ro
+      - ./etc/access-control.properties:/etc/trino/access-control.properties:ro
+      - ./etc/keystore.pem:/etc/trino/keystore.pem:ro
+      # Fichiers de sécurité générés par l'application (apps/nextjs,
+      # TRINO_SECURITY_DIR) : password.db (bcrypt) + rules.json (access
+      # control). Le conteneur n'écrit pas dedans : recharge périodique
+      # (file.refresh-period / security.refresh-period, sans redémarrage).
+      - ./security:/etc/trino/security:ro
     healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:8080/v1/info"]
+      test: ["CMD", "curl", "--fail", "--insecure", "https://localhost:8443/v1/info"]
       interval: 5s
       timeout: 10s
       retries: 20

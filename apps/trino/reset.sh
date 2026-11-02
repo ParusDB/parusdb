@@ -67,6 +67,14 @@ compose_down() {
 
 compose_down
 
+echo "===> Suppression des artefacts de durcissement (etc/, security/)..."
+# Config durcie, keystore TLS et fichiers de sécurité (mots de passe bcrypt,
+# règles d'access control) : tous régénérés par le prochain setup.sh — les
+# secrets correspondants vivent dans .env (reset ci-dessous).
+confirm
+rm -rf etc security
+echo "    artefacts supprimés"
+
 echo "===> Remise à zéro de .env (sauvegarde en .env.old)..."
 confirm
 if [ -f ".env" ] || [ -L ".env" ]; then

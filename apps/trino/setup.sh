@@ -9,14 +9,19 @@
 #   1. vérification des prérequis (docker, compose, Polaris joignable) ;
 #   2. création de .env depuis .env.example si absent, import des credentials
 #      Polaris depuis apps/polaris/.env ;
-#   3. démarrage de la stack compose ;
-#   4. génération des bindings de catalogues : un fichier
+#   3. durcissement (rbac_refonte.md §9) : keystore TLS autosigné,
+#      config.properties (HTTPS + authentification password file + secret
+#      interne), comptes de service bcrypt (BFF, mcp-trino) et règles
+#      d'access control de bootstrap — l'application régénère ensuite
+#      password.db/rules.json depuis iam.grants (TRINO_SECURITY_DIR) ;
+#   4. démarrage de la stack compose ;
+#   5. génération des bindings de catalogues : un fichier
 #      catalog/<catalogue>.properties par catalogue Polaris (le nom du fichier
 #      est le nom du catalogue Trino — on requête `SELECT … FROM dev…`, pas
 #      `FROM polaris…`). Le catalogue par défaut et le catalogue système
 #      sont générés ici ; les autres le sont par l'application à leur
 #      création ;
-#   5. test de bout en bout : lecture des schémas de chaque catalogue.
+#   6. test de bout en bout : lecture des schémas de chaque catalogue.
 #
 # Usage :
 #   sh setup.sh               # bootstrap complet puis démarrage
@@ -141,7 +146,7 @@ set_env_value POLARIS_CLIENT_SECRET "$POLARIS_ROOT_CLIENT_SECRET"
 [ -n "$POLARIS_S3_REGION" ] && set_env_value S3_REGION "$POLARIS_S3_REGION"
 
 # Valeurs par défaut pour toute clé restée vide.
-for var in POLARIS_URI POLARIS_CATALOG_NAME POLARIS_SYSTEM_CATALOG POLARIS_REALM S3_ENDPOINT S3_REGION TRINO_PORT; do
+for var in POLARIS_URI POLARIS_CATALOG_NAME POLARIS_SYSTEM_CATALOG POLARIS_REALM S3_ENDPOINT S3_REGION TRINO_PORT TRINO_HTTPS_PORT TRINO_SERVICE_USER TRINO_MCP_USER; do
     ensure_from_example "$var"
 done
 
@@ -192,6 +197,127 @@ else
     echo "    POLARIS_CATALOG_NAME vide : aucun binding par défaut généré"
 fi
 
+# ---------------------------------------------------------------------------
+# Durcissement Trino (rbac_refonte.md §9) : HTTPS autosigné + authenticator
+# password file (bcrypt) + access control JSON. Le port HTTP clair n'est plus
+# publié : l'authentification exige TLS. Les comptes applicatifs et les
+# règles issues de iam.grants sont régénérés par l'application (apps/nextjs,
+# TRINO_SECURITY_DIR) ; ce setup ne pose que les comptes de service statiques
+# et les règles de bootstrap.
+# ---------------------------------------------------------------------------
+echo "===> Durcissement Trino (HTTPS + authentification + access control)..."
+
+# Secrets de service : générés une seule fois, conservés entre les relances.
+generate_secret() {
+    if [ -z "$(get_env_value "$1")" ]; then
+        set_env_value "$1" "$(openssl rand -hex 24)"
+        echo "    $1 généré"
+    fi
+}
+generate_secret TRINO_SERVICE_PASSWORD
+generate_secret TRINO_MCP_PASSWORD
+generate_secret TRINO_INTERNAL_SHARED_SECRET
+
+TRINO_SERVICE_USER=$(get_env_value TRINO_SERVICE_USER)
+TRINO_MCP_USER=$(get_env_value TRINO_MCP_USER)
+[ -n "$TRINO_SERVICE_USER" ] || TRINO_SERVICE_USER="parus-app"
+[ -n "$TRINO_MCP_USER" ] || TRINO_MCP_USER="parus-mcp"
+TRINO_HTTPS_PORT_VAL=$(get_env_value TRINO_HTTPS_PORT)
+[ -n "$TRINO_HTTPS_PORT_VAL" ] || TRINO_HTTPS_PORT_VAL="8453"
+
+mkdir -p "$SCRIPT_DIR/etc" "$SCRIPT_DIR/security"
+
+# Keystore TLS autosigné (PEM clé + certificat, accepté nativement par
+# Trino). Conservé s'il existe : les clients ne valident pas le certificat
+# (réseau privé — friction documentée dans /admin/informations).
+if [ ! -f "$SCRIPT_DIR/etc/keystore.pem" ]; then
+    openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
+        -subj "/CN=parus-trino" \
+        -keyout "$SCRIPT_DIR/etc/keystore.key" \
+        -out "$SCRIPT_DIR/etc/keystore.crt" 2>/dev/null \
+        || fail "la génération du keystore TLS a échoué (openssl requis)"
+    cat "$SCRIPT_DIR/etc/keystore.key" "$SCRIPT_DIR/etc/keystore.crt" \
+        > "$SCRIPT_DIR/etc/keystore.pem"
+    rm -f "$SCRIPT_DIR/etc/keystore.key" "$SCRIPT_DIR/etc/keystore.crt"
+    echo "    keystore TLS autosigné généré (etc/keystore.pem)"
+fi
+chmod 600 "$SCRIPT_DIR/etc/keystore.pem"
+
+# config.properties : base extraite de l'image (version épinglée du compose)
+# + propriétés de durcissement. Le secret interne est OBLIGATOIRE dès qu'une
+# authentification est activée — même en mono-noeud (communication interne
+# discovery), sinon Trino refuse de démarrer.
+TRINO_IMAGE=$(grep -m1 'image:' "$SCRIPT_DIR/docker-compose.yml" | awk '{print $2}')
+docker run --rm --entrypoint cat "$TRINO_IMAGE" /etc/trino/config.properties \
+    > "$SCRIPT_DIR/etc/config.properties" \
+    || fail "lecture de la config de l'image $TRINO_IMAGE impossible"
+cat >> "$SCRIPT_DIR/etc/config.properties" <<PROPS
+
+# Durcissement ParusDB (rbac_refonte.md §9) — HTTPS + authentification.
+http-server.https.enabled=true
+http-server.https.port=8443
+http-server.https.keystore.path=etc/keystore.pem
+http-server.authentication.type=PASSWORD
+internal-communication.shared-secret=$(get_env_value TRINO_INTERNAL_SHARED_SECRET)
+PROPS
+chmod 600 "$SCRIPT_DIR/etc/config.properties"
+
+# Authenticator password file : rechargé toutes les 5 s (défaut Trino),
+# sans redémarrage — l'application ajoute/retire les comptes applicatifs.
+cat > "$SCRIPT_DIR/etc/password-authenticator.properties" <<PROPS
+password-authenticator.name=file
+file.password-file=/etc/trino/security/password.db
+PROPS
+
+# Access control par règles JSON : rechargé toutes les 5 s sans redémarrage
+# (révocation d'un grant = refus immédiat). Le fichier rules.json est
+# régénéré en entier par l'application ; ce bootstrap ne couvre que les
+# comptes de service statiques (BFF non contraint — la garde RBAC est
+# applicative côté éditeur SQL ; mcp-trino en lecture seule globale, son
+# périmètre réel est borné par TRINO_ALLOWED_SCHEMAS côté serveur MCP).
+cat > "$SCRIPT_DIR/etc/access-control.properties" <<PROPS
+access-control.name=file
+security.config-file=/etc/trino/security/rules.json
+security.refresh-period=5s
+PROPS
+
+# bcrypt au format Trino ($2y$, cost 10 ≥ 8) : conteneur éphémère htpasswd
+# (même pattern que les busybox des reset.sh — aucun outil bcrypt fiable sur
+# l'hôte, busybox cryptpw ne supporte pas bcrypt).
+htpasswd_hash() {
+    docker run --rm httpd:2-alpine htpasswd -bnB -C 10 "$1" "$2" \
+        || fail "la génération bcrypt a échoué (image httpd:2-alpine requise)"
+}
+
+# password.db : les lignes des comptes applicatifs (autres utilisateurs,
+# gérées par l'application) sont préservées ; seules les deux lignes des
+# comptes de service sont mises à jour.
+touch "$SCRIPT_DIR/security/password.db"
+grep -v "^${TRINO_SERVICE_USER}:" "$SCRIPT_DIR/security/password.db" \
+    | grep -v "^${TRINO_MCP_USER}:" > "$SCRIPT_DIR/security/password.db.tmp" || true
+htpasswd_hash "$TRINO_SERVICE_USER" "$(get_env_value TRINO_SERVICE_PASSWORD)" \
+    >> "$SCRIPT_DIR/security/password.db.tmp"
+htpasswd_hash "$TRINO_MCP_USER" "$(get_env_value TRINO_MCP_PASSWORD)" \
+    >> "$SCRIPT_DIR/security/password.db.tmp"
+mv "$SCRIPT_DIR/security/password.db.tmp" "$SCRIPT_DIR/security/password.db"
+chmod 600 "$SCRIPT_DIR/security/password.db"
+
+# rules.json de bootstrap (l'application en devient propriitaire ensuite et
+# le régénère en entier à chaque modification des grants/comptes).
+if [ ! -f "$SCRIPT_DIR/security/rules.json" ]; then
+    cat > "$SCRIPT_DIR/security/rules.json" <<EOF
+{
+  "catalogs": [
+    { "user": "^${TRINO_SERVICE_USER}\$", "allow": "all" },
+    { "user": "^${TRINO_MCP_USER}\$", "allow": "read-only" }
+  ]
+}
+EOF
+    chmod 600 "$SCRIPT_DIR/security/rules.json"
+    echo "    règles d'access control de bootstrap générées (security/rules.json)"
+fi
+echo "    comptes de service Trino : $TRINO_SERVICE_USER (BFF), $TRINO_MCP_USER (mcp-trino)"
+
 if [ "$SKIP_START" = "1" ]; then
     echo ""
     echo "Préparation terminée (--skip-start : stack non démarrée)."
@@ -203,16 +329,24 @@ echo "===> Démarrage de la stack Trino..."
 docker compose up -d --wait
 echo "    trino est démarré et sain"
 
-echo "===> Test de bout en bout (schémas de chaque catalogue via Polaris)..."
+echo "===> Test de bout en bout (HTTPS + authentification, schémas de chaque catalogue)..."
+SERVICE_PW=$(get_env_value TRINO_SERVICE_PASSWORD)
 for catalog in $POLARIS_SYSTEM_CATALOG $POLARIS_CATALOG_NAME; do
-    docker compose exec -T trino trino --execute "SHOW SCHEMAS FROM $catalog"
+    docker compose exec -T -e TRINO_PASSWORD="$SERVICE_PW" trino trino \
+        --server https://localhost:8443 --user "$TRINO_SERVICE_USER" \
+        --password --insecure \
+        --execute "SHOW SCHEMAS FROM $catalog"
 done
 
 echo ""
 echo "Trino est prêt."
-echo "  UI web + API HTTP   : http://localhost:$(get_env_value TRINO_PORT)"
+echo "  UI web + API HTTPS  : https://localhost:$(get_env_value TRINO_HTTPS_PORT)"
+echo "                        (certificat autosigné, authentification obligatoire)"
 echo "  Catalogues Trino    : $POLARIS_SYSTEM_CATALOG (système), $POLARIS_CATALOG_NAME (environnement)"
 echo "  CLI SQL             : sh run.sh cli"
 echo ""
+echo "Les comptes de service (BFF $TRINO_SERVICE_USER, mcp-trino $TRINO_MCP_USER) sont"
+echo "dans apps/trino/.env — synchronisés vers les apps par le setup racine."
+echo ""
 echo "Exemple :"
-echo "  docker compose exec -T trino trino --execute \"SELECT * FROM $POLARIS_CATALOG_NAME.information_schema.tables\""
+echo "  docker compose exec -T -e TRINO_PASSWORD=\$TRINO_SERVICE_PASSWORD trino trino --server https://localhost:8443 --user $TRINO_SERVICE_USER --password --insecure --execute \"SELECT * FROM $POLARIS_CATALOG_NAME.information_schema.tables\""
