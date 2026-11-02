@@ -59,6 +59,9 @@ sh reset.sh   # tout réinitialiser (conteneurs + modèles + .env)
   lakehouse et exécute son SQL via mcp-trino, puis restitue la réponse.
   Le script (`scripts/test-mcp-trino.mjs`, Node >= 18 sans dépendance) crée
   les données de test `dev.sales.orders` et vérifie le montant attendu.
+  Il sème ses données via le CLI Trino **durci** (HTTPS + credentials du
+  compte de service BFF importées de `apps/trino/.env`) : le port HTTP clair
+  n'est plus publié.
 
 ## Notes opérationnelles
 
@@ -76,7 +79,10 @@ sh reset.sh   # tout réinitialiser (conteneurs + modèles + .env)
   `PARUSDB_AGENT_MAX_STEPS` (8 par défaut) et le titre de conversation est
   généré par une seconde requête au même modèle.
 - **Le LLM est non déterministe** : `ministral-3:3b` peut échouer sur une syntaxe
-  Trino invalide d'une exécution à l'autre. Le prompt socle de l'app documente
-  la syntaxe des dates relatives Trino (`date_add('month', -3, current_date)`)
-  et impose de corriger et rejouer en cas d'erreur SQL — toujours rejouer un
-  test e2e avant de conclure à un succès ou un échec.
+  Trino invalide d'une exécution à l'autre (boucle observée sur
+  `INTERVAL '3 months'` — unité dans la chaîne, rejetée par Trino). Le prompt
+  socle de l'app (et du script e2e — les garder synchrones) impose
+  `date_add('month', -3, current_date)` ou `current_date - INTERVAL '3' DAY`,
+  avec contre-exemple explicite, l'interdiction de répéter une syntaxe
+  rejetée, et la sémantique « N mois = mois complets, hors mois en cours » —
+  toujours rejouer un test e2e avant de conclure à un succès ou un échec.

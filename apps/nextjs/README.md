@@ -32,7 +32,7 @@ afficher** (copie par `sed`/`grep`, pas de copier-coller dans un terminal).
 | Agents IA (CRUD, modèles, sources) | `/agents` | Fonctionnel |
 | Data Lakehouse (catalogues Polaris, éditeur SQL Trino) | `/data-lakehouse` | Fonctionnel |
 | Connecteurs ELT (dlt) | `/connectors` | Fonctionnel — introspection réelle, exécution dlt (apps/dlt), historique des runs |
-| Administration (utilisateurs, rôles, fournisseurs LLM) | `/admin/*` | Fonctionnel |
+| Administration (utilisateurs, rôles, fournisseurs LLM, informations) | `/admin/*` | Fonctionnel |
 
 ## Variables d'environnement (`.env.local`)
 
@@ -69,7 +69,9 @@ afficher** (copie par `sed`/`grep`, pas de copier-coller dans un terminal).
   conversations appartiennent au compte (partage en lecture seule à un rôle) ;
   les comptes applicatifs (outils data, `/admin/users` → Applicatifs)
   répliquent leurs droits de catalogue en grants Polaris réels
-  (`lib/polaris.ts`).
+  (`lib/polaris.ts`) **et en règles d'access control Trino** (durcissement :
+  `lib/trino-security.ts` → `password.db` + `rules.json`, refus réel sur le
+  chemin SQL des outils externes).
 - **Schémas métier PostgreSQL** : `iam`, `agents`, `chat`, `lakehouse`,
   `connectors`, `admin` — DDL versionné et idempotent dans
   `apps/supabase/sql/01-parusdb-app.sql` (RLS partout, TO authenticated +
@@ -155,8 +157,12 @@ vérification RLS par requêtes de test et, pour le chat, un test e2e rejoué
 - Les modèles de raisonnement renvoient parfois `content` en tableau de
   blocs (`thinking`/`text`) : seul le texte est retenu (`normalizeContent`
   dans `lib/llm.ts`).
-- L'éditeur SQL s'exécute sous l'utilisateur Trino unique : le RBAC porte sur
-  la visibilité des catalogues par rôle, pas sur des rôles Trino distincts.
+- L'éditeur SQL de l'interface s'exécute sous le compte de service BFF,
+  **non contraint** par les règles Trino (durcissement) : sa garde RBAC est
+  applicative (`iam.has_grant` : lecture/écriture par catalogue). Les
+  comptes applicatifs et les outils externes connectés à Trino, eux, sont
+  réellement contraints par les règles d'access control générées depuis
+  `iam.grants` — voir `apps/trino/README.md`.
 - Connecteurs ELT : le CRON est évalué en UTC ; le mode d'insertion
   (incrémental / toutes les données) s'applique aux sources génériques
   (SQL, REST, fichiers) — les sources verified conservent leurs

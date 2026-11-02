@@ -14,7 +14,7 @@ vendus par Polaris. Trino ne stocke aucun secret d'infrastructure.
 | Credentials S3 | vendus par Polaris (`iceberg.rest-catalog.vended-credentials-enabled=true`) — aucun secret statique côté Trino |
 | Réseau | externe `supabase_default` (stacks Supabase et Polaris démarrées) |
 | État | sans état ; les requêtes passent par le principal root Polaris. Le RBAC applicatif (rôle actif, grants `iam.grants` + propriété `owner_role_id`) est implémenté **côté application** (l'éditeur SQL exige Lecture pour une requête de lecture, Écriture pour toute requête modifiante) — le compte de service BFF n'est pas contraint par les règles Trino |
-| Durcissement | HTTPS (certificat autosigné, port public **8453**) + authentification password file bcrypt + access control par règles JSON générés depuis `iam.grants` par le BFF (rbac_refonte.md §9) |
+| Durcissement | HTTPS (certificat autosigné, port public **8453**) + authentification password file bcrypt + access control par règles JSON générés depuis `iam.grants` par le BFF (AGENTS.md §10) |
 
 ## Cycle de vie
 
@@ -38,7 +38,7 @@ Prérequis : stack Supabase (avec RustFS) puis Polaris démarrées
   `.env`)
 - Catalogues Trino : `dev` (environnement) et `parusdb` (système), au nom de leur catalogue Polaris (ex. `SHOW SCHEMAS FROM dev`)
 
-## Durcissement (rbac_refonte.md §9)
+## Durcissement (AGENTS.md §10, spec fonctionnelle §Administration/Informations)
 
 Trino est un **artefact dérivé de `iam.grants`** — l'admin ne change pas
 d'UX :
@@ -71,6 +71,13 @@ d'UX :
 - Le port HTTP clair n'est plus publié (l'authentification exige TLS) ;
   tout client direct (dbt, JDBC/ODBC, scripts) passe par
   `/admin/informations` pour les paramètres de connexion.
+- **Leçons complémentaires** : le compte BFF non contraint (`allow: all`)
+  peut faire du DDL (CREATE SCHEMA/TABLE) sans règles schemas/tables —
+  ces règles ne servent qu'à restreindre les autres comptes ; bcryptjs
+  produit un préfixe `$2a$`/`$2b$`, Trino exige `$2y$` (remplacement de
+  préfixe interopérable) ; après tout changement de surface Trino, grepper
+  `localhost:8080` dans toutes les apps — des clients directs oubliés
+  subsistent (cas réel : le script e2e d'Ollama).
 
 ## Notes opérationnelles
 

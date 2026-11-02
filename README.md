@@ -81,6 +81,11 @@ Apache 2.0).
 
 **Prérequis** : Git, Node.js LTS + npm, Docker avec le plugin Compose.
 
+> Le plus simple : `sh setup.sh` à la racine orchestre toute l'installation
+> (ordre des dépendances, SQL applicatif, synchronisation du frontend, test
+> dlt). Le pas-à-pas ci-dessous détaille chaque brique pour comprendre la
+> mécanique.
+
 ### 1. Stack Supabase (self-hosted)
 
 ```bash
@@ -106,14 +111,16 @@ et la [documentation self-hosting Supabase](https://supabase.com/docs/guides/sel
 
 ```bash
 cd apps/polaris
-sh setup.sh        # base `polaris` dans le Postgres Supabase, bucket RustFS, stack, catalogue `dev`
+sh setup.sh        # base `polaris` dans le Postgres Supabase, bucket RustFS, stack, catalogues `parusdb` (système) + `dev`
 cd ../trino
-sh setup.sh        # catalogue Trino `polaris` (Iceberg REST), test de bout en bout
+sh setup.sh        # bindings Trino (Iceberg REST), durcissement (HTTPS 8453 + comptes de service), test de bout en bout
 ```
 
 Polaris persiste ses métadonnées dans le **Postgres de la stack Supabase** (base dédiée
 `polaris`) et stocke les fichiers Iceberg dans son **RustFS** — aucun service de données
-supplémentaire n'est démarré. Détails et pièges d'intégration :
+supplémentaire n'est démarré. Trino est durci : HTTPS avec certificat autosigné +
+authentification par mot de passe, règles d'access control générées depuis les droits RBAC.
+Détails et pièges d'intégration :
 [`apps/polaris/README.md`](apps/polaris/README.md) ·
 [`apps/trino/README.md`](apps/trino/README.md).
 
@@ -159,6 +166,9 @@ complète, clients SSR) est fonctionnel ; les briques produit arrivent dans cet 
 - [x] **Data Lakehouse** — catalogues, schémas, explorateur, éditeur SQL
 - [x] **Chat IA** — agents, Ollama, mcp-trino, conversations, streaming
 - [x] **Interface frontend** — menus, RBAC, administration
+- [x] **RBAC à grants & durcissement** — rôles multiples + rôle actif, comptes
+      applicatifs pour les outils data, Trino HTTPS + authentification + access
+      control générés depuis les droits
 - [x] **Flux ELT** — dlt, 40+ connecteurs, pipelines, CRON
 - [ ] **Release open source** — déploiement `docker compose up -d` prêt à l'emploi
 

@@ -279,9 +279,8 @@ parusdb.<schéma>.<table>`.
 
 ## 👤 Rôles et Permissions
 
-> Modèle RBAC à **grants**, calqué sur Apache Polaris
-> (`docs/functional/rbac_refonte.md` en fait la spécification de référence
-> détaillée pour cette brique).
+> Modèle RBAC à **grants**, calqué sur Apache Polaris : principal → rôle →
+> privilèges par ressource.
 
 ### Concepts
 
@@ -311,14 +310,32 @@ parusdb.<schéma>.<table>`.
 - ✅ Section **Administration** visible et accessible uniquement aux comptes
   portant le rôle `admin`
 
+**Sémantique des privilèges par ressource** :
+
+| Ressource | `Lecture` | `Écriture` | `Gestion` |
+| --- | --- | --- | --- |
+| **Catalogue** | voir le catalogue, ses schémas et tables ; exécuter des requêtes en lecture dans l'éditeur SQL | créer/modifier des objets via l'éditeur SQL ; **être une destination d'ingestion** (pipeline) | modifier/supprimer le catalogue, gérer les accès |
+| **Agent IA** | voir l'agent, discuter avec lui (nouvelles conversations) | modifier l'agent et ses sources | supprimer l'agent, gérer l'accès |
+| **Pipeline** | voir le pipeline, son statut, son historique | modifier, lancer, désactiver | supprimer |
+
+**Distribution des droits (cross-rôle)** : l'administrateur distribue les
+droits par rôle via Administration → Rôles. Exemple : le rôle `sales` n'a
+accès qu'aux catalogues `sales` et `orders` → ses comptes ne peuvent ingérer
+que vers ces catalogues et ne voient que les pipelines de leur rôle.
+
 **Chats** : les conversations appartiennent au **compte**, pas au rôle. Le
 propriétaire peut **partager** une conversation en **lecture seule** aux
 comptes partageant l'un de ses rôles (bouton « Partager » à côté du crayon de
-renommage), et révoquer l'accès à tout moment.
+renommage), et révoquer l'accès à tout moment. Les conversations partagées
+apparaissent dans la liste des membres du rôle (badge « Partagé »), sans
+possibilité d'y écrire.
 
-**Comptes applicatifs** : des comptes service (dbt, Power BI, Airbyte, Spark…)
-connectés au catalogue Iceberg Polaris — voir §Administration / Utilisateurs
-et §Administration / Informations.
+**Comptes applicatifs** : des comptes service pour les outils data externes
+(nom, note d'usage, rôle). Chaque compte reçoit **deux secrets** — le
+**client secret** du catalogue Iceberg (principal OAuth2, scope
+`PRINCIPAL_ROLE:<rôle>`) et le **mot de passe SQL** (accès SQL au lakehouse)
+— créés et réinitialisés ensemble, limités aux droits de son rôle. Voir
+§Administration / Utilisateurs et §Administration / Informations.
 
 ---
 
@@ -409,7 +426,9 @@ soumission, jamais sur la seule décision de la page.
 **Règles** :
 
 - ❌ **Impossible de changer d'agent** une fois la conversation lancée
-- 🔒 **Visibilité** : Seul le propriétaire (créateur) peut voir la conversation
+- 🔒 **Visibilité** : le propriétaire (créateur) et les comptes partageant un
+  rôle auquel il a partagé la conversation en **lecture seule** (badge
+  « Partagé », composer masqué) — cf. §Rôles et Permissions
 
 ---
 
@@ -552,21 +571,23 @@ chaque évolution de la stack).
 
 | Champ | Type | Description |
 | --- | --- | --- |
-| Nom | Texte | ex. `airbyte-prod` |
+| Nom | Texte | ex. `airbyte-prod` — sert aussi d'**utilisateur SQL** |
 | Note d'usage | Texte | Rappel de l'outil concerné |
-| Rôle | Sélecteur | Droits répliqués en grants Polaris réels |
+| Rôle | Sélecteur | Droits répliqués en grants Polaris réels + règles SQL |
 | Client ID | Texte | Identifiant public du principal Polaris |
 | Dernière rotation | Date | Dernière réinitialisation des credentials |
 
 **Actions** :
 
 - ➕ **Créer** : principal Polaris + rôles + miroir des droits du rôle, puis
-  **credentials affichées une seule fois** (copie)
-- 🔑 **Réinitialiser** : nouveau secret (l'ancien est invalidé), affiché une
-  seule fois
-- ✏️ **Changer de rôle** : réassignation + resynchronisation Polaris
+  **credentials affichées une seule fois** (copie) — **deux secrets** : le
+  client secret Polaris (catalogue Iceberg REST) et le mot de passe SQL
+  (accès SQL au lakehouse)
+- 🔑 **Réinitialiser** : **nouveaux secrets Polaris et SQL** (les anciens sont
+  invalidés), affichés une seule fois
+- ✏️ **Changer de rôle** : réassignation + resynchronisation Polaris et SQL
 - 🗑️ **Supprimer** : confirmation par ressaisie du nom ; le principal
-  Polaris est supprimé
+  Polaris et l'accès SQL sont révoqués immédiatement
 
 Le rôle `admin` est refusé : il hérite de tout sans grants explicites à
 répliquer.
@@ -669,11 +690,13 @@ formulaire d'agent.
 ### Évolutions Futures
 
 - [ ]  Intégration de nouveaux connecteurs
-- [ ]  Durcissement Trino : HTTPS + authentification par mot de passe +
-       access control généré depuis les grants RBAC (refus réel sur le chemin
-       SQL — spécification de référence :
-       `docs/functional/rbac_refonte.md` §9)
 - [ ]  Fonctionnalités avancées de gouvernance
+
+> Livrées récemment (hors feuille de route restante) : refonte RBAC à grants
+> (rôles multiples + rôle actif, comptes applicatifs, partage de
+> conversations) et **durcissement Trino** — HTTPS + authentification par mot
+> de passe + access control générés depuis les grants RBAC, refus réel sur le
+> chemin SQL des outils externes.
 
 ---
 

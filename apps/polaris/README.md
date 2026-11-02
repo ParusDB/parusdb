@@ -117,6 +117,38 @@ et fichiers concernés.
     conteneur datait d'avant l'ajout du flag, la vérification de chevauchement
     restait active malgré le `docker-compose.yml` à jour.
 
+### API Management — miroir RBAC des comptes applicatifs (leçons, spec 1.8.0)
+
+Les utilisateurs applicatifs (`/admin/users` → Applicatifs) sont des
+principals Polaris dont les grants de catalogue du rôle sont répliqués
+(`syncRoleCatalogAccess` dans `apps/nextjs/lib/polaris.ts`) :
+
+- **Création** : `POST /api/management/v1/principals` →
+  `{principal, credentials}` — le clientSecret n'est retourné **qu'une
+  fois**, jamais stocké côté applicatif. **Rotation : `/reset`**
+  (`POST /principals/{name}/reset`, `Content-Type: application/json`
+  requis même avec body vide) — `/rotate` est **refusé au client root**
+  (bug amont #624, contourné par `/reset`).
+- **Grants** : **un PUT par privilège singulier** — body
+  `{grant: {type: "catalog", privilege: "<PRIVILEGE>"}}` sur
+  `/catalogs/{cat}/catalog-roles/{role}/grants` ; **un POST sur le même
+  chemin = RÉVOCATION** du privilège.
+- **Assignations** : par **PUT sur la collection avec body** —
+  `PUT /principals/{n}/principal-roles` (body
+  `{principalRole: {name}}`) et
+  `PUT /principal-roles/{r}/catalog-roles/{cat}` (body
+  `{catalogRole: {name}}`).
+- **Conventions du miroir** : principal = nom du compte applicatif,
+  principal-role = key du rôle ParusDB, catalog-role = `<roleKey>_access`.
+- **Mapping des privilèges ParusDB** : Lecture → `CATALOG_READ_PROPERTIES`,
+  `NAMESPACE_LIST`, `NAMESPACE_READ_PROPERTIES`, `TABLE_LIST`,
+  `TABLE_READ_PROPERTIES`, `TABLE_READ_DATA` ; Écriture → + `NAMESPACE_CREATE`,
+  `NAMESPACE_WRITE_PROPERTIES`, `TABLE_CREATE`, `TABLE_WRITE_PROPERTIES`,
+  `TABLE_WRITE_DATA` ; Gestion → `CATALOG_MANAGE_CONTENT`.
+- Les tokens des comptes applicatifs sont toujours demandés avec le scope
+  `PRINCIPAL_ROLE:<rôle>` — jamais `PRINCIPAL_ROLE:ALL` (réservé au client
+  root, utilisé uniquement côté serveur BFF pour l'API Management).
+
 ## Notes opérationnelles
 
 - Versions épinglées dans `docker-compose.yml` : mettre à jour = changer le tag,

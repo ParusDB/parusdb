@@ -14,7 +14,7 @@ jamais écrire dans le lakehouse.
 | Image | `ghcr.io/tuannvm/mcp-trino:4.3.1` |
 | Transport | MCP Streamable HTTP, endpoint `/mcp` (legacy `/sse` conservé) |
 | Outils | `list_catalogs`, `list_schemas`, `list_tables`, `get_table_schema`, `execute_query`, `explain_query` |
-| Cible | Trino durci (`apps/trino`) sur le réseau externe `supabase_default`, `https://trino:8443`, compte de service `parus-mcp` (rbac_refonte.md §9) |
+| Cible | Trino durci (`apps/trino`) sur le réseau externe `supabase_default`, `https://trino:8443`, compte de service `parus-mcp` (AGENTS.md §10) |
 | Politique | lecture seule (`TRINO_ALLOW_WRITE_QUERIES=false`), schémas autorisés `dev.sales` ; règle Trino `read-only` globale (le périmètre réel du chat reste borné par `TRINO_ALLOWED_SCHEMAS` + le RBAC applicatif) |
 | TLS | certificat autosigné de Trino monté dans le conteneur + `SSL_CERT_FILE` (le transport custom Go ignore `TRINO_SSL_INSECURE` : validation complète) |
 | État | sans état ; aucune donnée stockée |

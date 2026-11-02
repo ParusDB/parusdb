@@ -53,19 +53,21 @@ et **techniques** (RBAC, catalogues, pipelines).
 
 **Avancement actuel** : le socle technique est en place — template Next.js + Supabase
 (authentification complète, clients SSR), stack self-hosted Supabase avec RustFS,
-Data Lakehouse (Apache Polaris + Trino) et infrastructure du Chat IA (Ollama GPU +
-mcp-trino, test e2e « question → SQL → réponse » validé). **L'interface produit est
-implémentée** (charte « Mésange Charbonnière » : Tailwind v4, tokens, polices) : auth,
-shell + RBAC à grants (rôles multiples, rôle actif, droits par objet,
-comptes applicatifs pour les outils data), Chat IA fonctionnel (diffusion temps
-réel via Supabase Realtime,
-Ollama + mcp-trino), Agents IA, Data Lakehouse (catalogues Polaris + éditeur SQL
-Trino), Administration (utilisateurs, rôles, fournisseurs LLM). **Les pipelines ELT sont fonctionnels** (apps/dlt : dlt + destination
-Iceberg/Polaris + conteneur jetable par run, validation e2e source PostgreSQL →
-lakehouse → Trino/LLM, §12). Les tables
+Data Lakehouse (Apache Polaris + Trino durci : HTTPS + authentification par mot de
+passe + access control générés depuis les grants RBAC) et infrastructure du Chat IA
+(Ollama GPU + mcp-trino, test e2e « question → SQL → réponse » validé). **L'interface
+produit est implémentée** (charte « Mésange Charbonnière » : Tailwind v4, tokens,
+polices) : auth, shell + RBAC à grants (rôles multiples, rôle actif, droits par objet,
+comptes applicatifs pour les outils data, refus réel sur le chemin SQL), Chat IA
+fonctionnel (diffusion temps réel via Supabase Realtime, Ollama + mcp-trino,
+partage de conversations en lecture seule), Agents IA, Data Lakehouse (catalogues
+Polaris + éditeur SQL Trino), Administration (utilisateurs, rôles, fournisseurs
+LLM, page d'informations agnostique des outils). **Les pipelines ELT sont
+fonctionnels** (apps/dlt : dlt + destination Iceberg/Polaris + conteneur jetable par
+run, validation e2e source PostgreSQL → lakehouse → Trino/LLM, §12). Les tables
 applicatives vivent dans les schémas métier PostgreSQL (`iam`, `agents`, `chat`,
 `lakehouse`, `connectors`, `admin` — `apps/supabase/sql/01-parusdb-app.sql`,
-RLS partout).
+RLS partout, tests rejouables dans `apps/supabase/sql/tests/`).
 
 **Ordre de construction décidé (feuille de route) :**
 
@@ -113,7 +115,7 @@ parusdb/
 ├── apps/nextjs/                  # Application Next.js 16 (App Router) — frontend + BFF (voir son README.md)
 │   ├── app/                      # Routes : auth/ (public) + (app)/ (protégé : chat, agents, data-lakehouse, connectors, admin)
 │   ├── components/               # Composants applicatifs (un dossier par feature) + ui/ (shadcn, ne pas éditer à la main)
-│   ├── lib/                      # Clients : supabase/ (SSR + admin service_role), session.ts, trino.ts (trino-js-client), polaris.ts, ollama.ts, mcp.ts, agent-runner.ts, crypto.ts, lakehouse.ts, sources.ts
+│   ├── lib/                      # Clients : supabase/ (SSR + admin service_role), session.ts (RBAC), rbac.ts, permissions.ts, trino.ts, trino-restart.ts, trino-security.ts, polaris.ts, llm.ts, providers.ts, ollama.ts, mcp.ts, agent-runner.ts, connection-info.ts, crypto.ts, lakehouse.ts, sources.ts
 │   ├── types/db.ts               # Types des lignes métier (frontières typées)
 │   ├── proxy.ts                  # Proxy Next 16 (ex-middleware) : refresh de session
 │   └── app/globals.css           # Tokens de design (charte §3, copiés à l'identique)
@@ -132,13 +134,17 @@ parusdb/
 │   ├── run.sh                    # Cycle de vie du stack (start/stop/logs/secrets/config)
 │   ├── setup.sh                  # Bootstrap première installation (génère .env + clés)
 │   ├── sql/01-parusdb-app.sql    # Schémas métier + RLS + seed ParusDB (idempotent, cf. §9)
+│   ├── sql/02-lakehouse-catalogs.sql  # Seed catalogues d'installation (descriptions + propriété admin)
+│   ├── sql/tests/rls-rbac-test.sql    # Tests RLS rejouables (26 assertions)
 │   ├── volumes/db/               # Données + SQL d'initialisation
 │   └── CONFIG.md                 # Référence des variables d'environnement self-hosted
 └── apps/trino/                   # Trino — moteur SQL du lakehouse (Iceberg REST → Polaris)
-    ├── docker-compose.yml        # trino (réseau externe supabase_default)
+    ├── docker-compose.yml        # trino (réseau externe supabase_default, HTTPS public 8453)
     ├── catalog/                  # Bindings iceberg : un <catalogue>.properties par catalogue Polaris,
     │                              # générés par setup.sh (catalogues par défaut + système) ou l'app
     │                              # (aucun fichier statique commité, cf. §10)
+    ├── etc/ + security/          # Durcissement généré par setup.sh / l'app (cf. §10) : keystore TLS,
+    │                              # config, password.db (bcrypt), rules.json (access control) — gitignorés
     └── run.sh / setup.sh / reset.sh / update.sh  # Cycle de vie (cf. §5)
 ```
 
@@ -152,7 +158,7 @@ NVIDIA Container Toolkit (runtime `nvidia`) — voir `apps/ollama/README.md`.
 
 | Action | Commande |
 |---|---|
-| **Installer toute la stack** | `sh setup.sh` (à la racine) — orchestre les apps dans l'ordre des dépendances, applique le SQL applicatif, expose les schémas PostgREST, resynchronise `apps/nextjs/.env.local` (clés Supabase, credentials Polaris, clé de chiffrement) sans les afficher, puis vérifie dlt |
+| **Installer toute la stack** | `sh setup.sh` (à la racine) — orchestre les apps dans l'ordre des dépendances, applique le SQL applicatif, expose les schémas PostgREST, resynchronise `apps/nextjs/.env.local` (clés Supabase, credentials Polaris, mot de passe Trino du BFF, clé de chiffrement) sans les afficher, puis vérifie dlt |
 | **Démarrer / arrêter toute la stack** | `sh run.sh start` / `sh run.sh stop` (à la racine) — ordre des dépendances ; `status`, `logs <app> [service]`, ciblage par app : `sh run.sh start polaris trino` |
 | **Désinstaller tout** | `sh reset.sh` (destructif : conteneurs, volumes, données, `.env` → `.env.old` ; `--purge-images` pour retirer aussi les images) |
 | Installer le frontend | `cd apps/nextjs && npm install` |
@@ -201,7 +207,9 @@ lockfiles à la main.
   n'y mettre **jamais** de secret.
 - Le frontend lit aussi des variables **serveur uniquement** :
   `SUPABASE_SERVICE_ROLE_KEY`, `PARUSDB_ENCRYPTION_KEY`, `TRINO_URL`,
-  `TRINO_USER`, `TRINO_CATALOG_DIR`, `POLARIS_API_URL`,
+  `TRINO_USER`, `TRINO_PASSWORD` (compte de service BFF, durcissement),
+  `TRINO_MCP_USER`, `TRINO_SECURITY_DIR` (fichiers de sécurité Trino
+  générés depuis `iam.grants`), `TRINO_CATALOG_DIR`, `POLARIS_API_URL`,
   `POLARIS_ROOT_CLIENT_ID/SECRET`, `S3_ACCESS_KEY_ID/SECRET_ACCESS_KEY`
   (affichage masqué dans /admin/informations), `PARUSDB_PUBLIC_HOST`
   (adresse publique des outils data), `OLLAMA_URL`, `MCP_TRINO_URL`… — la liste
@@ -317,15 +325,13 @@ l'app.
 
 > **Obligatoire avant tout écran** : lire `docs/functional/brand_guidelines.md` en entier.
 
-**État actuel (à corriger en premier)** : le template est en Tailwind CSS **v3**
-(`tailwind.config.ts`, variables HSL, thème shadcn neutre, police Geist). La charte cible
-Tailwind CSS **v4** (tout dans le CSS, pas de `tailwind.config.ts`). Le premier travail UI est
-donc : migrer en v4, remplacer `globals.css` par la section 3 de la charte **à l'identique**
-(tokens, base, utilitaires `yolk-stripe`/`grid-bg`), installer les polices via `next/font`
-(Inter, Space Grotesk, JetBrains Mono — graisses exactes de la charte §4, setup charte §9.1),
-remplacer
-`tailwindcss-animate` par `tw-animate-css`, et mettre à jour `components.json`
-(baseColor `slate`, `cssVariables: true`).
+**État actuel** : la migration Tailwind CSS **v4** est faite — tout vit dans
+`app/globals.css` (tokens de la charte §3 copiés à l'identique, pas de
+`tailwind.config.ts`), polices via `next/font` (Inter, Space Grotesk, JetBrains
+Mono — graisses exactes de la charte §4), `tw-animate-css` à la place de
+`tailwindcss-animate`, `components.json` shadcn (baseColor `slate`,
+`cssVariables: true`). Tout nouvel écran doit réutiliser ces tokens — aucun
+style de template par défaut (neutre, police Geist).
 
 **Règles permanentes :**
 
@@ -432,7 +438,7 @@ revient en Envoy.
   passer par `chat.can_manage_share` (SECURITY DEFINER).
 - **Autorisation** : jamais `raw_user_meta_data` (éditable par l'utilisateur) pour des décisions
   d'autorisation → `raw_app_meta_data`. Le RBAC applicatif est un modèle **à grants**
-  calqué sur Polaris (`docs/functional/rbac_refonte.md` = spec de référence) : rôles
+  calqué sur Polaris (spec fonctionnelle §Rôles et Permissions) : rôles
   multiples + **rôle actif** (`iam.roles`, `iam.user_roles`, `iam.user_active_role`),
   grants par objet (`iam.grants` : catalogues/agents/pipelines × read/write/manage,
   hiérarchiques), propriété par rôle (`owner_role_id`), `admin` qui hérite de tout,
@@ -555,17 +561,17 @@ revient en Envoy.
   refus est réel sur le chemin Trino (dbt, Power BI, JDBC/ODBC). Le compte
   de service BFF n'est pas contraint par les règles (la garde de l'éditeur
   SQL reste `iam.has_grant`) ; mcp-trino est `read-only` global. Pièges et
-  mode opératoire : `docs/functional/rbac_refonte.md` §9.5 et
-  `apps/trino/README.md` (secret interne obligatoire, SANs + `SSL_CERT_FILE`
-  pour mcp-trino, sections vides interdites dans rules.json, recréation du
-  conteneur après régénération du keystore).
+  mode opératoire : `apps/trino/README.md` (secret interne obligatoire,
+  SANs + `SSL_CERT_FILE` pour mcp-trino, sections vides interdites dans
+  rules.json, recréation du conteneur après régénération du keystore).
 
 ## 11. Chat IA — Ollama + mcp-trino
 
 **Déploiement en place** : `apps/ollama` (serveur d'inférence GPU, modèle par défaut
 `ministral-3:3b`, function calling natif) et `apps/mcp-trino` (endpoint MCP Streamable HTTP
 `http://localhost:8185/mcp`, lecture seule, schémas autorisés bornés par
-`TRINO_ALLOWED_SCHEMAS`). Le test e2e `sh run.sh test` (apps/ollama) valide le parcours
+`TRINO_ALLOWED_SCHEMAS`, connecté au Trino durci en HTTPS avec son compte de
+service). Le test e2e `sh run.sh test` (apps/ollama) valide le parcours
 complet : question métier → exploration du lakehouse → SQL exécuté → réponse restituée.
 
 **Règles :**
@@ -583,10 +589,13 @@ complet : question métier → exploration du lakehouse → SQL exécuté → r�
   découverts dynamiquement via l'API de listing du fournisseur
   (`lib/providers.ts`). Un agent référence une **source** (« Ollama (local) »
   ou l'id d'un fournisseur, `agents.model_provider`) et un modèle découvert.
-- **Conversations** : propriétaire = créateur (visible par lui seul) ; agent **immuable** après
-  création de la conversation ; titre généré par l'IA à partir des 2 premiers échanges ;
-  messages utilisateur à droite, agent à gauche, bulles selon la charte (§8.2 : agent =
-  fond charbon, code SQL en jaune).
+- **Conversations** : propriétaire = créateur ; partage possible en **lecture
+  seule** aux comptes partageant l'un de ses rôles (`chat.conversation_shares`,
+  révocable, composer masqué + refus serveur pour les membres) ; agent
+  **immuable** après création de la conversation ; titre généré par l'IA à
+  partir des 2 premiers échanges ; messages utilisateur à droite, agent à
+  gauche, bulles selon la charte (§8.2 : agent = fond charbon, code SQL en
+  jaune).
 - **Streaming** : diffusion temps réel via Supabase Realtime.
 - **Traçabilité sans fuite** : journaliser métadonnées (durée, modèle, coût en tokens) mais
   jamais les secrets ; les prompts des utilisateurs sont des données personnelles (RGPD) —
@@ -604,11 +613,15 @@ complet : question métier → exploration du lakehouse → SQL exécuté → r�
   handshake `initialize` → `notifications/initialized` → `tools/list` → `tools/call`,
   `Mcp-Session-Id` par message, réponses SSE à parser ligne à ligne.
 - **Boucle agentique** (`lib/agent-runner.ts`) : historique normalisé + `tools`,
-  max 8 allers-retours (`PARUSDB_AGENT_MAX_STEPS`). Le prompt socle impose le français,
-  l'exploration avant exécution, et documente la syntaxe Trino des dates relatives
-  (`date_add('month', -3, current_date)`) : sans cet indice, `ministral-3:3b` tente des
-  syntaxes inexistantes — un LLM peut échouer de façon non déterministe, toujours
-  rejouer un test e2e chat avant de conclure.
+  max 8 allers-retours (`PARUSDB_AGENT_MAX_STEPS`). Le prompt socle impose le
+  français, l'exploration avant exécution, et documente la syntaxe Trino des
+  dates relatives (`date_add('month', -3, current_date)` ou
+  `current_date - INTERVAL '3' DAY`, avec contre-exemple explicite —
+  `INTERVAL '3 months'`, unité dans la chaîne, est rejeté par Trino et
+  faisait boucler `ministral-3:3b`) et l'interdiction de répéter une
+  syntaxe rejetée : un LLM peut échouer de façon non déterministe, toujours
+  rejouer un test e2e chat avant de conclure (même prompt socle dans le
+  script e2e d'apps/ollama — les garder synchrones).
 - **Backends LLM normalisés** (`lib/llm.ts`) : Ollama, compatible OpenAI
   (OpenAI, Mistral, endpoints personnalisés) et Anthropic partagent la même
   interface (`chat(model, messages, tools)`) ; la route de stream résout le
