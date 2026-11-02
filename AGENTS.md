@@ -535,22 +535,30 @@ revient en Envoy.
 - **Métriques disque** : tailles et nombres de fichiers via les tables metadata Iceberg
   `"<catalog>"."<schéma>"."<table>$files"` (identifiants à quoter).
 - **RBAC applicatif par catalogue** : grants `iam.grants` (resource_type
-  `catalog`) + propriété par rôle (`catalog_registry.owner_role_id`).
-  L'éditeur SQL s'exécute sous l'utilisateur Trino unique : le RBAC porte sur
-  la visibilité des catalogues et l'accès aux pages (requêtes de lecture =
-  `read`, toute requête modifiante = `write`), pas sur des rôles Trino
-  distincts (limitation assumée, à documenter dans les PR concernées). Les
-  helpers de `lib/rbac.ts` filtrent les listes (catalogues lisibles /
-  destination d'ingestion en `write`) et calculent les capacités par objet
-  depuis les grants du rôle actif. Les **utilisateurs applicatifs**
+  `catalog`) + propriété par rôle (`catalog_registry.owner_role_id`). Le
+  RBAC porte sur la visibilité des catalogues et l'accès aux pages
+  (requêtes de lecture = `read`, toute requête modifiante = `write`), via
+  `iam.has_grant` côté BFF. Les helpers de `lib/rbac.ts` filtrent les listes
+  (catalogues lisibles / destination d'ingestion en `write`) et calculent
+  les capacités par objet depuis les grants du rôle actif. Les
+  **utilisateurs applicatifs**
   (`iam.app_users`, `/admin/users` → Applicatifs) répliquent les grants de
   catalogue de leur rôle en **vrais grants Polaris** (catalog-roles +
   privilèges, `syncRoleCatalogAccess` de `lib/polaris.ts`, spec 1.8 :
   privilege **singulier** par grant, `/reset` et non `/rotate` — bug root) ;
   les secrets ne sont jamais stockés, affichés une seule fois. **Durcissement
-  Trino décidé (option A)** : HTTPS + password file + file access control
-  générés depuis `iam.grants` — spec complète et statut dans
-  `docs/functional/rbac_refonte.md` §9/§10.
+  Trino livré (option A)** : HTTPS (certificat autosigné, port public 8453 —
+  8443 est publié par Kong) + authentification password file bcrypt +
+  access control par règles JSON **générés depuis `iam.grants`** par
+  `lib/trino-security.ts` (password.db + rules.json dans
+  `apps/trino/security/`, rechargés toutes les 5 s sans redémarrage) — le
+  refus est réel sur le chemin Trino (dbt, Power BI, JDBC/ODBC). Le compte
+  de service BFF n'est pas contraint par les règles (la garde de l'éditeur
+  SQL reste `iam.has_grant`) ; mcp-trino est `read-only` global. Pièges et
+  mode opératoire : `docs/functional/rbac_refonte.md` §9.5 et
+  `apps/trino/README.md` (secret interne obligatoire, SANs + `SSL_CERT_FILE`
+  pour mcp-trino, sections vides interdites dans rules.json, recréation du
+  conteneur après régénération du keystore).
 
 ## 11. Chat IA — Ollama + mcp-trino
 

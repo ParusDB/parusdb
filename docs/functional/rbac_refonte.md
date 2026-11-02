@@ -1,12 +1,12 @@
 # Refonte RBAC & Utilisateurs Applicatifs — Spécification de référence
 
 > Branche : `feat/rbac_remake`
-> Statut : **LIVRÉE** (commits `9105c44` → `1d71a03`, voir §8) et vérifiée
-> (lint/tsc/build, tests RLS, e2e chat, `sh run.sh verify` dlt, installation
-> complète rejouée sur base fraîche après reset).
-> Ce document reste la source de vérité de la brique RBAC (le §9 spécifie
-> l'évolution suivante : durcissement Trino) ; en cas de divergence, il fait
-> foi pour cette brique.
+> Statut : **LIVRÉE ET DURCIE** — RBAC à grants (commits `9105c44` →
+> `1d71a03`, §8) puis durcissement Trino (commits `4b09827` → `a55e56c`,
+> §9), tous deux vérifiés (lint/tsc/build, tests RLS, e2e chat,
+> `sh run.sh verify` dlt, mapping Trino validé sur la stack durcie).
+> Ce document reste la source de vérité de la brique RBAC ; en cas de
+> divergence, il fait foi pour cette brique.
 
 ---
 
@@ -389,15 +389,20 @@ Contenu :
 
 ---
 
-## 9. Évolution suivante — Durcissement Trino (option A, VALIDÉE)
+## 9. Évolution suivante — Durcissement Trino (option A, LIVRÉE)
 
 > Objectif : rendre le refus réel sur le **chemin Trino** (dbt, Power BI,
-> clients JDBC/ODBC), qui aujourd'hui contourne le RBAC. Décidé : HTTPS +
-> password file + file access control **généré depuis `iam.grants`** —
-> l'admin ne change pas d'UX, Trino devient un artefact dérivé (comme les
-> bindings de catalogues). Principe : **les humains ne reçoivent pas de
-> compte Trino** — ils passent par l'UI (le BFF applique `iam.has_grant`
-> côté éditeur SQL) ; seuls les comptes applicatifs parlent à Trino.
+> clients JDBC/ODBC), qui aujourd'hui contourne le RBAC. Décidé puis **livré**
+> (commits `4b09827` → `a55e56c` sur `feat/rbac_remake`) : HTTPS + password
+> file + file access control **généré depuis `iam.grants`** — l'admin ne
+> change pas d'UX, Trino devient un artefact dérivé (comme les bindings de
+> catalogues). Principe : **les humains ne reçoivent pas de compte Trino** —
+> ils passent par l'UI (le BFF applique `iam.has_grant` côté éditeur SQL) ;
+> seuls les comptes applicatifs parlent à Trino. Vérifié en conditions
+> réelles : refus 403 sur catalogue non accordé, mapping read/write/manage
+> (SELECT/INSERT/CREATE TABLE/CREATE SCHEMA), refresh 5 s sans redémarrage,
+> révocation immédiate à la suppression d'un compte. Retours
+> d'implémentation au §9.5.
 
 ### 9.1 Briques Trino (config vérifiée sur la doc officielle)
 
@@ -441,45 +446,95 @@ de grants (même déclencheur que la resync Polaris) :
    `/admin/informations`.
 3. Deux secrets par compte applicatif (Polaris + Trino), créés et rotés
    ensemble dans le même parcours.
-4. `SHOW CATALOGS` reste autorisé (visible) mais l'accès aux données est
-   refusé par les règles — à vérifier en dev et documenter si besoin.
+4. `SHOW CATALOGS` reste autorisé (vérifié : les catalogues existants sont
+   listés pour tous les comptes authentifiés) mais l'accès aux données
+   est refusé par les règles.
 
-### 9.4 Points d'implémentation à traiter en dev
+### 9.4 Points d'implémentation — traités (tous)
 
-- `apps/trino/docker-compose.yml` + `setup.sh` : port 8443 exposé,
-  génération du keystore (openssl/keytool), écriture de
-  `etc/config.properties` (auth), `password-authenticator.properties`,
-  `access-control.properties` ; fichiers mots de passe + règles générés par
-  l'app (répertoire dédié, monté en bind comme `TRINO_CATALOG_DIR`).
-- `lib/polaris.ts` / actions admin : à la création/rotation/suppression
-  d'un compte applicatif et à chaque `setRoleGrant` catalogue → générer
-  password.db (bcrypt) + rules.json.
-- `lib/trino.ts` : trino-js-client en HTTPS + basic auth
-  (`server: https://…`, credentials `TRINO_USER`/`TRINO_PASSWORD`) —
-  vérifier le support TLS self-signed du client Node.
+- `apps/trino/docker-compose.yml` + `setup.sh` : port public **8453**
+  (8443 est déjà publié par Kong) mappé sur le port interne 8443,
+  génération du keystore (openssl, PEM accepté nativement — SANs
+  obligatoires, cf. §9.5), écriture de `etc/config.properties` (HTTPS +
+  auth + secret interne), `password-authenticator.properties`,
+  `access-control.properties` ; `security/` (password.db + rules.json)
+  bind-monté comme `TRINO_CATALOG_DIR`.
+- `lib/trino-security.ts` + actions admin : à la création/rotation/
+  suppression d'un compte applicatif et à chaque `setRoleGrant` catalogue →
+  password.db (bcryptjs, préfixe `$2y$`) + rules.json régénéré (best
+  effort, avertissements UI, `warning` ; rattrapage paresseux une fois par
+  processus avant requête BFF).
+- `lib/trino.ts` : trino-js-client en HTTPS + basic auth — support TLS
+  self-signed **confirmé au runtime** (`ssl: { rejectUnauthorized: false }`
+  → `new https.Agent`).
 - La suppression de compte applicatif retire sa ligne du password.db
-  (révocation immédiate).
-- Tests : 403 réel sur un catalogue non accordé via un compte applicatif
-  Trino ; requête SELECT/DDL conforme au mapping ; refresh sans redémarrage.
+  (révocation immédiate, vérifiée : « Invalid credentials » après refresh).
+- Tests : 403 réel sur un catalogue non accordé, SELECT/INSERT/CREATE
+  TABLE/CREATE SCHEMA conformes au mapping, refresh 5 s sans redémarrage —
+  tous exécutés sur la stack durcie.
 - Vérification complète : `npm run lint`, `npx tsc --noEmit`,
-  `npm run build`, tests RLS rejoués, test e2e chat (`apps/ollama
-  sh run.sh test`), `sh run.sh verify` dlt.
+  `npm run build`, tests RLS rejoués (26 assertions), test e2e chat
+  (`apps/ollama sh run.sh test`, 2/2 succès), `sh run.sh verify` dlt —
+  tous verts.
+
+### 9.5 Retours d'implémentation (pièges validés sur la stack)
+
+1. **`internal-communication.shared-secret` est obligatoire** dès qu'une
+   authentification est activée, même en mono-noeud (communication interne
+   discovery) — sans lui Trino refuse de démarrer. En revanche
+   `discovery-server.shared-secret` n'existe pas en 484 (propriété « not
+   used » fatale). Généré par `setup.sh` dans `apps/trino/.env`
+   (`TRINO_INTERNAL_SHARED_SECRET`).
+2. **Kong (stack Supabase) publie déjà 8443 sur l'hôte** : le port public
+   de Trino est **8453** (port interne du conteneur inchangé). Le BFF se
+   connecte à `https://localhost:8453`, mcp-trino au nom réseau `trino:8443`.
+3. **mcp-trino ne peut pas ignorer la validation TLS** : son transport Go
+   custom ignore les DSN `SSL`/`SSLInsecure` de trino-go-client. Solution :
+   le certificat public de Trino (`apps/trino/etc/keystore.crt`, **avec
+   SANs** `DNS:parus-trino,DNS:trino,DNS:localhost,IP:127.0.0.1` — les
+   runtimes Go ne regardent que les SANs, pas le CN) est monté dans son
+   conteneur et désigné par `SSL_CERT_FILE` (variable honorée par le
+   runtime Go) : validation complète, pas de skip-verify.
+4. **Piège rules.json** : les clés `"schemas": []` / `"tables": []`
+   présentes mais vides font échouer `SHOW SCHEMAS` pour **tous** les
+   utilisateurs, y compris `allow: all`. Une section sans règle doit être
+   **absente** du JSON (corrigé dans `lib/trino-security.ts`).
+5. **Piège bind-mount inode** : le keystore monté en fichier unique — une
+   régénération (rm + nouveau fichier) crée un nouvel inode invisible au
+   conteneur existant, qui sert l'ancien certificat. `setup.sh` force la
+   recréation du conteneur quand le keystore est régénéré.
+6. **bcrypt** : bcryptjs produit `$2a$`/`$2b$`, Trino exige `$2y$` —
+   remplacement de préfixe à l'écriture (interopérable, vérifié). Les
+   comptes de service statiques sont hashés au setup via un conteneur
+   éphémère `httpd:2-alpine htpasswd -bnB -C 10` (busybox `cryptpw` ne
+   produit pas de bcrypt, seulement `$1$`).
+7. **DDL du compte BFF** : `allow: all` au niveau catalogue suffit pour
+   CREATE SCHEMA/TABLE sans règles schemas/tables — ces règles ne servent
+   qu'à restreindre les autres comptes.
+8. **Cinquième client Trino découvert** : le script e2e d'Ollama
+   (`apps/ollama/scripts/test-mcp-trino.mjs`) semait ses données via le CLI
+   en HTTP sans auth — migré en HTTPS + credentials de service. À retenir :
+   grep « localhost:8080 » dans toutes les apps après tout changement de
+   surface Trino.
 
 ---
 
 ## 10. Reste à faire — checklist de passation
 
-- [ ] **Durcissement Trino** (§9, option A validée) — à développer dans une
-      nouvelle conversation sur la même branche ou une suite de PR.
+- [x] **Durcissement Trino** (§9, option A) — **livré et vérifié**
+      (commits `4b09827` → `a55e56c` ; retours d'implémentation §9.5).
+- [x] **Prompt socle du chat** (`lib/agent-runner.ts`) — livré : indice
+      durci sur les dates relatives (`INTERVAL '3' DAY`, contre-exemple
+      `INTERVAL '3 months'`, interdiction de répéter une syntaxe rejetée),
+      même durcissement + sémantique « mois complets » dans le script e2e
+      d'Ollama. Test e2e : 2/2 succès (contre 1/5 avant).
 - [ ] **Passage UI manuel** : `cd apps/nextjs && npm run dev` puis vérifier
-      onboarding (premier compte admin), création d'un compte applicatif,
-      distribution de droits dans /admin/roles, /admin/informations,
-      partage de conversation. (Jamais testé en conditions réelles : le
-      serveur Next n'était pas joignable pendant la refonte.)
-- [ ] **Prompt socle du chat** (`lib/agent-runner.ts`) : renforcer l'indice
-      sur les dates relatives — le modèle boucle parfois sur `INTERVAL
-      'n months'` (syntaxe rejetée par Trino) ; exiger
-      `date_add('month', -3, current_date)` (4 échecs e2e sur 5 runs du
-      29/10, succès au rejeu).
-- [ ] **PR de la branche** `feat/rbac_remake` vers `main` (une PR par étape
-      ou une PR de refonte avec le présent document en description).
+      onboarding (premier compte admin), création d'un compte applicatif
+      (modale credentials : client Polaris + mot de passe Trino),
+      distribution de droits dans /admin/roles, /admin/informations
+      (snippets HTTPS), partage de conversation, éditeur SQL. (Jamais testé
+      en conditions réelles avec le durcissement.)
+- [ ] **Reset + setup complet** à rejouer une fois : les scripts Trino et
+      mcp-trino ont changé (keystore, secrets, imports croisés).
+- [ ] **PR de la branche** `feat/rbac_remake` vers `main` (le présent
+      document en description).

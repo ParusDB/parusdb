@@ -507,8 +507,10 @@ les credentials d'un **compte applicatif** — jamais le compte root.
 
 **Contenu** :
 
-- Avertissement : connexions en HTTP, Trino sans authentification — usage
-  réservé au réseau privé
+- Avertissement : Trino est durci (HTTPS + mot de passe, certificat
+  autosigné) et Polaris reste en HTTP — usage réservé au réseau privé ;
+  chaque compte applicatif reçoit deux secrets (client Polaris + mot de
+  passe Trino) limités aux droits de son rôle
 - Sélecteurs : **compte applicatif** × **catalogue** (limité aux catalogues
   accessibles au rôle du compte)
 - **Adresses de la plateforme** : Trino (hôte/port), Polaris (API Iceberg

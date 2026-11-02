@@ -44,8 +44,9 @@ afficher** (copie par `sed`/`grep`, pas de copier-coller dans un terminal).
 | `PARUSDB_ENCRYPTION_KEY` | Clé AES-256-GCM des credentials (`openssl rand -hex 32`) |
 | `OLLAMA_URL` / `OLLAMA_DEFAULT_MODEL` / `PARUSDB_AGENT_MAX_STEPS` | Serveur d'inférence, modèle par défaut, plafond d'allers-retours outils |
 | `MCP_TRINO_URL` | Endpoint MCP Streamable HTTP (`http://localhost:8185/mcp`) |
-| `TRINO_URL` / `TRINO_USER` / `TRINO_CONTAINER_NAME` | Moteur SQL, utilisateur applicatif tracé dans les logs Trino, conteneur redémarré automatiquement après création d'un catalogue |
+| `TRINO_URL` / `TRINO_USER` / `TRINO_PASSWORD` / `TRINO_CONTAINER_NAME` | Moteur SQL durci (HTTPS, port public 8453), compte + mot de passe de service BFF (basic auth, importés de `apps/trino/.env` par le setup racine), conteneur redémarré automatiquement après création d'un catalogue |
 | `TRINO_CATALOG_DIR` | Dossier des `.properties` Trino (`../trino/catalog`) : l'app y écrit les bindings des nouveaux catalogues (fichier portant le nom du catalogue) |
+| `TRINO_SECURITY_DIR` / `TRINO_MCP_USER` | Dossier des fichiers de sécurité Trino (`../trino/security`) : `password.db` (bcrypt des comptes applicatifs, affichés une fois) + `rules.json` (access control) régénérés depuis `iam.grants` par `lib/trino-security.ts` ; nom du compte de service mcp-trino dans les règles |
 | `POLARIS_API_URL` / `POLARIS_REALM` / `POLARIS_ROOT_CLIENT_ID` / `POLARIS_ROOT_CLIENT_SECRET` | API Management Polaris (secret importé de `apps/polaris/.env`) |
 | `POLARIS_SYSTEM_CATALOG` / `POLARIS_S3_BUCKET` / `POLARIS_S3_ENDPOINT` / `POLARIS_S3_REGION` | Catalogue système (par défaut de la plateforme) et stockage (RustFS) |
 | `PARUSDB_DLT_IMAGE` / `PARUSDB_DLT_NETWORK` | Runner dlt pour le « Test connexion » du wizard (introspection en conteneur jetable) — image construite par `apps/dlt` |

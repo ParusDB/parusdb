@@ -14,8 +14,9 @@ jamais écrire dans le lakehouse.
 | Image | `ghcr.io/tuannvm/mcp-trino:4.3.1` |
 | Transport | MCP Streamable HTTP, endpoint `/mcp` (legacy `/sse` conservé) |
 | Outils | `list_catalogs`, `list_schemas`, `list_tables`, `get_table_schema`, `execute_query`, `explain_query` |
-| Cible | Trino (`apps/trino`) sur le réseau externe `supabase_default`, catalogue `dev` (environnement par défaut) |
-| Politique | lecture seule (`TRINO_ALLOW_WRITE_QUERIES=false`), schémas autorisés `dev.sales` |
+| Cible | Trino durci (`apps/trino`) sur le réseau externe `supabase_default`, `https://trino:8443`, compte de service `parus-mcp` (rbac_refonte.md §9) |
+| Politique | lecture seule (`TRINO_ALLOW_WRITE_QUERIES=false`), schémas autorisés `dev.sales` ; règle Trino `read-only` globale (le périmètre réel du chat reste borné par `TRINO_ALLOWED_SCHEMAS` + le RBAC applicatif) |
+| TLS | certificat autosigné de Trino monté dans le conteneur + `SSL_CERT_FILE` (le transport custom Go ignore `TRINO_SSL_INSECURE` : validation complète) |
 | État | sans état ; aucune donnée stockée |
 
 ## Cycle de vie
@@ -45,6 +46,14 @@ run.sh start` ; `cd apps/trino && sh run.sh start`).
 - Version épinglée dans `docker-compose.yml` : mettre à jour = changer le
   tag puis `sh update.sh`. Les variables d'environnement peuvent évoluer
   entre versions majeures (relire les release notes amont).
+- **Connexion Trino durcie** : `setup.sh` importe le compte de service et
+  son mot de passe depuis `apps/trino/.env` (`TRINO_MCP_USER` /
+  `TRINO_MCP_PASSWORD`) et resynchronise les clés structurelles
+  (`TRINO_SCHEME=https`, `TRINO_PORT=8443`, `TRINO_SSL`, `TRINO_SSL_INSECURE`).
+  Piège : le transport Go custom de mcp-trino ignore les DSN `SSL` /
+  `SSLInsecure` de trino-go-client — la confiance TLS passe par le certificat
+  public de Trino (`../trino/etc/keystore.crt`, SANs `DNS:trino` requis)
+  monté en lecture seule et désigné par `SSL_CERT_FILE`.
 - `TRINO_ALLOWED_SCHEMAS` borne ce que le LLM voit et interroge : ajuster
   quand de nouveaux domaines (schémas) sont ajoutés au lakehouse. Le RBAC
   applicatif (rôle actif, sources par agent) est implémenté côté application
