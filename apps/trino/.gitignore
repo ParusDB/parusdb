@@ -8,7 +8,7 @@ catalog/*
 !catalog/parusdb.properties
 !catalog/dev.properties
 
-# Durcissement (rbac_refonte.md §9) : config, keystore TLS et fichiers de
+# Durcissement (spec fonctionnelle § « Intégration Technique » (durcissement Trino)) : config, keystore TLS et fichiers de
 # sécurité sont générés par setup.sh (secrets dans .env) — jamais commités.
 etc/
 security/

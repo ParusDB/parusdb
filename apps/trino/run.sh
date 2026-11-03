@@ -77,8 +77,8 @@ case "$CMD" in
         exec docker compose logs -f "$@"
         ;;
     cli)
-        # Session SQL en HTTPS + authentification (durcissement, rbac_refonte
-        # §9) : compte outillage (accès complet), mot de passe passé par
+        # Session SQL en HTTPS + authentification (durcissement, spec
+        # fonctionnelle § « Intégration Technique ») : compte outillage (accès complet), mot de passe passé par
         # variable d'environnement (jamais en argument de ligne de commande).
         # Le compte BFF est limité au catalogue system dans rules.json — le
         # CLI d'exploitation doit pouvoir lire les catalogues de données.

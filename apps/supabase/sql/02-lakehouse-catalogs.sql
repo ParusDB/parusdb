@@ -14,7 +14,7 @@
 -- Polaris reste la source de vérité des catalogues : ce seed ne crée rien côté
 -- Iceberg, il ne fait que décrire et attribuer la propriété.
 --
--- RBAC refonte (docs/functional/rbac_refonte.md) : l'accès par rôle vit dans
+-- RBAC refonte (docs/functional/functional_specifications.md (§ Rôles et Permissions)) : l'accès par rôle vit dans
 -- iam.grants (distribué par l'admin via /admin/roles) et la propriété dans
 -- catalog_registry.owner_role_id — les catalogues d'installation appartiennent
 -- au rôle système `admin`, qui hérite de tout : aucun grant à seed-er.

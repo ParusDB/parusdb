@@ -1,4 +1,4 @@
-// Métadonnées du RBAC applicatif (refonte, docs/functional/rbac_refonte.md).
+// Métadonnées du RBAC applicatif (refonte, docs/functional/functional_specifications.md (§ Rôles et Permissions)).
 // Les accès ne sont plus des permissions statiques de menu : ce fichier est
 // la source TypeScript des types de ressources et des privilèges hiérarchiques
 // (manage ⊇ write ⊇ read) affichés dans l'éditeur de rôles (/admin/roles).

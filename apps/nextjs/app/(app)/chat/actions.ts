@@ -61,7 +61,7 @@ export async function deleteConversation(id: string): Promise<{ ok: boolean; err
 }
 
 // ---------------------------------------------------------------------------
-// Partage de conversation (RBAC refonte — docs/functional/rbac_refonte.md) :
+// Partage de conversation (RBAC refonte — docs/functional/functional_specifications.md (§ Rôles et Permissions)) :
 // le propriétaire autorise l'accès en LECTURE SEULE aux comptes partageant
 // l'un de ses rôles. Révocable à tout moment.
 // ---------------------------------------------------------------------------

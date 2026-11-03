@@ -3,7 +3,7 @@
 // @trinodb/trino-js-client ; le nom scopé exige Node 24, la machine tourne
 // en Node 22 — à renommer lors d'une montée de version de Node).
 // Aucune chaîne de connexion côté navigateur : tout passe par le serveur
-// Next.js, en HTTPS + basic auth (durcissement, rbac_refonte.md §9).
+// Next.js, en HTTPS + basic auth (durcissement, spec fonctionnelle § « Intégration Technique » (durcissement Trino)).
 //
 // Deux identités d'exécution :
 //   - trinoQuery : le compte de service BFF (usage infrastructure uniquement

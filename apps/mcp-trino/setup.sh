@@ -95,7 +95,7 @@ if [ ! -f "$LOCAL_ENV" ]; then
     echo "    .env créé depuis .env.example"
 fi
 
-# Comptes de service Trino durci (rbac_refonte.md §9) : toujours resynchronisés
+# Comptes de service Trino durci (spec fonctionnelle § « Intégration Technique » (durcissement Trino)) : toujours resynchronisés
 # depuis apps/trino/.env (générés par son setup).
 TRINO_MCP_USER_VAL=$(read_env_var "$SCRIPT_DIR/../trino/.env" TRINO_MCP_USER)
 TRINO_MCP_PASSWORD_VAL=$(read_env_var "$SCRIPT_DIR/../trino/.env" TRINO_MCP_PASSWORD)

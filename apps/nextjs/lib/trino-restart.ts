@@ -19,7 +19,7 @@
 // Contrainte d'exécution : le serveur Next.js doit pouvoir joindre le CLI
 // Docker (`docker restart <conteneur>`) — même accès que l'ordonnanceur dlt.
 //
-// Trino durci (rbac_refonte.md §9) : les sondes passent en HTTPS
+// Trino durci (spec fonctionnelle § « Intégration Technique » (durcissement Trino)) : les sondes passent en HTTPS
 // (certificat autosigné) + basic auth du compte de service BFF — via
 // node:https (fetch/undici ne permet pas d'ignorer la validation TLS sans
 // dispatcher dédié).

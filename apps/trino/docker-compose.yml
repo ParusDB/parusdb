@@ -34,7 +34,7 @@ services:
     networks:
       - supabase
     ports:
-      # API + UI web en HTTPS (durcissement, rbac_refonte.md §9). Le port
+      # API + UI web en HTTPS (durcissement, spec fonctionnelle § « Intégration Technique » (durcissement Trino)). Le port
       # interne du conteneur est toujours 8443 ; le port hôte par défaut
       # (8453) évite la collision avec Kong (supabase-kong publie déjà
       # 8443). Le port interne 8080 (HTTP) reste ouvert dans le conteneur

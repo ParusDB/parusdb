@@ -13,7 +13,7 @@
 --   connectors — pipelines ELT (dlt) et leurs exécutions
 --   admin      — fournisseurs LLM externes (clés API chiffrées)
 --
--- RBAC (docs/functional/rbac_refonte.md) : modèle à grants calqué sur Apache
+-- RBAC (docs/functional/functional_specifications.md (§ Rôles et Permissions)) : modèle à grants calqué sur Apache
 -- Polaris. Les ressources sont les catalogues, les agents IA et les
 -- pipelines ; les privilèges read/write/manage sont hiérarchiques
 -- (manage ⊇ write ⊇ read). Le rôle qui crée un objet en devient propriétaire
@@ -1213,7 +1213,7 @@ create trigger on_auth_user_created
   for each row execute function iam.on_auth_user_created();
 
 -- ---------------------------------------------------------------------------
--- 12. Seed : rôles système (RBAC refonte, docs/functional/rbac_refonte.md)
+-- 12. Seed : rôles système (RBAC refonte, docs/functional/functional_specifications.md (§ Rôles et Permissions))
 -- ---------------------------------------------------------------------------
 
 insert into iam.roles (key, name, description, is_system) values

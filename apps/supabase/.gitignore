@@ -13,5 +13,6 @@ volumes/functions/hello/**
 .env.old
 test.http
 docker-compose.override.yml
+docker-compose.yml.old
 .supabase-version
 backups

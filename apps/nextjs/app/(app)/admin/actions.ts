@@ -156,7 +156,7 @@ export async function deleteUser(
 
 // ---------------------------------------------------------------------------
 // Utilisateurs applicatifs (comptes service pour les outils data : dbt,
-// Power BI, Airbyte… — rbac_refonte.md §2.2/§4). Credentials Polaris
+// Power BI, Airbyte… — spec fonctionnelle § « Rôles et Permissions »/§4). Credentials Polaris
 // affichées UNE FOIS : jamais stockées côté applicatif.
 // ---------------------------------------------------------------------------
 
@@ -280,7 +280,7 @@ export async function createAppUser(input: {
     return { ok: false, error: `L'enregistrement a échoué : ${insertError.message}` };
   }
 
-  // 6. Durcissement Trino (rbac_refonte.md §9.2) : mot de passe Trino du
+  // 6. Durcissement Trino (spec fonctionnelle § « Intégration Technique » (durcissement Trino).2) : mot de passe Trino du
   // compte applicatif (affiché une seule fois, comme le clientSecret) +
   // règles d'access control régénérées. Best effort : un échec n'annule pas
   // la création (le compte reste utilisable via Polaris REST), il est
@@ -303,7 +303,7 @@ export async function createAppUser(input: {
 }
 
 // Réinitialisation : nouveaux secrets Polaris ET Trino (rotés ensemble,
-// même parcours — rbac_refonte.md §9.2), retournés une seule fois. Le
+// même parcours — spec fonctionnelle § « Intégration Technique » (durcissement Trino).2), retournés une seule fois. Le
 // clientId reste inchangé.
 export async function rotateAppUserCredentials(
   appUserId: string,
@@ -589,7 +589,7 @@ export async function deleteRole(
 }
 
 // ---------------------------------------------------------------------------
-// Grants RBAC (docs/functional/rbac_refonte.md) : l'admin distribue les
+// Grants RBAC (docs/functional/functional_specifications.md (§ Rôles et Permissions)) : l'admin distribue les
 // privilèges read/write/manage par rôle sur les catalogues, agents et
 // pipelines. La hiérarchie (manage ⊇ write ⊇ read) est appliquée au moment
 // de l'enregistrement : un privilège supérieur inclut toujours les
@@ -695,7 +695,7 @@ export async function setRoleGrant(input: {
   }
   // Miroir Polaris (comptes applicatifs du rôle) : best effort — un échec
   // est renvoyé en avertissement sans bloquer l'édition applicative
-  // (synchronisation éventuellement cohérente, rbac_refonte.md §7).
+  // (synchronisation éventuellement cohérente, spec fonctionnelle § « Rôles et Permissions »).
   let warning: string | undefined;
   if (input.resourceType === "catalog") {
     const sync = await mirrorRoleCatalogAccess(input.roleId);

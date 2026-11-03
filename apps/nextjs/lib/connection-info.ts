@@ -1,5 +1,5 @@
 // Informations de connexion du lakehouse pour les outils data externes
-// (rbac_refonte.md §5.3). Adresses publiques : le hostname des URLs internes
+// (spec fonctionnelle § « Rôles et Permissions »). Adresses publiques : le hostname des URLs internes
 // (ex. http://rustfs:9000, interne au réseau Docker) est remplacé par
 // PARUSDB_PUBLIC_HOST (défaut : localhost) — ports et chemins conservés.
 

@@ -153,9 +153,13 @@ rapide avec une source PostgreSQL bidon :
 pipeline de type PostgreSQL dans l'interface. Détails :
 [`apps/dlt/README.md`](apps/dlt/README.md).
 
-> **Note** : le parcours produit complet (« clonez, `docker compose up -d`, instance prête
-> en 5 minutes ») sera livré avec la première release. En attendant, le dépôt s'adresse aux
-> contributeurs : chaque brique se développe ici.
+> **Parcours recommandé** : `sh setup.sh` à la racine orchestre toute
+> l'installation (ordre des dépendances, SQL applicatif, synchronisation du
+> frontend, vérification dlt) — l'instance est prête en quelques minutes. Au
+> premier lancement, l'interface guide la création du compte **Administrateur**
+> (onboarding), aucune commande supplémentaire. Les briques optionnelles
+> (Ollama pour le chat en local, dlt pour les connecteurs) se posent ensuite
+> selon vos besoins.
 
 ## État du projet
 
@@ -170,7 +174,7 @@ complète, clients SSR) est fonctionnel ; les briques produit arrivent dans cet 
       applicatifs pour les outils data, Trino HTTPS + authentification + access
       control générés depuis les droits
 - [x] **Flux ELT** — dlt, 40+ connecteurs, pipelines, CRON
-- [ ] **Release open source** — déploiement `docker compose up -d` prêt à l'emploi
+- [ ] **Release open source** — première version publique taguée `v1.0.0`
 
 ## Structure du dépôt
 
@@ -178,7 +182,13 @@ complète, clients SSR) est fonctionnel ; les briques produit arrivent dans cet 
 parusdb/
 ├── AGENTS.md             # Règles de développement pour agents IA et contributeurs
 ├── README.md             # Ce fichier
+├── CONTRIBUTING.md       # Guide de contribution
+├── SECURITY.md           # Politique de sécurité (divulgation responsable)
+├── CODE_OF_CONDUCT.md    # Code de conduite
+├── CHANGELOG.md          # Journal des versions
 ├── docs/functional/      # Fiche produit, spécifications fonctionnelles, charte graphique
+├── .agents/skills/       # Skills Supabase officiels (guides de contribution assistée par IA)
+├── .github/              # CI (lint, typecheck, build), scan de secrets, templates d'issues/PR
 ├── apps/nextjs/          # Application Next.js 16 (App Router) — frontend + BFF
 ├── apps/dlt/             # dlt — moteur ELT (pipelines → lakehouse, conteneur jetable par run)
 ├── apps/mcp-trino/       # mcp-trino — serveur MCP exposant Trino aux LLM (lecture seule)
@@ -204,16 +214,24 @@ parusdb/
 
 ## Contribuer
 
-Tous les contributeurs sont bienvenus : forkez le dépôt, créez une branche, soumettez une PR.
+Tous les contributeurs sont bienvenus : le guide complet (prérequis, workflow,
+conventions, definition of done) vit dans
+[`CONTRIBUTING.md`](CONTRIBUTING.md). En résumé :
 
 1. Forkez puis clonez le dépôt.
 2. Créez votre branche : `feat/<brique>-<sujet>` (ex. `feat/lakehouse-explorateur`).
 3. Développez en suivant [`AGENTS.md`](AGENTS.md) — conventions de code, charte graphique,
    definition of done. Les agents de développement IA doivent le lire en premier.
-4. Ouvrez une Pull Request décrivant le quoi et le pourquoi.
+4. Vérifiez `npm run lint`, `npm run typecheck` et `npm run build` dans
+   `apps/nextjs` (la CI les exécute sur chaque PR).
+5. Ouvrez une Pull Request décrivant le quoi et le pourquoi.
+
+Pour signaler une vulnérabilité de sécurité : voir [`SECURITY.md`](SECURITY.md)
+— jamais d'issue publique pour ce cas.
 
 Questions et discussions : [GitHub Discussions](https://github.com/ParusDB/parusdb/discussions).
 Bugs : [Issues](https://github.com/ParusDB/parusdb/issues).
+Journal des versions : [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Licence
 
@@ -223,8 +241,13 @@ conditions usuelles de la licence (conservation des notices, mention des
 modifications, clause de non-contrefaçon de brevets).
 Texte intégral : [`LICENSE`](LICENSE). Mentions des composants tiers : [`NOTICE`](NOTICE).
 
+**Marque** : le nom « ParusDB » et son logo sont des marques du projet
+(dépôt INPI en cours). Ils ne sont pas soumis à la licence Apache 2.0 : le nom
+et le logo ne peuvent être réutilisés pour nommer un produit ou un service
+sans autorisation du mainteneur.
+
 ## Liens
 
 - **Site** : <https://parusdb.com/>
 - **GitHub** : <https://github.com/ParusDB/parusdb>
-- **Documentation, guides, changelog** : en construction
+- **Documentation, guides** : en construction

@@ -9,7 +9,7 @@
 #   1. vérification des prérequis (docker, compose, Polaris joignable) ;
 #   2. création de .env depuis .env.example si absent, import des credentials
 #      Polaris depuis apps/polaris/.env ;
-#   3. durcissement (rbac_refonte.md §9) : keystore TLS autosigné,
+#   3. durcissement (spec fonctionnelle § « Intégration Technique » (durcissement Trino)) : keystore TLS autosigné,
 #      config.properties (HTTPS + authentification password file + secret
 #      interne), comptes de service bcrypt (BFF, mcp-trino) et règles
 #      d'access control de bootstrap — l'application régénère ensuite
@@ -198,7 +198,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Durcissement Trino (rbac_refonte.md §9) : HTTPS autosigné + authenticator
+# Durcissement Trino (spec fonctionnelle § « Intégration Technique » (durcissement Trino)) : HTTPS autosigné + authenticator
 # password file (bcrypt) + access control JSON. Le port HTTP clair n'est plus
 # publié : l'authentification exige TLS. Les comptes applicatifs et les
 # règles issues de iam.grants sont régénérés par l'application (apps/nextjs,
@@ -267,7 +267,7 @@ docker run --rm --entrypoint cat "$TRINO_IMAGE" /etc/trino/config.properties \
     || fail "lecture de la config de l'image $TRINO_IMAGE impossible"
 cat >> "$SCRIPT_DIR/etc/config.properties" <<PROPS
 
-# Durcissement ParusDB (rbac_refonte.md §9) — HTTPS + authentification.
+# Durcissement ParusDB (spec fonctionnelle § « Intégration Technique » (durcissement Trino)) — HTTPS + authentification.
 http-server.https.enabled=true
 http-server.https.port=8443
 http-server.https.keystore.path=etc/keystore.pem

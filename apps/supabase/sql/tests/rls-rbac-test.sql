@@ -1,4 +1,4 @@
--- Test RLS du modèle RBAC refondu (docs/functional/rbac_refonte.md)
+-- Test RLS du modèle RBAC refondu (docs/functional/functional_specifications.md (§ Rôles et Permissions))
 -- Usage : docker exec -i supabase-db psql -U supabase_admin -d postgres < rls-test.sql
 -- Crée des fixtures jetables (2 users de test, 1 rôle custom), exécute les
 -- scénarios puis nettoie tout. Sans ON_ERROR_STOP : les échecs attendus

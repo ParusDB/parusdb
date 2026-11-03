@@ -17,7 +17,7 @@ import { CharbonPanel } from "@/components/parus/charbon-panel";
 import type { ConnectionEndpoints } from "@/lib/connection-info";
 
 // Informations de connexion du lakehouse pour les outils data externes
-// (rbac_refonte.md §5.3). La page est **agnostique des outils** : elle
+// (spec fonctionnelle § « Rôles et Permissions »). La page est **agnostique des outils** : elle
 // décrit les protocoles d'accès (SQL, catalogue Iceberg REST, stockage
 // objet S3) avec leurs paramètres factuels et un profil de connexion
 // structuré par protocole — aucune section par outil (dbt, Power BI,

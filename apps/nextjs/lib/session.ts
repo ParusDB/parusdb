@@ -9,7 +9,7 @@ export interface SessionContext {
   roles: Role[];
   activeRole: Role | null;
   // Le compte porte le rôle système `admin` (hérite de tout, RBAC refonte —
-  // docs/functional/rbac_refonte.md). Indépendant du rôle actif :
+  // docs/functional/functional_specifications.md (§ Rôles et Permissions)). Indépendant du rôle actif :
   // l'administration est une capacité du compte.
   isAdmin: boolean;
 }

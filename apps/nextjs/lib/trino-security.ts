@@ -1,4 +1,4 @@
-// Génération des fichiers de sécurité Trino (durcissement, rbac_refonte.md
+// Génération des fichiers de sécurité Trino (durcissement, spec fonctionnelle
 // §9) depuis iam.grants — source de vérité unique. Trino devient un artefact
 // dérivé, comme les bindings de catalogues. Deux fichiers dans
 // TRINO_SECURITY_DIR (répertoire bind-monté dans le conteneur Trino,

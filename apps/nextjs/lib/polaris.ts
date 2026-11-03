@@ -300,7 +300,7 @@ export async function polarisPing(): Promise<boolean> {
 
 // ---------------------------------------------------------------------------
 // Utilisateurs applicatifs — principals Polaris (RBAC refonte,
-// docs/functional/rbac_refonte.md §4). Endpoints validés sur Polaris 1.8.0 :
+// docs/functional/functional_specifications.md (§ Rôles et Permissions) §4). Endpoints validés sur Polaris 1.8.0 :
 // le secret n'est JAMAIS stocké côté applicatif, il est retourné une seule
 // fois à la création (POST /principals) ou à la réinitialisation
 // (POST /principals/{name}/reset, réservé au client root ; /rotate est

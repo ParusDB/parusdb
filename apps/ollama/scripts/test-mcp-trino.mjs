@@ -88,7 +88,7 @@ const MONTHLY_TOTAL = AMOUNT_A + AMOUNT_B; // 2091.25
 const EXPECTED = MONTHLY_TOTAL * 3; // 3 mois glissants = 6273.75
 
 function trino(sql) {
-  // Trino durci (rbac_refonte.md §9) : HTTPS + authentification. Le seed est
+  // Trino durci (spec fonctionnelle § « Intégration Technique » (durcissement Trino)) : HTTPS + authentification. Le seed est
   // une opération d'outillage : compte parus-ops (accès complet,
   // apps/trino/.env) — le compte BFF est limité au catalogue `system` depuis
   // la migration de l'éditeur SQL sur les comptes de rôle.

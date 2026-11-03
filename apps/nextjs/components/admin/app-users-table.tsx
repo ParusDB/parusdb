@@ -41,7 +41,7 @@ import {
 } from "@/app/(app)/admin/actions";
 
 // Utilisateurs applicatifs (comptes service pour les outils data —
-// rbac_refonte.md §2.2) : miroir applicatif d'un principal Polaris. Le
+// spec fonctionnelle § « Rôles et Permissions ») : miroir applicatif d'un principal Polaris. Le
 // clientSecret n'est JAMAIS stocké ni réaffiché : il apparaît une seule
 // fois, à la création ou à la réinitialisation.
 

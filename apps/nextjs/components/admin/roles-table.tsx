@@ -32,7 +32,7 @@ import {
   updateRole,
 } from "@/app/(app)/admin/actions";
 
-// Table des rôles (RBAC refonte — docs/functional/rbac_refonte.md). La
+// Table des rôles (RBAC refonte — docs/functional/functional_specifications.md (§ Rôles et Permissions)). La
 // distribution des droits par rôle (grants lecture/écriture/gestion sur les
 // catalogues, agents et pipelines) se fait dans l'éditeur dédié de chaque
 // rôle ; ici : création/édition des rôles, effectifs, suppression.

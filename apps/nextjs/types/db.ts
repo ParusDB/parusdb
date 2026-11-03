@@ -13,7 +13,7 @@ export interface Role {
 }
 
 // Grant RBAC : privilèges hiérarchiques (manage ⊇ write ⊇ read) d'un rôle sur
-// une ressource (catalogue, agent, pipeline) — docs/functional/rbac_refonte.md.
+// une ressource (catalogue, agent, pipeline) — docs/functional/functional_specifications.md (§ Rôles et Permissions).
 export interface Grant {
   role_id: string;
   resource_type: "catalog" | "agent" | "pipeline";

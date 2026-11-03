@@ -25,7 +25,7 @@ import type { Grant, Role } from "@/types/db";
 import { setRoleGrant, type GrantPrivilege } from "@/app/(app)/admin/actions";
 import { PRIVILEGES } from "@/lib/permissions";
 
-// Éditeur des droits d'un rôle (RBAC refonte — docs/functional/rbac_refonte.md)
+// Éditeur des droits d'un rôle (RBAC refonte — docs/functional/functional_specifications.md (§ Rôles et Permissions))
 // : matrice ressources (catalogues / agents / pipelines) × privilèges
 // (lecture / écriture / gestion). Les privilèges sont hiérarchiques :
 // cocher un niveau supérieur inclut les inférieurs, décocher un niveau
