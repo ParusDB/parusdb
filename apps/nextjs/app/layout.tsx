@@ -26,6 +26,7 @@ const jetbrainsMono = localFont({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://parusdb.com"),
   title: "ParusDB — Plateforme Data Analytique IAgentique Open Source",
   description:
     "ParusDB unifie ELT, Data Lakehouse et agents IA dans une plateforme open source et souveraine. Licence Apache 2.0.",
