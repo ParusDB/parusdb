@@ -23,6 +23,10 @@ under their own licenses:
   dépôt : elles sont téléchargées à la construction de l'image
   (commit épinglé, cf. apps/dlt/Dockerfile).
 
+- Polices Inter, Space Grotesk et JetBrains Mono (auto-hébergées dans
+  apps/nextjs/app/fonts/) — SIL Open Font License 1.1, Copyright The Inter
+  Project Authors / Florian Karsten / The JetBrains Mono Project Authors.
+
 This product also depends on, but does not redistribute the source of:
 Apache Polaris, Trino, RustFS, Ollama, mcp-trino — deployed as containers
 via docker-compose, each under its own license.

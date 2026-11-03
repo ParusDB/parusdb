@@ -1,0 +1,14 @@
+title = "Configuration gitleaks ParusDB"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Clés de démonstration Supabase du template initial (jetons publics, iss supabase-demo) et exemples de secrets documentés"
+paths = [
+  '''^apps/supabase/\.env\.example$''',
+  '''^apps/[^/]+/\.env\.example$''',
+]
+regexes = [
+  '''aXNzIjogInN1cGFiYXNlLWRlbW8i''',
+]
