@@ -145,6 +145,23 @@ create table if not exists iam.app_users (
 );
 create index if not exists app_users_role_id_idx on iam.app_users (role_id);
 
+-- Comptes Trino de rôle (refus réel de l'éditeur SQL, durcissement) : un
+-- compte de service Trino par rôle applicatif (`parus-role-<role_id>`),
+-- contraint par rules.json dérivé des grants + de la propriété des
+-- catalogues. Le mot de passe de ces comptes est utilisé par le BFF à chaque
+-- requête de l'éditeur : chiffré AES-256-GCM (PARUSDB_ENCRYPTION_KEY, apps/
+-- nextjs/lib/crypto.ts), jamais en clair. RLS **sans aucune politique** :
+-- invisible via PostgREST pour tous les comptes (admin compris) — seul le
+-- BFF (service_role, serveur uniquement) y accède. Le contrôle d'accès
+-- effectif vit côté Trino (rules.json), pas ici.
+create table if not exists iam.role_trino_accounts (
+  role_id uuid primary key references iam.roles (id) on delete cascade,
+  username text not null unique,
+  password_encrypted text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 -- Colonnes de propriété par rôle (RBAC refonte) : ajoutées tôt car les
 -- fonctions d'autorisation ci-dessous les référencent à leur création (les
 -- fonctions SQL sont validées à la création). Sur installation existante la
@@ -308,6 +325,7 @@ alter table iam.user_roles enable row level security;
 alter table iam.user_active_role enable row level security;
 alter table iam.grants enable row level security;
 alter table iam.app_users enable row level security;
+alter table iam.role_trino_accounts enable row level security;
 
 drop policy if exists profiles_select_own_or_admin on iam.user_profiles;
 create policy profiles_select_own_or_admin on iam.user_profiles
@@ -1119,6 +1137,8 @@ grant select, insert, delete on iam.user_roles to authenticated;
 grant select, insert, update, delete on iam.user_active_role to authenticated;
 grant select, insert, update, delete on iam.grants to authenticated;
 grant select, insert, update, delete on iam.app_users to authenticated;
+-- iam.role_trino_accounts : aucun grant à authenticated (RLS sans politique,
+-- mot de passe chiffré réservé au BFF service_role — moindre privilège).
 
 grant select, insert, update, delete on agents.agents to authenticated;
 grant select, insert, update, delete on agents.agent_sources to authenticated;

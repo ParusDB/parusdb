@@ -15,7 +15,7 @@ import {
   trinoBindingFileContent,
   trinoBindingFor,
 } from "@/lib/lakehouse";
-import { quoteIdent, trinoQuery } from "@/lib/trino";
+import { quoteIdent, sessionTrinoExecutor } from "@/lib/trino";
 import {
   getTrinoRestartState,
   requestTrinoRestart,
@@ -43,8 +43,11 @@ export interface QueryExecution {
   error?: string;
 }
 
-// Exécution SQL : passe par Trino (unique moteur) avec les droits du rôle
-// actif vérifiés côté serveur (spec §Data Lakehouse, RBAC refonte).
+// Exécution SQL : passe par Trino (unique moteur) sous le compte Trino du
+// rôle ACTIF (contraint par rules.json — la qualification croisée de
+// catalogue est refusée par Trino, pas seulement par la garde applicative)
+// après vérification applicative des droits (spec §Data Lakehouse, RBAC
+// refonte : message d'erreur français précoce avant d'atteindre Trino).
 export async function executeQuery(
   catalog: string,
   sql: string,
@@ -73,6 +76,13 @@ export async function executeQuery(
           : "Votre rôle actif ne permet pas de modifier ce catalogue (privilège « Écriture » requis).",
     };
   }
+  if (!session.activeRole) {
+    return {
+      ok: false,
+      error:
+        "Aucun rôle actif : impossible d'exécuter une requête. Contactez un administrateur.",
+    };
+  }
   const binding = trinoBindingFor(catalog);
   if (!binding) {
     return {
@@ -82,7 +92,8 @@ export async function executeQuery(
     };
   }
   try {
-    const result = await trinoQuery(trimmed);
+    const run = await sessionTrinoExecutor(session);
+    const result = await run(trimmed);
     await supabase.schema("lakehouse").from("query_history").insert({
       user_id: session.userId,
       catalog_name: catalog,
@@ -228,16 +239,25 @@ export async function deleteCatalogAction(
   const binding = trinoBindingFor(name);
   if (binding) {
     try {
-      const tree = await loadCatalogTree(binding);
+      // Purge exécutée sous le compte Trino du rôle actif (privilège
+      // « Gestion » vérifié ci-dessus) — le refus éventuel vient de Trino.
+      if (!session.activeRole) {
+        return {
+          ok: false,
+          error: "Aucun rôle actif : impossible de supprimer ce catalogue.",
+        };
+      }
+      const run = await sessionTrinoExecutor(session);
+      const tree = await loadCatalogTree(binding, run);
       for (const schema of tree.schemas) {
         for (const table of schema.tables) {
-          await trinoQuery(
+          await run(
             `DROP TABLE IF EXISTS ${quoteIdent(binding)}.${quoteIdent(schema.name)}.${quoteIdent(table.name)}`,
           );
         }
       }
       for (const schema of tree.schemas) {
-        await trinoQuery(
+        await run(
           `DROP SCHEMA IF EXISTS ${quoteIdent(binding)}.${quoteIdent(schema.name)}`,
         );
       }

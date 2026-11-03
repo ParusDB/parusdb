@@ -146,7 +146,7 @@ set_env_value POLARIS_CLIENT_SECRET "$POLARIS_ROOT_CLIENT_SECRET"
 [ -n "$POLARIS_S3_REGION" ] && set_env_value S3_REGION "$POLARIS_S3_REGION"
 
 # Valeurs par défaut pour toute clé restée vide.
-for var in POLARIS_URI POLARIS_CATALOG_NAME POLARIS_SYSTEM_CATALOG POLARIS_REALM S3_ENDPOINT S3_REGION TRINO_PORT TRINO_HTTPS_PORT TRINO_SERVICE_USER TRINO_MCP_USER; do
+for var in POLARIS_URI POLARIS_CATALOG_NAME POLARIS_SYSTEM_CATALOG POLARIS_REALM S3_ENDPOINT S3_REGION TRINO_PORT TRINO_HTTPS_PORT TRINO_SERVICE_USER TRINO_MCP_USER TRINO_OPS_USER; do
     ensure_from_example "$var"
 done
 
@@ -216,12 +216,15 @@ generate_secret() {
 }
 generate_secret TRINO_SERVICE_PASSWORD
 generate_secret TRINO_MCP_PASSWORD
+generate_secret TRINO_OPS_PASSWORD
 generate_secret TRINO_INTERNAL_SHARED_SECRET
 
 TRINO_SERVICE_USER=$(get_env_value TRINO_SERVICE_USER)
 TRINO_MCP_USER=$(get_env_value TRINO_MCP_USER)
+TRINO_OPS_USER=$(get_env_value TRINO_OPS_USER)
 [ -n "$TRINO_SERVICE_USER" ] || TRINO_SERVICE_USER="parus-app"
 [ -n "$TRINO_MCP_USER" ] || TRINO_MCP_USER="parus-mcp"
+[ -n "$TRINO_OPS_USER" ] || TRINO_OPS_USER="parus-ops"
 TRINO_HTTPS_PORT_VAL=$(get_env_value TRINO_HTTPS_PORT)
 [ -n "$TRINO_HTTPS_PORT_VAL" ] || TRINO_HTTPS_PORT_VAL="8453"
 
@@ -301,14 +304,17 @@ htpasswd_hash() {
 }
 
 # password.db : les lignes des comptes applicatifs (autres utilisateurs,
-# gérées par l'application) sont préservées ; seules les deux lignes des
+# gérées par l'application) sont préservées ; seules les lignes des
 # comptes de service sont mises à jour.
 touch "$SCRIPT_DIR/security/password.db"
 grep -v "^${TRINO_SERVICE_USER}:" "$SCRIPT_DIR/security/password.db" \
-    | grep -v "^${TRINO_MCP_USER}:" > "$SCRIPT_DIR/security/password.db.tmp" || true
+    | grep -v "^${TRINO_MCP_USER}:" \
+    | grep -v "^${TRINO_OPS_USER}:" > "$SCRIPT_DIR/security/password.db.tmp" || true
 htpasswd_hash "$TRINO_SERVICE_USER" "$(get_env_value TRINO_SERVICE_PASSWORD)" \
     >> "$SCRIPT_DIR/security/password.db.tmp"
 htpasswd_hash "$TRINO_MCP_USER" "$(get_env_value TRINO_MCP_PASSWORD)" \
+    >> "$SCRIPT_DIR/security/password.db.tmp"
+htpasswd_hash "$TRINO_OPS_USER" "$(get_env_value TRINO_OPS_PASSWORD)" \
     >> "$SCRIPT_DIR/security/password.db.tmp"
 mv "$SCRIPT_DIR/security/password.db.tmp" "$SCRIPT_DIR/security/password.db"
 chmod 600 "$SCRIPT_DIR/security/password.db"
@@ -319,15 +325,17 @@ if [ ! -f "$SCRIPT_DIR/security/rules.json" ]; then
     cat > "$SCRIPT_DIR/security/rules.json" <<EOF
 {
   "catalogs": [
-    { "user": "^${TRINO_SERVICE_USER}\$", "allow": "all" },
-    { "user": "^${TRINO_MCP_USER}\$", "allow": "read-only" }
+    { "user": "^${TRINO_SERVICE_USER}\$", "catalog": "^system\$", "allow": "read-only" },
+    { "user": "^${TRINO_SERVICE_USER}\$", "allow": "none" },
+    { "user": "^${TRINO_MCP_USER}\$", "allow": "read-only" },
+    { "user": "^${TRINO_OPS_USER}\$", "allow": "all" }
   ]
 }
 EOF
     chmod 600 "$SCRIPT_DIR/security/rules.json"
     echo "    règles d'access control de bootstrap générées (security/rules.json)"
 fi
-echo "    comptes de service Trino : $TRINO_SERVICE_USER (BFF), $TRINO_MCP_USER (mcp-trino)"
+echo "    comptes de service Trino : $TRINO_SERVICE_USER (BFF, limité à system), $TRINO_MCP_USER (mcp-trino, lecture seule), $TRINO_OPS_USER (outillage, accès complet)"
 
 if [ "$SKIP_START" = "1" ]; then
     echo ""
@@ -345,10 +353,10 @@ fi
 echo "    trino est démarré et sain"
 
 echo "===> Test de bout en bout (HTTPS + authentification, schémas de chaque catalogue)..."
-SERVICE_PW=$(get_env_value TRINO_SERVICE_PASSWORD)
+OPS_PW=$(get_env_value TRINO_OPS_PASSWORD)
 for catalog in $POLARIS_SYSTEM_CATALOG $POLARIS_CATALOG_NAME; do
-    docker compose exec -T -e TRINO_PASSWORD="$SERVICE_PW" trino trino \
-        --server https://localhost:8443 --user "$TRINO_SERVICE_USER" \
+    docker compose exec -T -e TRINO_PASSWORD="$OPS_PW" trino trino \
+        --server https://localhost:8443 --user "$TRINO_OPS_USER" \
         --password --insecure \
         --execute "SHOW SCHEMAS FROM $catalog"
 done
@@ -360,8 +368,8 @@ echo "                        (certificat autosigné, authentification obligatoi
 echo "  Catalogues Trino    : $POLARIS_SYSTEM_CATALOG (système), $POLARIS_CATALOG_NAME (environnement)"
 echo "  CLI SQL             : sh run.sh cli"
 echo ""
-echo "Les comptes de service (BFF $TRINO_SERVICE_USER, mcp-trino $TRINO_MCP_USER) sont"
+echo "Les comptes de service (BFF $TRINO_SERVICE_USER limité à system, mcp-trino $TRINO_MCP_USER en lecture seule, outillage $TRINO_OPS_USER accès complet) sont"
 echo "dans apps/trino/.env — synchronisés vers les apps par le setup racine."
 echo ""
-echo "Exemple :"
-echo "  docker compose exec -T -e TRINO_PASSWORD=\$TRINO_SERVICE_PASSWORD trino trino --server https://localhost:8443 --user $TRINO_SERVICE_USER --password --insecure --execute \"SELECT * FROM $POLARIS_CATALOG_NAME.information_schema.tables\""
+echo "Exemple (compte outillage — les requêtes des utilisateurs passent par leurs comptes de rôle) :"
+echo "  docker compose exec -T -e TRINO_PASSWORD=\$TRINO_OPS_PASSWORD trino trino --server https://localhost:8443 --user $TRINO_OPS_USER --password --insecure --execute \"SELECT * FROM $POLARIS_CATALOG_NAME.information_schema.tables\""

@@ -4,7 +4,7 @@ import {
   DEFAULT_CATALOG,
   listCatalogs,
 } from "@/lib/polaris";
-import { quoteIdent, trinoQuery } from "@/lib/trino";
+import { quoteIdent, type TrinoExecutor } from "@/lib/trino";
 import type { CatalogEntry } from "@/types/db";
 
 // Helpers Data Lakehouse côté serveur. Rôles stricts (AGENTS.md §10) :
@@ -89,6 +89,8 @@ s3.region=\${ENV:S3_REGION}
 }
 
 // Arbre schémas -> tables -> colonnes d'un catalogue lié (2 requêtes Trino).
+// Toute requête passe par l'executor du rôle actif (compte Trino du rôle,
+// contraint par rules.json) — jamais le compte de service BFF.
 export interface ColumnInfo {
   name: string;
   type: string;
@@ -109,8 +111,9 @@ export interface CatalogTree {
 
 export async function loadCatalogTree(
   binding: string,
+  run: TrinoExecutor,
 ): Promise<CatalogTree> {
-  const schemasResult = await trinoQuery(`SHOW SCHEMAS FROM ${quoteIdent(binding)}`);
+  const schemasResult = await run(`SHOW SCHEMAS FROM ${quoteIdent(binding)}`);
   const schemas = schemasResult.rows
     .map((r) => String(r[0]))
     .filter((s) => s !== "information_schema")
@@ -120,14 +123,14 @@ export async function loadCatalogTree(
     return { binding, schemas: [] };
   }
 
-  const columnsResult = await trinoQuery(
+  const columnsResult = await run(
     `SELECT table_schema, table_name, column_name, data_type ` +
       `FROM ${quoteIdent(binding)}.information_schema.columns ` +
       `ORDER BY table_schema, table_name, ordinal_position`,
   );
 
   const tablesIndex = new Map<string, TableNode>();
-  const typesResult = await trinoQuery(
+  const typesResult = await run(
     `SELECT table_schema, table_name, table_type ` +
       `FROM ${quoteIdent(binding)}.information_schema.tables`,
   );
@@ -176,8 +179,9 @@ export interface CatalogStats {
 }
 export async function computeCatalogStats(
   binding: string,
+  run: TrinoExecutor,
 ): Promise<CatalogStats> {
-  const tablesResult = await trinoQuery(
+  const tablesResult = await run(
     `SELECT table_schema, table_name ` +
       `FROM ${quoteIdent(binding)}.information_schema.tables ` +
       `WHERE table_schema <> 'information_schema'`,
@@ -188,7 +192,7 @@ export async function computeCatalogStats(
     const table = String(row[1]);
     stats.tables += 1;
     try {
-      const files = await trinoQuery(
+      const files = await run(
         `SELECT count(*), coalesce(sum(file_size_in_bytes), 0) ` +
           `FROM ${quoteIdent(binding)}.${quoteIdent(schema)}.${quoteIdent(`${table}$files`)}`,
       );

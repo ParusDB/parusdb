@@ -88,18 +88,20 @@ const MONTHLY_TOTAL = AMOUNT_A + AMOUNT_B; // 2091.25
 const EXPECTED = MONTHLY_TOTAL * 3; // 3 mois glissants = 6273.75
 
 function trino(sql) {
-  // Trino durci (rbac_refonte.md §9) : HTTPS + authentification par mot de
-  // passe du compte de service BFF (apps/trino/.env).
+  // Trino durci (rbac_refonte.md §9) : HTTPS + authentification. Le seed est
+  // une opération d'outillage : compte parus-ops (accès complet,
+  // apps/trino/.env) — le compte BFF est limité au catalogue `system` depuis
+  // la migration de l'éditeur SQL sur les comptes de rôle.
   try {
     return execFileSync(
       "docker",
       [
         "exec",
-        "-e", `TRINO_PASSWORD=${trinoEnv.TRINO_SERVICE_PASSWORD ?? ""}`,
+        "-e", `TRINO_PASSWORD=${trinoEnv.TRINO_OPS_PASSWORD ?? ""}`,
         TRINO_CONTAINER,
         "trino",
         "--server", "https://localhost:8443",
-        "--user", trinoEnv.TRINO_SERVICE_USER || "parus-app",
+        "--user", trinoEnv.TRINO_OPS_USER || "parus-ops",
         "--password",
         "--insecure",
         "--execute", sql,

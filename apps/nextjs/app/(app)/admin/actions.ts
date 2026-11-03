@@ -19,6 +19,7 @@ import {
   type ParusPrivilege,
 } from "@/lib/polaris";
 import {
+  ensureRoleTrinoAccounts,
   generateTrinoPassword,
   isReservedTrinoUserName,
   removeTrinoPassword,
@@ -210,7 +211,8 @@ export async function createAppUser(input: {
   if (isReservedTrinoUserName(name)) {
     return {
       ok: false,
-      error: "Ce nom est réservé à un compte de service Trino (BFF ou mcp-trino).",
+      error:
+        "Ce nom est réservé (comptes de service Trino : BFF, mcp-trino, préfixe parus-role- des comptes de rôle).",
     };
   }
   const { data: role } = await admin
@@ -486,7 +488,7 @@ export async function createRole(input: {
   key: string;
   name: string;
   description: string;
-}): Promise<{ ok: boolean; error?: string }> {
+}): Promise<{ ok: boolean; error?: string; warning?: string }> {
   await requireAdmin();
   const admin = createAdminClient();
   const { error } = await admin.schema("iam").from("roles").insert({
@@ -498,7 +500,18 @@ export async function createRole(input: {
   if (error) {
     return { ok: false, error: `La création a échoué : ${error.message}` };
   }
+  // Durcissement Trino : le nouveau rôle reçoit son compte parus-role-<id>
+  // (inert : allow:none tant qu'aucun grant) + rules.json resynchronisé
+  // (best effort, même parcours que les grants).
+  const accounts = await ensureRoleTrinoAccounts();
+  const rules = accounts.ok ? await syncTrinoRules() : accounts;
   revalidatePath("/admin/roles");
+  if (!rules.ok) {
+    return {
+      ok: true,
+      warning: `Rôle créé, mais le durcissement Trino a échoué (${rules.error}) : l'éditeur SQL de ce rôle ne fonctionnera pas tant que TRINO_SECURITY_DIR n'est pas corrigé.`,
+    };
+  }
   return { ok: true };
 }
 
@@ -528,7 +541,7 @@ export async function updateRole(
 
 export async function deleteRole(
   roleId: string,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; warning?: string }> {
   await requireAdmin();
   const admin = createAdminClient();
   const { count } = await admin
@@ -560,7 +573,18 @@ export async function deleteRole(
     }
     return { ok: false, error: `La suppression a échoué : ${error.message}` };
   }
+  // Durcissement Trino : la ligne SQL du compte de rôle est cascade-
+  // détruite ; retirer la ligne bcrypt + resynchroniser rules.json (best
+  // effort — révocation effective après refresh 5 s).
+  const accounts = await ensureRoleTrinoAccounts();
+  const rules = accounts.ok ? await syncTrinoRules() : accounts;
   revalidatePath("/admin/roles");
+  if (!rules.ok) {
+    return {
+      ok: true,
+      warning: `Rôle supprimé, mais la révocation Trino a échoué (${rules.error}) : vérifiez TRINO_SECURITY_DIR.`,
+    };
+  }
   return { ok: true };
 }
 

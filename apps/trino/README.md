@@ -13,8 +13,8 @@ vendus par Polaris. Trino ne stocke aucun secret d'infrastructure.
 | Catalogues | un fichier `catalog/<catalogue>.properties` par catalogue Polaris (généré par `setup.sh` : `dev` par défaut + `parusdb` système) : connecteur Iceberg REST → `http://polaris:8181/api/catalog`, OAuth2 client credentials, realm `POLARIS`, warehouse = le catalogue du même nom |
 | Credentials S3 | vendus par Polaris (`iceberg.rest-catalog.vended-credentials-enabled=true`) — aucun secret statique côté Trino |
 | Réseau | externe `supabase_default` (stacks Supabase et Polaris démarrées) |
-| État | sans état ; les requêtes passent par le principal root Polaris. Le RBAC applicatif (rôle actif, grants `iam.grants` + propriété `owner_role_id`) est implémenté **côté application** (l'éditeur SQL exige Lecture pour une requête de lecture, Écriture pour toute requête modifiante) — le compte de service BFF n'est pas contraint par les règles Trino |
-| Durcissement | HTTPS (certificat autosigné, port public **8453**) + authentification password file bcrypt + access control par règles JSON générés depuis `iam.grants` par le BFF (AGENTS.md §10) |
+| État | sans état ; les requêtes passent par le principal root Polaris. Le RBAC applicatif (rôle actif, grants `iam.grants` + propriété `owner_role_id`) est implémenté côté application (garde précoce `iam.has_grant`) **et** côté Trino (rules.json par compte de rôle — le refus de la qualification croisée de catalogue est effectif dans Trino, cf. Durcissement) |
+| Durcissement | HTTPS (certificat autosigné, port public **8453**) + authentification password file bcrypt + access control par règles JSON générés depuis `iam.grants` et la propriété des catalogues par le BFF (AGENTS.md §10) — chaque rôle applicatif possède un compte Trino `parus-role-<role_id>` qui porte ses droits réels : le refus est effectif dans Trino |
 
 ## Cycle de vie
 
@@ -34,7 +34,7 @@ Prérequis : stack Supabase (avec RustFS) puis Polaris démarrées
 
 - UI web + API HTTPS : `https://localhost:8453` (certificat autosigné,
   authentification obligatoire — `/v1/info` seul répond sans auth)
-- CLI SQL : `sh run.sh cli` (compte de service BFF, mot de passe lu dans
+- CLI SQL : `sh run.sh cli` (compte outillage `parus-ops`, mot de passe lu dans
   `.env`)
 - Catalogues Trino : `dev` (environnement) et `parusdb` (système), au nom de leur catalogue Polaris (ex. `SHOW SCHEMAS FROM dev`)
 
@@ -53,31 +53,48 @@ d'UX :
   Format `user:bcrypt` (`$2y$`, cost 10). Le secret interne
   `internal-communication.shared-secret` est **obligatoire** dès qu'une
   authentification est activée, même en mono-noeud.
-- **Comptes** : deux comptes de service gérés par `setup.sh`
-  (`TRINO_SERVICE_USER` pour le BFF, `TRINO_MCP_USER` pour mcp-trino —
-  mots de passe dans `.env`, hashés via un conteneur éphémère
-  `httpd:2-alpine htpasswd -B`) ; les comptes applicatifs sont gérés par le
-  BFF (`lib/trino-security.ts`) : mot de passe affiché une seule fois,
-  hash fusionné dans `password.db`, ligne retirée à la suppression
-  (révocation immédiate).
+- **Comptes** : trois comptes de service gérés par `setup.sh`
+  (`TRINO_SERVICE_USER` pour le BFF — restreint à la lecture du catalogue
+  `system` par rules.json, `TRINO_MCP_USER` pour mcp-trino, `TRINO_OPS_USER`
+  pour l'outillage — CLI, seed du test e2e ; mots de passe dans `.env`,
+  hashés via un conteneur éphémère `httpd:2-alpine htpasswd -B`). Les
+  comptes **applicatifs** sont gérés par le BFF (`lib/trino-security.ts`) :
+  mot de passe affiché une seule fois, hash fusionné dans `password.db`,
+  ligne retirée à la suppression (révocation immédiate). Les **comptes de
+  rôle** (`parus-role-<role_id>`, éditeur SQL) sont créés paresseusement par
+  le BFF : mot de passe aléatoire chiffré AES-256-GCM dans
+  `iam.role_trino_accounts` (RLS sans politique : seul le service_role du
+  BFF y accède), ligne bcrypt synchronisée dans `password.db` (restaurée
+  depuis le chiffré si le dossier security est réinitialisé, retirée à la
+  suppression du rôle).
 - **Access control** : `security/rules.json` régénéré en entier par le BFF
-  à chaque modification de grants de catalogue / de comptes applicatifs
-  (rechargé toutes les 5 s, sans redémarrage). Mapping : Lecture →
-  `read-only` ; Écriture → + `SELECT`/`INSERT`/`DELETE`/`UPDATE` ; Gestion →
-  + `OWNERSHIP` + schémas `owner`. Première règle qui matche s'applique,
+  à chaque modification de grants de catalogue / de rôles / de comptes
+  applicatifs (rechargé toutes les 5 s, sans redémarrage). Mapping :
+  Lecture → `read-only` ; Écriture → + `SELECT`/`INSERT`/`DELETE`/`UPDATE` ;
+  Gestion → + `OWNERSHIP` + schémas `owner` ; propriété d'un catalogue
+  (owner_role_id) ≈ Gestion ; rôle `admin` → `allow: all` ; rôle sans
+  accès → `allow: none` (compte inert). Première règle qui matche s'applique,
   sans correspondance = refus. **Piège** : une section `schemas`/`tables`
   vide fait échouer `SHOW SCHEMAS` pour tout le monde — elle doit être
   absente du JSON.
 - Le port HTTP clair n'est plus publié (l'authentification exige TLS) ;
   tout client direct (dbt, JDBC/ODBC, scripts) passe par
   `/admin/informations` pour les paramètres de connexion.
-- **Leçons complémentaires** : le compte BFF non contraint (`allow: all`)
-  peut faire du DDL (CREATE SCHEMA/TABLE) sans règles schemas/tables —
-  ces règles ne servent qu'à restreindre les autres comptes ; bcryptjs
+- **Leçons complémentaires** : le catalogue `system` est **ouvert à tous par
+  défaut** et l'absence de règle ne le referme pas —
+  `system.runtime.queries` expose le SQL de toutes les requêtes (fuite
+  inter-utilisateurs) ; il faut une règle explicite
+  `{catalog: "^system$", allow: "none"}` par compte non-admin (vérifié
+  empiriquement : `allow: "none"` s'applique aussi à `system`). Un compte
+  sans règle exécute toujours `SELECT 1` (sans catalogue) — inoffensif, mais
+  pour un compte inerte, poser `allow: none`. Les endpoints HTTP
+  `/v1/query` et `/v1/info` ne sont pas soumis à l'access control (le
+  cycle de redémarrage fonctionne avec un compte refusé partout). bcryptjs
   produit un préfixe `$2a$`/`$2b$`, Trino exige `$2y$` (remplacement de
   préfixe interopérable) ; après tout changement de surface Trino, grepper
-  `localhost:8080` dans toutes les apps — des clients directs oubliés
-  subsistent (cas réel : le script e2e d'Ollama).
+  `localhost:8080` **et les credentials TRINO_SERVICE** dans toutes les
+  apps — des clients directs oubliés subsistent (cas réel : le seed du
+  script e2e d'Ollama, qui doit utiliser le compte ops, jamais le BFF).
 
 ## Notes opérationnelles
 

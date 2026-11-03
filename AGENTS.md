@@ -207,8 +207,11 @@ lockfiles à la main.
   n'y mettre **jamais** de secret.
 - Le frontend lit aussi des variables **serveur uniquement** :
   `SUPABASE_SERVICE_ROLE_KEY`, `PARUSDB_ENCRYPTION_KEY`, `TRINO_URL`,
-  `TRINO_USER`, `TRINO_PASSWORD` (compte de service BFF, durcissement),
-  `TRINO_MCP_USER`, `TRINO_SECURITY_DIR` (fichiers de sécurité Trino
+  `TRINO_USER`, `TRINO_PASSWORD` (compte de service BFF, durcissement —
+  restreint au catalogue `system` par rules.json, cf. §10),
+  `TRINO_MCP_USER`, `TRINO_OPS_USER` (nom du compte outillage cité dans
+  les règles ; son mot de passe ne quitte jamais apps/trino/.env),
+  `TRINO_SECURITY_DIR` (fichiers de sécurité Trino
   générés depuis `iam.grants`), `TRINO_CATALOG_DIR`, `POLARIS_API_URL`,
   `POLARIS_ROOT_CLIENT_ID/SECRET`, `S3_ACCESS_KEY_ID/SECRET_ACCESS_KEY`
   (affichage masqué dans /admin/informations), `PARUSDB_PUBLIC_HOST`
@@ -553,17 +556,60 @@ revient en Envoy.
   privilèges, `syncRoleCatalogAccess` de `lib/polaris.ts`, spec 1.8 :
   privilege **singulier** par grant, `/reset` et non `/rotate` — bug root) ;
   les secrets ne sont jamais stockés, affichés une seule fois. **Durcissement
-  Trino livré (option A)** : HTTPS (certificat autosigné, port public 8453 —
-  8443 est publié par Kong) + authentification password file bcrypt +
-  access control par règles JSON **générés depuis `iam.grants`** par
+  Trino livré (option A) — comptes de rôle pour l'éditeur SQL** : HTTPS
+  (certificat autosigné, port public 8453 — 8443 est publié par Kong) +
+  authentification password file bcrypt + access control par règles JSON
+  **générés depuis `iam.grants` + la propriété des catalogues** par
   `lib/trino-security.ts` (password.db + rules.json dans
-  `apps/trino/security/`, rechargés toutes les 5 s sans redémarrage) — le
-  refus est réel sur le chemin Trino (dbt, Power BI, JDBC/ODBC). Le compte
-  de service BFF n'est pas contraint par les règles (la garde de l'éditeur
-  SQL reste `iam.has_grant`) ; mcp-trino est `read-only` global. Pièges et
-  mode opératoire : `apps/trino/README.md` (secret interne obligatoire,
-  SANs + `SSL_CERT_FILE` pour mcp-trino, sections vides interdites dans
-  rules.json, recréation du conteneur après régénération du keystore).
+  `apps/trino/security/`, rechargés toutes les 5 s sans redémarrage).
+  Chaque rôle applicatif possède un compte Trino `parus-role-<role_id>`
+  (table `iam.role_trino_accounts`, mot de passe chiffré AES-256-GCM,
+  RLS **sans politique** : lisible uniquement par le service_role du BFF) ;
+  **toute requête portée par une session utilisateur (éditeur SQL,
+  explorateur, purge à la suppression, métriques disque) s'exécute sous ce
+  compte** (`roleTrinoExecutor`, `lib/trino.ts`) : le refus de la
+  qualification croisée de catalogue (`SELECT … FROM prod.x.y` avec un grant
+  sur `dev` seul) est effectif **dans Trino**, `iam.has_grant` restant le
+  premier filtre (message français précoce). Le compte BFF `parus-app` est
+  restreint par les règles à la lecture du catalogue `system` et refusé
+  ailleurs (fail closed : une régression du BFF échoue, elle ne s'exécute
+  pas) ; un compte outillage `parus-ops` (`TRINO_OPS_USER`/
+  `TRINO_OPS_PASSWORD`, apps/trino/.env, jamais synchronisé vers Next.js)
+  garde l'accès complet pour le CLI `sh run.sh cli` et le seed du test e2e ;
+  mcp-trino est `read-only` global. Pièges et mode opératoire :
+  `apps/trino/README.md` (secret interne obligatoire, SANs + `SSL_CERT_FILE`
+  pour mcp-trino, sections vides interdites dans rules.json, catalogue
+  `system` ouvert par défaut — règle `allow: "none"` explicite requise,
+  recréation du conteneur après régénération du keystore).
+
+  **Leçons de la mise en place des comptes de rôle (retours d'expérience)** :
+
+  - **Le catalogue `system` de Trino est ouvert à tous par défaut** et une
+    absence de règle ne le referme PAS : `system.runtime.queries` expose le
+    texte SQL des requêtes de TOUS les utilisateurs (fuite inter-utilisateurs
+    réelle). Une règle explicite `{catalog: "^system$", allow: "none"}` par
+    compte non-admin est obligatoire (vérifié empiriquement : `allow:
+    "none"` fonctionne sur `system`).
+  - **Le catalogue de session n'est pas une propriété de session Trino** :
+    c'est l'en-tête HTTP `X-Trino-Catalog` du client (`X-Trino-Schema` pour
+    le schéma). Sans lui, tout nom 2-part se résout `schéma.table` et échoue
+    en `MISSING_CATALOG_NAME`/`MISSING_SCHEMA_NAME` — les requêtes de
+    l'éditeur exigent des noms 3-part (`catalog.schéma.table`), comme avant
+    (pas de régression), et un refus de parsing (`MISSING_*`) n'est PAS un
+    refus d'access control : tester les deux distinctement.
+  - **Un utilisateur sans aucune règle peut toujours exécuter `SELECT 1`**
+    (requête sans catalogue) : pas de fuite de données, mais pour rendre un
+    compte totalement inerte, il faut une règle `allow: "none"` explicite.
+  - **Les endpoints HTTP de supervision (`/v1/query`, `/v1/info`) ne sont
+    pas soumis à l'access control** : le cycle de redémarrage de
+    `lib/trino-restart.ts` fonctionne avec un compte BFF refusé partout
+    ailleurs.
+  - **Le compte BFF restreint casse les outils qui le réutilisaient** : le
+    seed du test e2e Chat IA et `sh run.sh cli` créaient des tables via le
+    compte BFF — désormais refusés. Solution : compte outillage dédié
+    `parus-ops` (accès complet), qui doit rester hors du chemin des
+    requêtes utilisateur. Ne jamais « dé-restreindre » le BFF pour
+    dépanner un outil : lui donner le compte ops.
 
 ## 11. Chat IA — Ollama + mcp-trino
 

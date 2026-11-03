@@ -7,6 +7,7 @@ import { can, grantsForActiveRole } from "@/lib/rbac";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadCatalogViews, computeCatalogStats } from "@/lib/lakehouse";
+import { sessionTrinoExecutor } from "@/lib/trino";
 import { getTrinoRestartState } from "@/lib/trino-restart";
 import type { CatalogEntry } from "@/types/db";
 
@@ -46,8 +47,11 @@ export default async function DataLakehousePage() {
   let trinoError: string | null = null;
   const bound = catalogs.filter((c) => c.binding);
   try {
+    // Métriques sous le compte Trino du rôle actif : seuls les catalogues
+    // réellement accessibles (rules.json du rôle) renvoient des chiffres.
+    const run = await sessionTrinoExecutor(session);
     const stats = await Promise.all(
-      bound.map((c) => computeCatalogStats(c.binding as string)),
+      bound.map((c) => computeCatalogStats(c.binding as string, run)),
     );
     for (const s of stats) {
       totalTables += s.tables;

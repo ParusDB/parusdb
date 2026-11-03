@@ -12,6 +12,7 @@ delete from agents.agents where owner_id in ('00000000-0000-4000-8000-0000000000
 delete from connectors.pipelines where owner_id in ('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000002');
 delete from auth.users where id in ('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000002');
 delete from iam.app_users where name = 'app-user-test';
+delete from iam.role_trino_accounts where username = 'parus-role-test';
 delete from iam.roles where key = 'sales_test';
 delete from lakehouse.catalog_registry where catalog_name = 'test_catalog_rls';
 
@@ -257,10 +258,22 @@ select set_config('request.jwt.claims', '{"sub":"' || :'admin_uid' || '","role":
 insert into iam.app_users (name, note, role_id, polaris_client_id)
 select 'app-user-test', 'test', id, 'client-id-test' from iam.roles where key = 'sales_test';
 select 'T8b app_user créé par l admin (attendu 1)' as test, count(*) as n from iam.app_users;
+-- Comptes Trino de rôle : AUCUN grant à authenticated — même l'admin doit
+-- recevoir permission denied (le BFF y accède en service_role uniquement).
+insert into iam.role_trino_accounts (role_id, username, password_encrypted)
+select id, 'parus-role-test', 'blob' from iam.roles where key = 'sales_test';
 reset role;
 commit;
+
+begin;
+set role authenticated;
+select set_config('request.jwt.claims', '{"sub":"' || :'admin_uid' || '","role":"authenticated"}', false);
+select 'T8c role_trino_accounts illisible même pour l admin (attendu ERROR permission denied)' as test;
+select count(*) as n from iam.role_trino_accounts;
+reset role;
+rollback;
 \else
-select 'T7/T8b sautés : base fraîche sans compte admin (onboarding non fait) — relancer après création du compte' as test;
+select 'T7/T8b/T8c sautés : base fraîche sans compte admin (onboarding non fait) — relancer après création du compte' as test;
 \endif
 
 -- ---------------------------------------------------------------------------
@@ -273,6 +286,7 @@ delete from connectors.pipelines where name in ('pipeline-test', 'pipeline-refus
 delete from agents.agents where name = 'agent-test';
 delete from auth.users where id in ('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000002');
 delete from iam.app_users where name = 'app-user-test';
+delete from iam.role_trino_accounts where username = 'parus-role-test';
 delete from iam.roles where key = 'sales_test';
 delete from lakehouse.catalog_registry where catalog_name = 'test_catalog_rls';
 select 'nettoyage' as test,

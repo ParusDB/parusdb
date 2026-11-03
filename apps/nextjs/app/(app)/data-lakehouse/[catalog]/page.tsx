@@ -6,6 +6,7 @@ import { CatalogWorkspace } from "@/components/lakehouse/catalog-workspace";
 import { requireGrant } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
 import { trinoBindingFor, loadCatalogTree } from "@/lib/lakehouse";
+import { sessionTrinoExecutor } from "@/lib/trino";
 import type { CatalogEntry } from "@/types/db";
 
 export default async function CatalogPage({
@@ -16,7 +17,7 @@ export default async function CatalogPage({
   // Page d'un catalogue : privilège « Lecture » requis sur le rôle actif
   // (propriété ou grant).
   const { catalog } = await params;
-  await requireGrant("catalog", catalog, "read");
+  const session = await requireGrant("catalog", catalog, "read");
   const supabase = await createClient();
 
   const { data: entry } = await supabase
@@ -32,7 +33,10 @@ export default async function CatalogPage({
   let treeError: string | null = null;
   if (binding) {
     try {
-      tree = await loadCatalogTree(binding);
+      // Exploration sous le compte Trino du rôle actif (rules.json borne
+      // réellement l'accès aux catalogues du rôle — refus par Trino sinon).
+      const run = await sessionTrinoExecutor(session);
+      tree = await loadCatalogTree(binding, run);
     } catch (error) {
       treeError =
         error instanceof Error ? error.message : "Trino est injoignable.";
