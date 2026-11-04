@@ -128,7 +128,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Shellcheck sur tous les scripts (seuil : warning)
+      - name: "Shellcheck sur tous les scripts (seuil : warning)"
         run: |
           docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable \
             --severity=warning $(ls *.sh apps/*/*.sh)
