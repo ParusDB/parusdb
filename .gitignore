@@ -12,3 +12,4 @@ volumes/
 
 # Outillage agent interne
 .vibe/
+__pycache__/

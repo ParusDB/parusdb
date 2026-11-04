@@ -28,7 +28,6 @@
 set -e
 
 cd "$(dirname "$0")"
-ROOT=$(pwd)
 
 print_help() {
     cat <<EOF

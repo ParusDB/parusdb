@@ -142,15 +142,8 @@ case "$CMD" in
         exec docker compose config "$@"
         ;;
     secrets)
-        for var in TRINO_PASSWORD; do
-            line=$(grep "^${var}=" .env | head -n 1)
-            if [ -n "$line" ]; then
-                echo "$line"
-            else
-                echo "${var}="
-            fi
-        done
-        echo ""
+        line=$(grep "^TRINO_PASSWORD=" .env | head -n 1)
+        echo "${line:-TRINO_PASSWORD=}"
         ;;
     help|-h|--help)
         cat <<EOF

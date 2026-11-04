@@ -1,0 +1,54 @@
+#
+# Source Apache Kafka de démonstration — validation e2e du moteur ELT.
+#
+# Broker Redpanda (compatible Kafka) en PLAINTEXT, fictif, données bidon.
+# Reproduit une « vraie » source de streaming pour tester le parcours :
+# pipeline dlt (source verified kafka) -> Iceberg (Polaris + RustFS) ->
+# Trino -> Chat IA.
+#
+# Réseau : supabase_default pour être joignable par les conteneurs de run.
+# Pas de port hôte : accessible uniquement depuis le réseau Docker interne
+# (bootstrap : parus-dlt-demo-kafka:9092).
+#
+# Démarrage : docker compose -f demo/docker-compose.kafka.yml up -d --wait
+# Données   : messages produits via rpk (voir README des tests ELT) :
+#   docker exec -i parus-dlt-demo-kafka rpk topic create ventes_evenements
+#   docker exec -i parus-dlt-demo-kafka rpk topic produce ventes_evenements \
+#     --key <clé> <<< '<message JSON>'
+#
+
+name: parus-dlt-demo-kafka
+
+networks:
+  supabase:
+    name: supabase_default
+    external: true
+
+services:
+
+  demo-kafka:
+    image: redpandadata/redpanda:v24.3.8
+    container_name: parus-dlt-demo-kafka
+    restart: unless-stopped
+    networks:
+      - supabase
+    command:
+      - redpanda
+      - start
+      - --smp
+      - "1"
+      - --memory
+      - 1G
+      - --overprovisioned
+      - --node-id
+      - "0"
+      - --kafka-addr
+      - PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr
+      - PLAINTEXT://parus-dlt-demo-kafka:9092
+      - --check=false
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health 2>/dev/null | grep -q 'Healthy: *true'"]
+      interval: 5s
+      timeout: 5s
+      retries: 20

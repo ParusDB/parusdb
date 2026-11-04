@@ -249,8 +249,13 @@ lockfiles à la main.
   remplacement — toujours le tiret simple « - » (charte §4.3).
 - **Vérification systématique** : avant de déclarer un travail terminé, exécuter
   `npm run lint`, `npm run typecheck` et `npm run build` dans `apps/nextjs` (et les tests dès
-  qu'ils existent, voir §13) — la CI GitHub exécute ces trois commandes + Gitleaks sur
-  chaque PR et chaque push sur `main`/`v1.0.0` (`.github/workflows/`).
+  qu'ils existent, voir §13) — la CI GitHub exécute ces trois commandes + les
+  tests (`npm test`) sur chaque PR et chaque push sur `main`/`v1.0.0`
+  (`.github/workflows/`). La CI couvre en outre le SQL applicatif
+  (idempotence + tests RLS sur un Postgres éphémère), les scripts shell
+  (shellcheck), les configurations compose (validation à env factices) et le
+  runner dlt (pytest) ; le détail vit dans `docs/CI.md`, et le test e2e
+  complet est un lancement manuel (`e2e-elt.yml`).
 - **Dépendances épinglées** : jamais de `latest` ni de `^` sur les dépendances majeures
   du `apps/nextjs/package.json` — un contributeur clonant le dépôt doit obtenir les mêmes
   versions que la CI (leçon : `next`/`@supabase/*` en `latest` contournaient le lockfile).
@@ -781,10 +786,14 @@ Une contribution est terminée quand :
 4. Tout écran passe la checklist de conformité de la charte (§8 + charte §14) ;
 5. Les messages d'erreur sont en français, factuels et actionnables.
 
-**Tests** : aucun framework de test n'est encore installé. Dès la première brique fonctionnelle :
-unitaire/intégration avec **Vitest + React Testing Library**, e2e des parcours critiques
-(auth, création catalogue, pipeline) avec **Playwright**. Toute nouvelle fonctionnalité
+**Tests** : **Vitest** dans `apps/nextjs` (`npm test`, `tests/`) pour la logique
+serveur (crypto, RBAC, backends LLM, registre de sources) et **pytest** dans
+`apps/dlt` (`pytest tests`) pour le runner (URL SQL, registre des sources,
+chiffrement compatible BFF). Les tests RLS rejouables vivent dans
+`apps/supabase/sql/tests/` et sont exécutés par la CI. Les parcours UI
+(auth) attendent **Playwright**. Toute nouvelle fonctionnalité
 s'accompagne de tests ; corriger un bug commence par un test qui le reproduit.
+Inventaire complet (unitaires, CI, e2e manuel) : `docs/CI.md`.
 
 **CI GitHub** (`.github/workflows/`) : le job Frontend exécute lint + typecheck + build
 sur Node 22 (`npm ci`) ; le job Gitleaks scanne **tout l'historique Git** avec le binaire
