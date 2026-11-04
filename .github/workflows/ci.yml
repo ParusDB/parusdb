@@ -25,6 +25,16 @@ jobs:
           cache: npm
           cache-dependency-path: apps/nextjs/package-lock.json
 
+      # Cache de build Turbopack : le warning « No build cache found »
+      # disparaît dès le 2e run ; la clé contient le hash du lockfile pour
+      # invalider le cache à chaque changement de dépendances.
+      - name: Cache du build next (.next/cache)
+        uses: actions/cache@v4
+        with:
+          path: apps/nextjs/.next/cache
+          key: nextcache-${{ runner.os }}-${{ hashFiles('apps/nextjs/package-lock.json') }}
+          restore-keys: nextcache-${{ runner.os }}-
+
       - name: Installation des dépendances
         run: npm ci
 
