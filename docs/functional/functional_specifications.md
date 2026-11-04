@@ -100,7 +100,10 @@ et Permissions).
 **Logo** : le logo officiel occupe le haut du menu latéral (plein cadre) et sert de
 bouton « Accueil » (retour au Chat).
 
-**Items Conversations et Agents IA** : chaque élément propose un menu « trois points »
+**Items Conversations et Agents IA** : chaque section commence par un lien
+« Liste des chats » (Chat) ou « Liste des agents » (Agents IA) vers la vue
+d'ensemble correspondante ; la création passe par les boutons « + » des pages
+principales. Chaque élément propose un menu « trois points »
 (visible au survol) avec :
 - ✏️ Renommer
 - 🗑️ Supprimer (confirmation ; ressaisie du nom pour un agent)
@@ -110,6 +113,8 @@ bouton « Accueil » (retour au Chat).
 - Affichage du user connecté (prénom, nom, email)
 - Sélecteur de thème : Dark Mode / Light Mode / System Mode
 - Sélecteur de **rôle actif** (pour les utilisateurs multi-rôles)
+- Action **« Déconnexion »** (icône à droite des informations du compte, fermeture
+  de la session, retour à l'écran de connexion)
 
 ---
 

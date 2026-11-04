@@ -1,4 +1,4 @@
-// Client MCP (Streamable HTTP) vers mcp-trino — porté du parcours e2e validé
+// Client MCP (Streamable HTTP) vers mcp-trino - porté du parcours e2e validé
 // (apps/ollama/scripts/test-mcp-trino.mjs, AGENTS.md §11). Lecture seule : le
 // LLM explore le lakehouse et exécute du SQL uniquement via ces outils.
 

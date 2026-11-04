@@ -25,7 +25,7 @@ import type { Grant, Role } from "@/types/db";
 import { setRoleGrant, type GrantPrivilege } from "@/app/(app)/admin/actions";
 import { PRIVILEGES } from "@/lib/permissions";
 
-// Éditeur des droits d'un rôle (RBAC refonte — docs/functional/functional_specifications.md (§ Rôles et Permissions))
+// Éditeur des droits d'un rôle (RBAC refonte - docs/functional/functional_specifications.md (§ Rôles et Permissions))
 // : matrice ressources (catalogues / agents / pipelines) × privilèges
 // (lecture / écriture / gestion). Les privilèges sont hiérarchiques :
 // cocher un niveau supérieur inclut les inférieurs, décocher un niveau
@@ -153,7 +153,7 @@ export function RoleGrantsDialog({
                   </p>
                 ) : (
                   <div className="overflow-hidden rounded-2xl border border-border">
-                    <Table>
+                    <Table className="[&_th]:px-4 [&_td]:px-4">
                       <TableHeader>
                         <TableRow>
                           <TableHead>Objet</TableHead>

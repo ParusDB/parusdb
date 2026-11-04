@@ -6,7 +6,7 @@
 //
 // Garde-fous :
 //   - le redémarrage n'a lieu que lorsque aucune requête SQL n'est en cours
-//     (endpoint UI `/v1/query` du coordinateur — seuls les états actifs
+//     (endpoint UI `/v1/query` du coordinateur - seuls les états actifs
 //     comptent : QUEUED, PLANNING, DISPATCHING, RUNNING, en attente de
 //     prérequis) ;
 //   - au-delà d'un délai maximal d'attente, le redémarrage a lieu quand même
@@ -17,10 +17,10 @@
 //     instance) et interrogé par l'UI pour afficher « Redémarrage en cours… ».
 //
 // Contrainte d'exécution : le serveur Next.js doit pouvoir joindre le CLI
-// Docker (`docker restart <conteneur>`) — même accès que l'ordonnanceur dlt.
+// Docker (`docker restart <conteneur>`) - même accès que l'ordonnanceur dlt.
 //
 // Trino durci (spec fonctionnelle § « Intégration Technique » (durcissement Trino)) : les sondes passent en HTTPS
-// (certificat autosigné) + basic auth du compte de service BFF — via
+// (certificat autosigné) + basic auth du compte de service BFF - via
 // node:https (fetch/undici ne permet pas d'ignorer la validation TLS sans
 // dispatcher dédié).
 
@@ -171,7 +171,7 @@ async function waitHealthy(): Promise<void> {
 
 // Demande un redémarrage (non bloquant) : le cycle attend l'inactivité de
 // Trino, redémarre le conteneur puis attend son retour à la santé. Si un
-// cycle est déjà en cours, la demande est absorbée — les bindings écrits
+// cycle est déjà en cours, la demande est absorbée - les bindings écrits
 // entre-temps seront chargés par le même redémarrage.
 export function requestTrinoRestart(catalog: string): void {
   if (cycleRunning) {
@@ -188,7 +188,7 @@ async function runRestartCycle(): Promise<void> {
     const idle = await waitForIdle();
     if (!idle) {
       // Des requêtes sont toujours actives après le délai maximal : on
-      // redémarre quand même — attendre davantage laisserait le catalogue
+      // redémarre quand même - attendre davantage laisserait le catalogue
       // ininterrogeable indéfiniment.
       console.warn(
         `[parusdb] Requêtes toujours actives sur Trino après ${IDLE_TIMEOUT_MS / 1000}s : redémarrage forcé.`,

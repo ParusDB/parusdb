@@ -42,10 +42,10 @@ export interface WizardInitial {
 }
 
 const CRON_PRESETS = [
-  { label: "Quotidien — minuit", value: "0 0 * * *" },
+  { label: "Quotidien - minuit", value: "0 0 * * *" },
   { label: "Toutes les heures", value: "0 * * * *" },
-  { label: "Hebdomadaire — dimanche", value: "0 0 * * 0" },
-  { label: "Mensuel — 1er du mois", value: "0 0 1 * *" },
+  { label: "Hebdomadaire - dimanche", value: "0 0 * * 0" },
+  { label: "Mensuel - 1er du mois", value: "0 0 1 * *" },
 ];
 
 const NO_CURSOR = "__none__";
@@ -75,7 +75,7 @@ export function PipelineWizard({
   const [step, setStep] = useState(1);
   const [search, setSearch] = useState("");
   const [sourceKey, setSourceKey] = useState(initial?.sourceType ?? "");
-  // Credentials : vides à l'édition — les valeurs chiffrées existantes sont
+  // Credentials : vides à l'édition - les valeurs chiffrées existantes sont
   // conservées côté serveur (jamais renvoyées au navigateur).
   const [config, setConfig] = useState<Record<string, string>>({});
   const [name, setName] = useState(initial?.name ?? "");
@@ -345,7 +345,7 @@ export function PipelineWizard({
         {step === 2 && source ? (
           <div className="space-y-5">
             <div>
-              <h2 className="font-display text-xl">Credentials — {source.label}</h2>
+              <h2 className="font-display text-xl">Credentials - {source.label}</h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 Les credentials sont chiffrés au repos et jamais renvoyés au
                 navigateur.
@@ -576,7 +576,7 @@ export function PipelineWizard({
                     {
                       value: "replace" as const,
                       title: "Toutes les données",
-                      desc: "Recrée complètement la table à chaque exécution — signalé comme recréation totale.",
+                      desc: "Recrée complètement la table à chaque exécution - signalé comme recréation totale.",
                     },
                   ]
                 ).map((mode) => (
@@ -670,19 +670,19 @@ export function PipelineWizard({
               {[
                 ["Nom", name],
                 ["Source", `${source.label} (${source.category})`],
-                ["Tables", selectedTables.join(", ") || "—"],
+                ["Tables", selectedTables.join(", ") || "-"],
                 [
                   "Curseurs",
                   Object.entries(cursors)
                     .filter(([, column]) => column)
                     .map(([table, column]) => `${table} → ${column}`)
-                    .join(", ") || "—",
+                    .join(", ") || "-",
                 ],
                 [
                   "Mode",
                   writeMode === "incremental" ? "Incrémental" : "Toutes les données",
                 ],
-                ["Ordonnancement", cron ? `${cron} (UTC)` : "—"],
+                ["Ordonnancement", cron ? `${cron} (UTC)` : "-"],
                 ["Destination", `${destination}.${effectiveSchema}`],
               ].map(([label, value]) => (
                 <div key={label} className="grid grid-cols-3 gap-3 px-4 py-2.5 text-sm">

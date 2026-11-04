@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
 // Premier démarrage : la plateforme n'a aucun compte. Écran « moment fort »
-// de la charte, proposé à la place du login — le compte créé reçoit le rôle
+// de la charte, proposé à la place du login - le compte créé reçoit le rôle
 // Administrateur. Dès qu'un compte existe, cette page redirige vers le
 // login : l'onboarding n'est jouable qu'une seule fois.
 export const instant = false;

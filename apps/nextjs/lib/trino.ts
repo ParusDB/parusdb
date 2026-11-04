@@ -1,16 +1,16 @@
-// Client Trino (moteur SQL unique du lakehouse, AGENTS.md §10) — basé sur le
+// Client Trino (moteur SQL unique du lakehouse, AGENTS.md §10) - basé sur le
 // client officiel trino-js-client (npm `trino-client`, même dépôt que
 // @trinodb/trino-js-client ; le nom scopé exige Node 24, la machine tourne
-// en Node 22 — à renommer lors d'une montée de version de Node).
+// en Node 22 - à renommer lors d'une montée de version de Node).
 // Aucune chaîne de connexion côté navigateur : tout passe par le serveur
 // Next.js, en HTTPS + basic auth (durcissement, spec fonctionnelle § « Intégration Technique » (durcissement Trino)).
 //
 // Deux identités d'exécution :
 //   - trinoQuery : le compte de service BFF (usage infrastructure uniquement
-//     — lecture du catalogue `system` via le CLI, il n'a plus d'usage
+//     - lecture du catalogue `system` via le CLI, il n'a plus d'usage
 //     data-plane depuis la migration de l'éditeur sur les comptes de rôle) ;
 //   - trinoQueryAs / roleTrinoExecutor : le compte Trino du rôle ACTIF de
-//     l'utilisateur (parus-role-<role_id>, contraint par rules.json) — le
+//     l'utilisateur (parus-role-<role_id>, contraint par rules.json) - le
 //     refus de la qualification croisée de catalogue est effectif PAR TRINO,
 //     la garde applicative iam.has_grant reste le premier filtre (message
 //     d'erreur explicite avant d'atteindre Trino).
@@ -32,7 +32,7 @@ export interface TrinoQueryResult {
 }
 
 // Fonction d'exécution de requêtes : toute requête portée par une session
-// utilisateur s'exécute via un executor de rôle — jamais le compte BFF.
+// utilisateur s'exécute via un executor de rôle - jamais le compte BFF.
 export type TrinoExecutor = (sql: string) => Promise<TrinoQueryResult>;
 
 const TRINO_URL = process.env.TRINO_URL ?? "https://localhost:8453";
@@ -59,7 +59,7 @@ async function runQueryAs(
   sql: string,
 ): Promise<TrinoQueryResult> {
   // Rattrapage de dérive éventuelle des fichiers de sécurité (rules.json)
-  // — génération paresseuse, une fois par cycle de vie du processus.
+  // - génération paresseuse, une fois par cycle de vie du processus.
   await ensureTrinoSecurity();
   const started = Date.now();
   const iter = await createTrinoFor(user, password).query({ query: sql, user });
@@ -94,7 +94,7 @@ async function runQueryAs(
 
 // Requête d'infrastructure sous le compte de service BFF : aucun usage
 // data-plane ne doit passer par ici (le compte est restreint à `system`
-// dans rules.json) — réserver aux diagnostics/CLI.
+// dans rules.json) - réserver aux diagnostics/CLI.
 export async function trinoQuery(sql: string): Promise<TrinoQueryResult> {
   return runQueryAs(TRINO_USER, TRINO_PASSWORD, sql);
 }
@@ -122,7 +122,7 @@ export async function roleTrinoExecutor(roleId: string): Promise<TrinoExecutor> 
 
 // Executor d'une session utilisateur. Cohérence avec iam.has_grant : un
 // compte admin hérite de tout QUEL QUE SOIT son rôle actif (l'administration
-// est une capacité du compte) — on utilise alors le compte du rôle admin,
+// est une capacité du compte) - on utilise alors le compte du rôle admin,
 // faute de quoi Trino refuserait ce que la garde applicative a permis.
 export async function sessionTrinoExecutor(
   session: { isAdmin: boolean; roles: { id: string; key: string }[]; activeRole: { id: string } | null },

@@ -76,7 +76,7 @@ async function assertPipelineGrant(
 }
 
 // Test de connexion + introspection réels : conteneur jetable du runner dlt
-// (job JSON sur stdin, réponse JSON sur stdout — les credentials transitent
+// (job JSON sur stdin, réponse JSON sur stdout - les credentials transitent
 // par stdin, jamais par l'environnement ni le disque).
 export async function testConnection(
   sourceType: string,
@@ -176,7 +176,7 @@ export async function testConnection(
   }
 }
 
-// Credentials chiffrés AES-256-GCM (lib/crypto.ts, clé hors base) — le
+// Credentials chiffrés AES-256-GCM (lib/crypto.ts, clé hors base) - le
 // runner dlt déchiffre avec la même clé (apps/dlt/runner/crypto.py).
 function pipelineCredentials(sourceConfig: Record<string, string>) {
   return encryptSecret(JSON.stringify(sourceConfig));

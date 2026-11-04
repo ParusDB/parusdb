@@ -1,5 +1,5 @@
 
-// Écrans d’authentification — « moment fort » de la marque (charte §6 et
+// Écrans d’authentification - « moment fort » de la marque (charte §6 et
 // §9.4) : fond charbon, grille, halo jaune radial, carte en rounded-3xl.
 export function AuthShell({
   title,

@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { TriangleAlert } from "lucide-react";
 
 // Confirmation destructif obligatoire : ressaisie du nom (AGENTS.md §10,
-// spec §Notes — suppressions cascade irréversibles).
+// spec §Notes - suppressions cascade irréversibles).
 export function ConfirmNameDialog({
   trigger,
   title,

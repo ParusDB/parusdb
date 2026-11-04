@@ -40,7 +40,7 @@ export interface AgentRunResult {
 }
 
 // Prompt système de base : complété par le prompt système de l'agent (donnée,
-// pas du code — AGENTS.md §11).
+// pas du code - AGENTS.md §11).
 function baseSystemPrompt(): string {
   return [
     "Tu es l'assistant analytique de ParusDB, une plateforme data lakehouse.",
@@ -62,7 +62,7 @@ function baseSystemPrompt(): string {
 
 export async function runAgent(params: {
   // Identifiant du modèle tel que l'API du backend l'attend (sans préfixe
-  // de fournisseur — « Mistral/mon-modele » serait rejeté en HTTP 400).
+  // de fournisseur - « Mistral/mon-modele » serait rejeté en HTTP 400).
   model: string;
   // Libellé de traçabilité (metadata du message), avec le nom du
   // fournisseur pour les sources par clé API.

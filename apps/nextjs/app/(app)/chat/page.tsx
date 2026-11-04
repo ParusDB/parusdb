@@ -14,7 +14,7 @@ export default async function ChatPage() {
   const supabase = await createClient();
 
   // Conversations visibles : les vôtres, plus celles partagées au rôle actif
-  // (RLS conversations_select_visible — lecture seule pour les partages).
+  // (RLS conversations_select_visible - lecture seule pour les partages).
 
   // Jointure cross-schema impossible via PostgREST (AGENTS.md §7) :
   // deux requêtes séparées, fusion ici.

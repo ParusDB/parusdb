@@ -77,7 +77,7 @@ export default async function DataLakehousePage() {
           return {
             ...c,
             // Suppression : privilège « Gestion » (rôle propriétaire ou
-            // grant) — le catalogue système reste intouchable.
+            // grant) - le catalogue système reste intouchable.
             canManage:
               !c.isDefault &&
               can(

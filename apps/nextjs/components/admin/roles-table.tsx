@@ -32,7 +32,7 @@ import {
   updateRole,
 } from "@/app/(app)/admin/actions";
 
-// Table des rôles (RBAC refonte — docs/functional/functional_specifications.md (§ Rôles et Permissions)). La
+// Table des rôles (RBAC refonte - docs/functional/functional_specifications.md (§ Rôles et Permissions)). La
 // distribution des droits par rôle (grants lecture/écriture/gestion sur les
 // catalogues, agents et pipelines) se fait dans l'éditeur dédié de chaque
 // rôle ; ici : création/édition des rôles, effectifs, suppression.
@@ -218,7 +218,7 @@ export function RolesTable({
         </Button>
       </div>
       <div className="overflow-hidden rounded-3xl border border-border bg-card">
-        <Table>
+        <Table className="[&_th]:px-4 [&_td]:px-4">
           <TableHeader>
             <TableRow>
               <TableHead>Rôle</TableHead>
@@ -249,8 +249,8 @@ export function RolesTable({
                     </div>
                   </div>
                 </TableCell>
-                <TableCell className="max-w-md text-muted-foreground">
-                  {role.description ?? "—"}
+                <TableCell className="max-w-md whitespace-normal break-words text-muted-foreground">
+                  {role.description ?? "-"}
                 </TableCell>
                 <TableCell className="max-w-xs">
                   <button

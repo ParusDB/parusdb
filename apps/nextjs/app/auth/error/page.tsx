@@ -13,7 +13,7 @@ async function ErrorContent({
       {params?.error
         ? `La vérification a échoué : ${params.error}`
         : "La vérification a échoué : erreur inconnue."}{" "}
-      Le lien a peut-être expiré — relancez la procédure depuis la page de
+      Le lien a peut-être expiré - relancez la procédure depuis la page de
       connexion.
     </p>
   );

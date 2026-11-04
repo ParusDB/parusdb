@@ -8,7 +8,7 @@ import {
   type AppUserRow,
 } from "@/components/admin/app-users-table";
 
-// Onglets de /admin/users (RBAC refonte — spec fonctionnelle § « Rôles et Permissions ») : comptes
+// Onglets de /admin/users (RBAC refonte - spec fonctionnelle § « Rôles et Permissions ») : comptes
 // humains d'un côté, comptes applicatifs (outils data) de l'autre.
 
 export function AdminUsersTabs({

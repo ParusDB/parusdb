@@ -69,7 +69,7 @@ export interface ConversationViewProps {
   /** Rôles portés par le propriétaire, avec lesquels partager. */
   shareableRoles: { id: string; name: string }[];
   initialMessages: Message[];
-  /** Premier message passé par /chat/new via ?pending= — envoyé au montage. */
+  /** Premier message passé par /chat/new via ?pending= - envoyé au montage. */
   pendingMessage?: string | null;
 }
 
@@ -381,7 +381,7 @@ export function ConversationView({
         ) : null}
       </div>
 
-      {/* Messages : zone de défilement pleine largeur — la barre verticale
+      {/* Messages : zone de défilement pleine largeur - la barre verticale
           reste au bord droit de l'écran ; seul le contenu est contraint à la
           largeur de lecture. */}
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -407,7 +407,7 @@ export function ConversationView({
                       <Terminal className="h-3 w-3 text-olive" strokeWidth={1.8} />
                       {t.tool}
                       {t.query ? ` : ${t.query.replace(/\s+/g, " ").slice(0, 80)}` : ""}
-                      {t.ok === false ? " — erreur" : ""}
+                      {t.ok === false ? " - erreur" : ""}
                     </p>
                   ))}
                 </div>
@@ -427,7 +427,7 @@ export function ConversationView({
         </div>
       </div>
 
-      {/* Composer : réservé au propriétaire — les partages sont en lecture
+      {/* Composer : réservé au propriétaire - les partages sont en lecture
           seule (RBAC refonte). */}
       {owned ? (
         <div className="mx-auto w-full max-w-4xl border-t border-border pt-4">
@@ -508,7 +508,7 @@ export function ConversationView({
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
             Les utilisateurs partageant le rôle choisi consultent cette
-            conversation en lecture seule — ils ne peuvent ni écrire, ni
+            conversation en lecture seule - ils ne peuvent ni écrire, ni
             renommer, ni supprimer.
           </p>
           {shares.length > 0 ? (

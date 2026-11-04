@@ -62,7 +62,7 @@ export default async function ConnectorsPage({
     return {
       id: row.id,
       pipeline_id: row.pipeline_id,
-      pipeline_name: pipeline?.name ?? "—",
+      pipeline_name: pipeline?.name ?? "-",
       status: row.status,
       trigger: row.trigger,
       message: row.message,
@@ -88,7 +88,7 @@ export default async function ConnectorsPage({
       />
       {created ? (
         <p className="rounded-lg border border-olive/40 bg-olive/10 px-4 py-3 text-sm text-olive">
-          Pipeline enregistré : la première exécution est en file — l’historique
+          Pipeline enregistré : la première exécution est en file - l’historique
           ci-dessous se met à jour automatiquement.
         </p>
       ) : null}

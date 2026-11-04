@@ -124,7 +124,7 @@ export function ProvidersView({
             )}
           >
             {/* Toute la carte est cliquable (même comportement que la carte
-                Ollama) ; les actions sont en surposition, frères du bouton —
+                Ollama) ; les actions sont en surposition, frères du bouton -
                 jamais imbriquées (HTML invalide). */}
             <button
               type="button"
@@ -237,7 +237,7 @@ export function ProvidersView({
         ) : null}
 
         <div className="overflow-hidden rounded-3xl border border-border bg-card">
-          <Table>
+          <Table className="[&_th]:px-4 [&_td]:px-4">
             <TableHeader>
               <TableRow>
                 <TableHead>Modèle</TableHead>

@@ -5,7 +5,7 @@ import { listModels, pullModel, validateModelName } from "@/lib/ollama";
 // Téléchargement d'un modèle Ollama (spec §Fournisseurs LLM). Le téléchargement
 // peut durer plusieurs minutes : le BFF relaie le flux NDJSON progressif
 // d'Ollama vers le navigateur (évènements simplifiés, un par ligne) au lieu
-// d'attendre la fin — même pattern BFF que le stream du chat.
+// d'attendre la fin - même pattern BFF que le stream du chat.
 //
 // Lignes émises vers le client :
 //   {"type":"log","message":"…"}                       (chaque ligne Ollama)
@@ -110,7 +110,7 @@ export async function POST(request: Request) {
   }
 
   // Ollama doit être joignable et le modèle ne doit pas déjà être installé
-  // (un pull sur un modèle existant est une mise à jour implicite — hors
+  // (un pull sur un modèle existant est une mise à jour implicite - hors
   // périmètre de ce parcours).
   try {
     const installed = await listModels();

@@ -1,7 +1,7 @@
 // Catalogue des sources ELT (dlt) proposées à la création d'un pipeline
 // (spec §Connecteurs). Miroir exact du registre du runner (apps/dlt,
 // runner/sources.py, commande `catalog`) : les clés de sources et de champs
-// sont les identifiants techniques attendus par le runner — seuls les
+// sont les identifiants techniques attendus par le runner - seuls les
 // identifiants, pas de secrets (credentials chiffrés au repos, jamais
 // renvoyés au client, AGENTS.md §12).
 //
@@ -146,7 +146,7 @@ export const SOURCES: SourceDefinition[] = [
     group: "REST APIs",
     icon: Globe,
     description:
-      "Endpoints HTTP JSON — chaque « table » est un chemin d'endpoint (pagination gérée par dlt).",
+      "Endpoints HTTP JSON - chaque « table » est un chemin d'endpoint (pagination gérée par dlt).",
     kind: "endpoints",
     fields: [
       {
@@ -215,7 +215,7 @@ export const SOURCES: SourceDefinition[] = [
     group: "SQL Databases",
     icon: key === "snowflake" ? Snowflake : key === "bigquery" ? Cloud : Database,
     description:
-      "Dialecte SQLAlchemy supporté par sql_database — requiert le pilote correspondant dans l'image du runner (voir apps/dlt/README.md).",
+      "Dialecte SQLAlchemy supporté par sql_database - requiert le pilote correspondant dans l'image du runner (voir apps/dlt/README.md).",
     kind: "sql" as const,
     fields: sqlFields({
       port: port ?? undefined,
@@ -231,7 +231,7 @@ export const SOURCES: SourceDefinition[] = [
     group: "Object Store & Filesystem",
     icon: HardDrive,
     description:
-      "Fichiers CSV, Parquet ou JSONL depuis S3 (et compatibles), GCS, Google Drive, Azure Blob, SFTP, filesystem local ou CDN public — chaque « table » est un glob de fichiers.",
+      "Fichiers CSV, Parquet ou JSONL depuis S3 (et compatibles), GCS, Google Drive, Azure Blob, SFTP, filesystem local ou CDN public - chaque « table » est un glob de fichiers.",
     kind: "globs",
     fields: [
       {
@@ -643,7 +643,7 @@ export const SOURCES: SourceDefinition[] = [
     category: "Verified Sources",
     group: "Autres",
     icon: Radio,
-    description: "Topics Kafka — une table par topic, offsets suivis incrémentalement.",
+    description: "Topics Kafka - une table par topic, offsets suivis incrémentalement.",
     kind: "resource",
     fields: [
       { key: "bootstrap_servers", label: "Serveurs (bootstrap)", placeholder: "broker1:9092", required: true },
@@ -679,7 +679,7 @@ export const SOURCES: SourceDefinition[] = [
     category: "Verified Sources",
     group: "Autres",
     icon: Inbox,
-    description: "Boîte email IMAP — messages et pièces jointes.",
+    description: "Boîte email IMAP - messages et pièces jointes.",
     kind: "resources",
     fields: [
       { key: "host", label: "Hôte IMAP", placeholder: "imap.exemple.com", required: true },

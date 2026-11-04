@@ -356,6 +356,9 @@ orphelines.
 ("01"), mentions discretes** (« Fait en France »), enchainant la fibre « data/terminal ».
 - Ne pas charger de graisses non listées (pas de Inter 300 ni de Space Grotesk 400).
 - Graisse par défaut du texte : `400` ; boutons et liens actifs : `500`–`600`.
+- **Tiret simple « - » partout dans l'UI** : libellés, descriptions, valeurs de
+  remplacement des tableaux. Le tiret cadratin (—) est interdit dans les
+  interfaces du produit.
 
 ---
 
@@ -745,7 +748,8 @@ techniques en anglais.
 factuelles et actionnables (« La connexion a échoué : clé API invalide »), jamais de « Oups ! ».
 - Mise en exergue : `<b>` pour les mots clés dans un paragraphe (`text-blanc` sur fond charbon,
 `text-foreground` sur fond clair).
-- Ponctuation : apostrophes typographiques françaises ; espaces insécables avant `: ; ! ?`.
+- Ponctuation : apostrophes typographiques françaises ; espaces insécables avant `: ; ! ?` ;
+  tirets simples « - » (pas de tiret cadratin `—` dans l'UI).
 
 ---
 
@@ -762,6 +766,7 @@ factuelles et actionnables (« La connexion a échoué : clé API invalide »), 
 | Destructive `#B23A48`, succès = jaune/olive | Rouge Tailwind `#ef4444`, vert `#22c55e` par défaut |
 | Hover = soulèvement `-translate-y-*` + transition douce | Scale agressif, rotation, animations flashy |
 | Cœur de la palette sur token sémantiques (`bg-primary`, `text-muted-foreground`) avec utilitaires de marque en renfort (`bg-jaune`) | Valeurs hex codées en dur dans les composants (sauf les ombres/motifs documentés) |
+| Tiret simple « - » dans l'UI (libellés, descriptions, valeurs de remplacement) | Tiret cadratin (—) dans les interfaces du produit |
 
 ---
 
@@ -781,6 +786,7 @@ Avant de considérer un écran « conforme à la marque » :
 - [ ]  Icônes lucide stroke 1.6–1.8, `currentColor`, tailles standard.
 - [ ]  Dark mode : uniquement l'inversion charbon/blanc cassé ; jaune et olive invariants.
 - [ ]  Textes en français, ton direct (section 12).
+- [ ]  Tirets simples « - » partout dans l'UI - aucun tiret cadratin (—).
 - [ ]  Contraste AA vérifié : jaune interdit comme texte ; sur charbon, texte blanc cassé à
 70–80 % d'opacité maximum pour le secondaire.
 

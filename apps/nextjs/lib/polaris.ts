@@ -23,13 +23,13 @@ export interface PolarisCatalog {
   type?: string;
   properties?: Record<string, string>;
   storageConfigInfo?: Record<string, unknown>;
-  /** Version de l'entité (persistance) — requise pour le PUT (currentEntityVersion). */
+  /** Version de l'entité (persistance) - requise pour le PUT (currentEntityVersion). */
   entityVersion?: number;
 }
 
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
-// Jeton OAuth2 (client credentials, scope PRINCIPAL_ROLE:ALL) — même
+// Jeton OAuth2 (client credentials, scope PRINCIPAL_ROLE:ALL) - même
 // mécanisme que apps/polaris/setup.sh.
 export async function getAccessToken(): Promise<string> {
   if (cachedToken && cachedToken.expiresAt > Date.now() + 30_000) {
@@ -157,7 +157,7 @@ export async function createCatalog(
     };
   }
   // Grant d'administration au rôle catalog_admin du catalogue (piège
-  // d'intégration documenté dans apps/polaris/README.md) — corps au format
+  // d'intégration documenté dans apps/polaris/README.md) - corps au format
   // AddGrantRequest {grant: GrantResource} de la spec Management.
   const grant = await management(
     `/catalogs/${encodeURIComponent(name)}/catalog-roles/catalog_admin/grants`,
@@ -215,7 +215,7 @@ export async function updateCatalogStorage(
 // Vérifie que le catalogue par défaut a des allowedLocations restreints au
 // sous-répertoire (et non au bucket entier). Si ce n'est pas le cas (install
 // antérieure à l'isolation), le corrige automatiquement via l'API Management
-// (PUT) — sinon tout nouveau catalogue serait rejeté par Polaris
+// (PUT) - sinon tout nouveau catalogue serait rejeté par Polaris
 // (chevauchement de locations, HTTP 400 ValidationException).
 // Le flag n'est posé qu'après succès : un échec permettra un réessai.
 // Retourne { fixed: true } si le catalogue a été corrigé (ou était déjà OK),
@@ -242,12 +242,12 @@ export async function ensureDefaultCatalogIsolated(): Promise<{
       defaultCatalogFixed = true;
       return { fixed: true };
     }
-    // entityVersion est requis par l'API PUT (currentEntityVersion) —
+    // entityVersion est requis par l'API PUT (currentEntityVersion) -
     // sans lui, Polaris rejette la mise à jour.
     if (catalog.entityVersion === undefined) {
       return {
         fixed: false,
-        error: `entityVersion absent de la réponse GET pour « ${DEFAULT_CATALOG} » — impossible de corriger automatiquement.`,
+        error: `entityVersion absent de la réponse GET pour « ${DEFAULT_CATALOG} » - impossible de corriger automatiquement.`,
       };
     }
     const result = await updateCatalogStorage(
@@ -268,10 +268,10 @@ export async function ensureDefaultCatalogIsolated(): Promise<{
   }
 }
 
-// Suppression d'un catalogue — spec 1.8.0 : DELETE /management/v1/catalogs/{name},
+// Suppression d'un catalogue - spec 1.8.0 : DELETE /management/v1/catalogs/{name},
 // le catalogue doit être vide. La purge des fichiers Iceberg est réalisée en
 // amont via les DROP Trino (propriété polaris.config.drop-with-purge.enabled
-// posée à la création) — voir deleteCatalogAction.
+// posée à la création) - voir deleteCatalogAction.
 export async function deleteCatalog(
   name: string,
 ): Promise<{ ok: boolean; error?: string }> {
@@ -299,12 +299,12 @@ export async function polarisPing(): Promise<boolean> {
 }
 
 // ---------------------------------------------------------------------------
-// Utilisateurs applicatifs — principals Polaris (RBAC refonte,
+// Utilisateurs applicatifs - principals Polaris (RBAC refonte,
 // docs/functional/functional_specifications.md (§ Rôles et Permissions) §4). Endpoints validés sur Polaris 1.8.0 :
 // le secret n'est JAMAIS stocké côté applicatif, il est retourné une seule
 // fois à la création (POST /principals) ou à la réinitialisation
 // (POST /principals/{name}/reset, réservé au client root ; /rotate est
-// refusé pour root — bug #624, contourné par /reset).
+// refusé pour root - bug #624, contourné par /reset).
 // ---------------------------------------------------------------------------
 
 export interface PolarisCredentials {
@@ -376,7 +376,7 @@ export async function createPolarisPrincipal(
   return res.data.credentials;
 }
 
-// Nouveau secret (l'ancien est invalidé). Le clientId reste inchangé —
+// Nouveau secret (l'ancien est invalidé). Le clientId reste inchangé -
 // seul le clientSecret est régénéré.
 export async function resetPolarisCredentials(
   name: string,
@@ -397,7 +397,7 @@ export async function deletePolarisPrincipal(name: string): Promise<void> {
   const res = await management(`/principals/${encodeURIComponent(name)}`, {
     method: "DELETE",
   });
-  // 404 : principal déjà absent — suppression idempotente.
+  // 404 : principal déjà absent - suppression idempotente.
   if (!res.ok && res.status !== 404) {
     throw new Error(
       `La suppression du principal Polaris a échoué (HTTP ${res.status}) : ${res.raw.slice(0, 300)}`,

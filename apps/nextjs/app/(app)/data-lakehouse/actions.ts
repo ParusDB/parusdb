@@ -26,7 +26,7 @@ const NAME_PATTERN = /^[a-z][a-z0-9_]*$/;
 
 // Privilège requis par une requête SQL : lecture pour les requêtes
 // d'interrogation, écriture pour tout ce qui modifie les objets (DDL/DML).
-// Heuristique sur le premier mot-clé — la garde finale reste la RLS du
+// Heuristique sur le premier mot-clé - la garde finale reste la RLS du
 // registre et la documentation de l'éditeur (AGENTS.md §10).
 const READ_ONLY_SQL = /^\s*(select|show|describe|desc|explain)\b/i;
 
@@ -44,7 +44,7 @@ export interface QueryExecution {
 }
 
 // Exécution SQL : passe par Trino (unique moteur) sous le compte Trino du
-// rôle ACTIF (contraint par rules.json — la qualification croisée de
+// rôle ACTIF (contraint par rules.json - la qualification croisée de
 // catalogue est refusée par Trino, pas seulement par la garde applicative)
 // après vérification applicative des droits (spec §Data Lakehouse, RBAC
 // refonte : message d'erreur français précoce avant d'atteindre Trino).
@@ -88,7 +88,7 @@ export async function executeQuery(
     return {
       ok: false,
       error:
-        "Ce catalogue n'est pas encore lié à Trino. Si vous venez de le créer, son redémarrage automatique est peut-être en cours — réessayez dans un instant.",
+        "Ce catalogue n'est pas encore lié à Trino. Si vous venez de le créer, son redémarrage automatique est peut-être en cours - réessayez dans un instant.",
     };
   }
   try {
@@ -145,7 +145,7 @@ export async function createCatalogAction(
   const supabase = await createClient();
 
   // Corrige le catalogue par défaut si ses allowedLocations couvrent le
-  // bucket entier (install antérieure) — sinon tout nouveau catalogue
+  // bucket entier (install antérieure) - sinon tout nouveau catalogue
   // serait rejeté par Polaris (chevauchement de locations, HTTP 400).
   // Le flag POLARIS_FEATURES_ALLOW_OVERLAPPING_CATALOG_URLS=true dans le
   // docker-compose Polaris sert de filet de sécurité pour les installations
@@ -184,7 +184,7 @@ export async function createCatalogAction(
   }
 
   // 3. Binding Trino : fichier de configuration chargé au prochain
-  //    redémarrage — automatique, dès qu'aucune requête n'est en cours.
+  //    redémarrage - automatique, dès qu'aucune requête n'est en cours.
   let warning: string | undefined;
   const dir = process.env.TRINO_CATALOG_DIR;
   if (dir) {
@@ -212,8 +212,8 @@ export async function createCatalogAction(
 
 // Suppression d'un catalogue : confirmation + ressaisie du nom côté UI
 // (action irréversible). Privilège « Gestion » requis sur le catalogue
-// (propriété du rôle actif ou grant — RBAC refonte). Spec Polaris 1.8.0 : le
-// catalogue doit être vide — la purge des fichiers Iceberg passe par les
+// (propriété du rôle actif ou grant - RBAC refonte). Spec Polaris 1.8.0 : le
+// catalogue doit être vide - la purge des fichiers Iceberg passe par les
 // DROP Trino (la propriété polaris.config.drop-with-purge.enabled est posée
 // à la création), puis le catalogue est supprimé via l'API Management.
 export async function deleteCatalogAction(
@@ -240,7 +240,7 @@ export async function deleteCatalogAction(
   if (binding) {
     try {
       // Purge exécutée sous le compte Trino du rôle actif (privilège
-      // « Gestion » vérifié ci-dessus) — le refus éventuel vient de Trino.
+      // « Gestion » vérifié ci-dessus) - le refus éventuel vient de Trino.
       if (!session.activeRole) {
         return {
           ok: false,

@@ -22,15 +22,13 @@ export function PageHeader({
         className,
       )}
     >
-      <div>
+      <div className="min-w-0 flex-1">
         <p className="mono text-xs uppercase tracking-[0.2em] text-olive">
           {eyebrow}
         </p>
         <h1 className="mt-2 font-display text-3xl text-balance">{title}</h1>
         {description ? (
-          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            {description}
-          </p>
+          <p className="mt-2 text-sm text-muted-foreground">{description}</p>
         ) : null}
       </div>
       {actions ? <div className="flex items-center gap-2">{actions}</div> : null}

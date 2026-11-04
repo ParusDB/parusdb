@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 
-// Point de statut — « feu jaune » pour l’actif (charte §10), cendre pour
+// Point de statut - « feu jaune » pour l’actif (charte §10), cendre pour
 // l’inactif, framboise pour l’erreur. Les runs ELT ajoutent « en file »
 // (cendre) et « en cours » (jaune).
 export function StatusDot({

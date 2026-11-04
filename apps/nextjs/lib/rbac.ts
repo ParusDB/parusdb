@@ -4,7 +4,7 @@ import type { Grant } from "@/types/db";
 
 // Helpers RBAC côté serveur (docs/functional/functional_specifications.md (§ Rôles et Permissions)) : calcul des
 // listes d'objets accessibles au rôle actif et des capacités par objet.
-// La RLS reste la garde finale — ces helpers servent à construire l'UI
+// La RLS reste la garde finale - ces helpers servent à construire l'UI
 // (listes filtrées, boutons affichés selon le privilège effectif).
 
 // Grants du rôle actif (une requête, puis calculs en mémoire). Le compte

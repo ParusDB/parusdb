@@ -1,7 +1,7 @@
 // Formatage français (dates, tailles, durées).
 
 export function formatDate(value: string | null | undefined): string {
-  if (!value) return "—";
+  if (!value) return "-";
   return new Intl.DateTimeFormat("fr-FR", {
     dateStyle: "medium",
     timeStyle: "short",
@@ -9,14 +9,14 @@ export function formatDate(value: string | null | undefined): string {
 }
 
 export function formatDateOnly(value: string | null | undefined): string {
-  if (!value) return "—";
+  if (!value) return "-";
   return new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium" }).format(
     new Date(value),
   );
 }
 
 export function formatBytes(bytes: number | null | undefined): string {
-  if (bytes == null || Number.isNaN(bytes)) return "—";
+  if (bytes == null || Number.isNaN(bytes)) return "-";
   if (bytes < 1024) return `${bytes} o`;
   const go = bytes / 1024 ** 3;
   if (go >= 1) return `${go.toFixed(2)} Go`;
@@ -26,7 +26,7 @@ export function formatBytes(bytes: number | null | undefined): string {
 }
 
 export function formatDuration(ms: number | null | undefined): string {
-  if (ms == null) return "—";
+  if (ms == null) return "-";
   if (ms < 1000) return `${ms} ms`;
   if (ms < 60_000) return `${(ms / 1000).toFixed(1)} s`;
   const min = Math.floor(ms / 60_000);

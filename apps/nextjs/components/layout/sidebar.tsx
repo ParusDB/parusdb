@@ -12,13 +12,13 @@ import {
   LogOut,
   MessageSquare,
   Plug,
-  Plus,
   Shield,
   Sun,
   Moon,
   Laptop,
   UserRound,
   KeyRound,
+  List,
   PanelLeft,
 } from "lucide-react";
 import { ParusLogo } from "@/components/parus/logo";
@@ -83,7 +83,7 @@ function displayNameOf(
 }
 
 // Hydratation : vrai côté client après hydratation, faux pendant le rendu
-// serveur — sans setState dans un effet.
+// serveur - sans setState dans un effet.
 function useIsHydrated(): boolean {
   return useSyncExternalStore(
     () => () => {},
@@ -113,6 +113,16 @@ function UserZone({ session }: { session: SidebarProps }) {
           </p>
           <p className="truncate text-xs text-blanc/50">{session.user.email}</p>
         </div>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="shrink-0 text-blanc/70 hover:bg-white/5 hover:text-jaune"
+          aria-label="Se déconnecter"
+          title="Se déconnecter"
+          onClick={() => void signOut()}
+        >
+          <LogOut className="h-4 w-4" />
+        </Button>
       </div>
       <div className="mt-2.5 flex items-center gap-1.5">
         {mounted ? (
@@ -175,16 +185,6 @@ function UserZone({ session }: { session: SidebarProps }) {
             </DropdownMenuContent>
           </DropdownMenu>
         ) : null}
-
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className="ml-auto text-blanc/70 hover:bg-white/5 hover:text-jaune"
-          aria-label="Se déconnecter"
-          onClick={() => void signOut()}
-        >
-          <LogOut className="h-4 w-4" />
-        </Button>
       </div>
     </div>
   );
@@ -230,7 +230,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-// Contenu de navigation — partagé entre la sidebar fixe et le menu mobile.
+// Contenu de navigation - partagé entre la sidebar fixe et le menu mobile.
 // Tous les menus fonctionnels sont visibles par les comptes authentifiés
 // (RBAC refonte) : le contenu est filtré par le rôle actif via la RLS.
 // La section Administration n'apparaît que pour les comptes admin.
@@ -244,17 +244,21 @@ export function SidebarContent({ session }: { session: SidebarProps }) {
 
   return (
     <div className="flex h-full flex-col">
-      <Link href="/chat" aria-label="ParusDB — accueil" className="block">
+      <Link href="/chat" aria-label="ParusDB - accueil" className="block">
         <ParusLogo className="h-auto w-full" />
       </Link>
 
       <nav className="flex-1 overflow-y-auto px-2 pb-4 pt-5">
         <div>
-            <NavLink href="/chat/new" icon={<Plus className="h-4 w-4" strokeWidth={1.8} />} label="Nouveau chat" />
+            <SectionLabel>Conversations</SectionLabel>
+            <NavLink
+              href="/chat"
+              icon={<List className="h-4 w-4" strokeWidth={1.6} />}
+              label="Liste des chats"
+              exact
+            />
             {session.conversations.length > 0 ? (
-              <>
-                <SectionLabel>Conversations</SectionLabel>
-                <div className="space-y-0.5">
+              <div className="space-y-0.5">
                   {session.conversations.map((c) => {
                     const label = c.title ?? `Chat ${c.id.slice(0, 8)}`;
                     return (
@@ -288,12 +292,16 @@ export function SidebarContent({ session }: { session: SidebarProps }) {
                     );
                   })}
                 </div>
-              </>
             ) : null}
         </div>
 
         <SectionLabel>Agents IA</SectionLabel>
-        <NavLink href="/agents/new" icon={<Plus className="h-4 w-4" strokeWidth={1.8} />} label="Nouvel agent IA" />
+        <NavLink
+          href="/agents"
+          icon={<List className="h-4 w-4" strokeWidth={1.6} />}
+          label="Liste des agents"
+          exact
+        />
         <div className="space-y-0.5">
           {session.agents.map((a) => (
             <SidebarListItem
@@ -375,7 +383,7 @@ export function Sidebar({ session }: { session: SidebarProps }) {
             <SidebarContent session={session} />
           </SheetContent>
         </Sheet>
-        <Link href="/chat" aria-label="ParusDB — accueil">
+        <Link href="/chat" aria-label="ParusDB - accueil">
           <ParusLogo className="h-10 w-auto" />
         </Link>
       </div>

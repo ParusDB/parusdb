@@ -26,7 +26,7 @@ export interface AgentInput {
   name: string;
   description: string;
   // 'ollama' (serveur local embarqué) ou l'id d'un fournisseur
-  // (admin.providers) — jamais un libellé libre.
+  // (admin.providers) - jamais un libellé libre.
   model_provider: string;
   model_id: string;
   system_prompt: string;

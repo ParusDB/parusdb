@@ -58,7 +58,7 @@ export function PipelinesTable({
     const result = await runPipeline(id);
     if (result.ok) {
       toast.success(
-        "Exécution mise en file — l'ordonnanceur dlt la démarre dans quelques secondes.",
+        "Exécution mise en file - l'ordonnanceur dlt la démarre dans quelques secondes.",
       );
       router.refresh();
     } else {
@@ -95,7 +95,7 @@ export function PipelinesTable({
         </CharbonPanel>
       ) : (
         <div className="overflow-hidden rounded-3xl border border-border bg-card">
-          <Table>
+          <Table className="[&_th]:px-4 [&_td]:px-4">
             <TableHeader>
               <TableRow>
                 <TableHead>Nom</TableHead>
@@ -134,7 +134,7 @@ export function PipelinesTable({
                     {formatDate(row.last_run_at)}
                   </TableCell>
                   <TableCell className="mono text-xs">
-                    {row.cron || "—"}
+                    {row.cron || "-"}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center justify-end gap-1">

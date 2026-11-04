@@ -272,7 +272,7 @@ export function UsersTable({
         </Button>
       </div>
       <div className="overflow-hidden rounded-3xl border border-border bg-card">
-        <Table>
+        <Table className="[&_th]:px-4 [&_td]:px-4">
           <TableHeader>
             <TableRow>
               <TableHead>Utilisateur</TableHead>
@@ -294,7 +294,7 @@ export function UsersTable({
                     <div className="min-w-0">
                       <p className="truncate font-medium">
                         {[user.firstName, user.lastName].filter(Boolean).join(" ") ||
-                          "—"}
+                          "-"}
                       </p>
                       <p className="truncate text-xs text-muted-foreground">
                         {user.email}
@@ -303,7 +303,7 @@ export function UsersTable({
                   </div>
                 </TableCell>
                 <TableCell className="text-muted-foreground">
-                  {user.phone ?? "—"}
+                  {user.phone ?? "-"}
                 </TableCell>
                 <TableCell>
                   <RoleChips roleIds={user.roleIds} roles={roles} />

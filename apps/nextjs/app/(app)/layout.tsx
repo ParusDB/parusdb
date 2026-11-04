@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
 // Layout protégé : toute décision d'accès est vérifiée côté serveur
-// (AGENTS.md §7) — pas de session, pas de contenu. Les pages de ce groupe
+// (AGENTS.md §7) - pas de session, pas de contenu. Les pages de ce groupe
 // lisent la session (cookies) : rendu bloquant à la requête, pas de shell
 // statique.
 export const instant = false;
@@ -15,6 +15,8 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // Le prerender dev est arrêté dans getSessionContext (connection() avant
+  // tout accès session) : cf. lib/session.ts.
   const session = await requireSession();
   const supabase = await createClient();
 
@@ -78,7 +80,7 @@ export default async function AppLayout({
   };
 
   if (session.roles.length === 0) {
-    // Aucun rôle attribué : aucune section accessible — signaler clairement.
+    // Aucun rôle attribué : aucune section accessible - signaler clairement.
     redirect("/auth/error?error=Aucun%20r%C3%B4le%20attribu%C3%A9%20au%20compte");
   }
 

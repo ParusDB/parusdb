@@ -62,7 +62,7 @@ export default async function AdminInformationsPage() {
       <PageHeader
         eyebrow="Administration"
         title="Informations"
-        description="Tout ce qu'il faut pour connecter un outil data externe : les protocoles d'accès au lakehouse (SQL, catalogue REST, stockage objet) et les credentials d'un compte applicatif — jamais le compte root."
+        description="Tout ce qu'il faut pour connecter un outil data externe : les protocoles d'accès au lakehouse (SQL, catalogue REST, stockage objet) et les credentials d'un compte applicatif - jamais le compte root."
       />
       <ConnectionInfoView
         endpoints={getConnectionEndpoints()}

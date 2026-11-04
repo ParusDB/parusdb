@@ -20,7 +20,7 @@ import type { ConnectionEndpoints } from "@/lib/connection-info";
 // (spec fonctionnelle § « Rôles et Permissions »). La page est **agnostique des outils** : elle
 // décrit les protocoles d'accès (SQL, catalogue Iceberg REST, stockage
 // objet S3) avec leurs paramètres factuels et un profil de connexion
-// structuré par protocole — aucune section par outil (dbt, Power BI,
+// structuré par protocole - aucune section par outil (dbt, Power BI,
 // Airbyte…), qui périmait à chaque évolution de la stack. Les secrets ne
 // sont jamais stockés : ils apparaissent en marqueurs, affichés une seule
 // fois à la création/réinitialisation du compte applicatif.
@@ -129,7 +129,7 @@ export function ConnectionInfoView({
 
   // Profils de connexion par protocole : tout client compatible avec le
   // protocole se configure à partir de ces valeurs, quel que soit l'outil.
-  const sqlProfile = `# Accès SQL — tout client compatible (protocole HTTPS, basic auth)
+  const sqlProfile = `# Accès SQL - tout client compatible (protocole HTTPS, basic auth)
 protocol: https
 host: ${endpoints.trinoHost}
 port: ${endpoints.trinoPort}
@@ -138,7 +138,7 @@ user: ${sqlUser}
 password: ${TRINO_PASSWORD_PLACEHOLDER}
 catalog: ${warehouse}`;
 
-  const catalogProfile = `# Catalogue de tables (Iceberg REST) — client OAuth2
+  const catalogProfile = `# Catalogue de tables (Iceberg REST) - client OAuth2
 uri: ${endpoints.polarisRestUri}
 oauth2_server_uri: ${endpoints.polarisTokenUri}
 warehouse: ${warehouse}
@@ -218,7 +218,7 @@ secret_access_key: ${s3Keys ? (showS3Keys ? s3Keys.secretAccessKey : "<afficher 
             <p className="text-sm text-muted-foreground">
               {selected
                 ? "Le rôle de ce compte n&apos;a accès à aucun catalogue : distribuez des droits via /admin/roles."
-                : "—"}
+                : "-"}
             </p>
           )}
         </div>
@@ -251,7 +251,7 @@ secret_access_key: ${s3Keys ? (showS3Keys ? s3Keys.secretAccessKey : "<afficher 
       {/* Catalogue REST */}
       <Section
         title="Catalogue de tables (Iceberg REST)"
-        description="Inventaire des bases, schémas et tables : tout client capable d'un flux OAuth2 client credentials (clientId + secret). Polaris vends des credentials de stockage temporaires aux clients compatibles — aucune clé statique à configurer."
+        description="Inventaire des bases, schémas et tables : tout client capable d'un flux OAuth2 client credentials (clientId + secret). Polaris vends des credentials de stockage temporaires aux clients compatibles - aucune clé statique à configurer."
       >
         <div>
           <Field label="URI du catalogue" value={endpoints.polarisRestUri} />
@@ -267,7 +267,7 @@ secret_access_key: ${s3Keys ? (showS3Keys ? s3Keys.secretAccessKey : "<afficher 
       {/* Stockage objet */}
       <Section
         title="Stockage de données (API S3)"
-        description="Fichiers de données sous-jacents. Nécessaire uniquement aux outils qui écrivent directement dans le stockage — les clients du catalogue REST reçoivent des credentials temporaires."
+        description="Fichiers de données sous-jacents. Nécessaire uniquement aux outils qui écrivent directement dans le stockage - les clients du catalogue REST reçoivent des credentials temporaires."
       >
         <div>
           <Field label="Endpoint" value={endpoints.s3Endpoint} />
@@ -303,7 +303,7 @@ secret_access_key: ${s3Keys ? (showS3Keys ? s3Keys.secretAccessKey : "<afficher 
               </div>
             ) : (
               <span className="text-xs text-muted-foreground">
-                Révélation ponctuelle — les clients du catalogue REST n&apos;en
+                Révélation ponctuelle - les clients du catalogue REST n&apos;en
                 ont pas besoin.
               </span>
             )
@@ -342,7 +342,7 @@ secret_access_key: ${s3Keys ? (showS3Keys ? s3Keys.secretAccessKey : "<afficher 
           <h2 className="font-display text-xl">Commencez par un compte applicatif</h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-blanc/70">
             Chaque outil reçoit ses propres credentials, limitées aux droits
-            de son rôle — le compte root ne quitte jamais le serveur.
+            de son rôle - le compte root ne quitte jamais le serveur.
           </p>
           <Button asChild className="mt-5 rounded-full bg-jaune font-semibold text-charbon hover:bg-jaune/90">
             <a href="/admin/users">

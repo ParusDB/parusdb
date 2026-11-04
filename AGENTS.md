@@ -245,6 +245,8 @@ lockfiles à la main.
 - **Diff minimal** : ne pas toucher ce qui n'est pas demandé ; pas de reformattage de fichiers
   entiers ; pas de renommages en cascade non sollicités.
 - **Pas d'emoji dans l'UI** — uniquement des icônes `lucide-react` (voir §8).
+- **Pas de tiret cadratin (—) dans l'UI** : libellés, descriptions, valeurs de
+  remplacement — toujours le tiret simple « - » (charte §4.3).
 - **Vérification systématique** : avant de déclarer un travail terminé, exécuter
   `npm run lint`, `npm run typecheck` et `npm run build` dans `apps/nextjs` (et les tests dès
   qu'ils existent, voir §13) — la CI GitHub exécute ces trois commandes + Gitleaks sur
@@ -290,6 +292,13 @@ l'app.
   cookies doit exporter `export const instant = false` (layout `(app)` **et** chaque
   page) — sinon le build échoue en « uncached or runtime data during
   prerendering » et le dev affiche l'erreur à chaque navigation.
+- **`Date.now()` interne à supabase-js en dev** : même avec `instant = false`,
+  le prerender dev des pages de `(app)` peut rencontrer `unstable value
+  Date.now()` (le client Supabase l'évalue pendant `getUser()`). Le fix est
+  **ponctuel** : `await connection()` (importé de `next/server`) en tête de
+  `getSessionContext()` (`lib/session.ts`) — point unique par lequel passent
+  toutes les pages/actions ; ne PAS le dupliquer dans chaque layout/page
+  (incident réel sur `/agents` puis `/chat`).
 - **Multi-schémas PostgREST** : les accès passent par `supabase.schema('<schéma>')`
   (en-têtes `Accept-Profile`/`Content-Profile`) ; les schémas doivent être listés
   dans `PGRST_DB_SCHEMAS` (cf. §9), sinon PGRST205 « Could not find the table ».

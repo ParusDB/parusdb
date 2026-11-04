@@ -147,7 +147,7 @@ export async function listProviderDetails(): Promise<ProviderDetail[]> {
 
 // Sources de modèles pour le formulaire d'agent : Ollama (local) en tête,
 // puis un fournisseur par clé API. `value` vaut 'ollama' ou l'id du
-// fournisseur — c'est ce que agents.agents.model_provider stocke.
+// fournisseur - c'est ce que agents.agents.model_provider stocke.
 export interface ModelSource {
   value: string;
   label: string;

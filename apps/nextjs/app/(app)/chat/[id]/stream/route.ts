@@ -51,7 +51,7 @@ export async function POST(
   }
 
   // RLS : le propriétaire a tous les droits ; les rôles bénéficiaires d'un
-  // partage ont la lecture seule — l'envoi est refusé ici explicitement.
+  // partage ont la lecture seule - l'envoi est refusé ici explicitement.
   const { data: conversation } = await supabase
     .schema("chat")
     .from("conversations")
@@ -139,7 +139,7 @@ export async function POST(
 
   try {
     // Source du modèle : Ollama (local) ou fournisseur par clé API
-    // (/admin/providers) — la clé est déchiffrée côté serveur uniquement.
+    // (/admin/providers) - la clé est déchiffrée côté serveur uniquement.
     // L'API reçoit l'identifiant de modèle nu ; le nom du fournisseur ne
     // sert qu'au libellé de traçabilité.
     let backend: LlmBackend;

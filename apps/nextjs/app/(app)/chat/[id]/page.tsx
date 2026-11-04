@@ -28,10 +28,10 @@ export default async function ConversationPage({
     .maybeSingle();
 
   // RLS : le propriétaire et les rôles bénéficiaires d'un partage voient la
-  // conversation — les partages sont en lecture seule.
+  // conversation - les partages sont en lecture seule.
   if (!conversation) notFound();
 
-  // Partages existants : visibles par le propriétaire (granted_by) — l'UI de
+  // Partages existants : visibles par le propriétaire (granted_by) - l'UI de
   // partage n'est proposée qu'au propriétaire.
   const owned = conversation.owner_id === session.userId;
   let shares: { roleId: string; roleName: string }[] = [];

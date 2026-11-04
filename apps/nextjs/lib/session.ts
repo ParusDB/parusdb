@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import type { Role, UserProfile } from "@/types/db";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 
 export interface SessionContext {
   userId: string;
@@ -8,7 +9,7 @@ export interface SessionContext {
   profile: UserProfile | null;
   roles: Role[];
   activeRole: Role | null;
-  // Le compte porte le rôle système `admin` (hérite de tout, RBAC refonte —
+  // Le compte porte le rôle système `admin` (hérite de tout, RBAC refonte -
   // docs/functional/functional_specifications.md (§ Rôles et Permissions)). Indépendant du rôle actif :
   // l'administration est une capacité du compte.
   isAdmin: boolean;
@@ -21,6 +22,11 @@ export type Privilege = "read" | "write" | "manage";
 // actif. Toute décision d'accès passe par ici ou par la RLS (jamais par un
 // état client, AGENTS.md §7).
 export async function getSessionContext(): Promise<SessionContext | null> {
+  // Rendu bloquant à la requête AVANT tout accès session : le client Supabase
+  // évalue Date.now() en interne (getUser), ce que cacheComponents rejette en
+  // prerender (« unstable value Date.now() », incident réel sur /agents et
+  // /chat). Point unique de fix : toutes les pages/actions passent ici.
+  await connection();
   const supabase = await createClient();
   const {
     data: { user },

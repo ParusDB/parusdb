@@ -34,7 +34,7 @@ export default async function CatalogPage({
   if (binding) {
     try {
       // Exploration sous le compte Trino du rôle actif (rules.json borne
-      // réellement l'accès aux catalogues du rôle — refus par Trino sinon).
+      // réellement l'accès aux catalogues du rôle - refus par Trino sinon).
       const run = await sessionTrinoExecutor(session);
       tree = await loadCatalogTree(binding, run);
     } catch (error) {

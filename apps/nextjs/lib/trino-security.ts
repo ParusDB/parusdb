@@ -1,5 +1,5 @@
 // Génération des fichiers de sécurité Trino (durcissement, spec fonctionnelle
-// §9) depuis iam.grants — source de vérité unique. Trino devient un artefact
+// §9) depuis iam.grants - source de vérité unique. Trino devient un artefact
 // dérivé, comme les bindings de catalogues. Deux fichiers dans
 // TRINO_SECURITY_DIR (répertoire bind-monté dans le conteneur Trino,
 // rechargé périodiquement sans redémarrage : file.refresh-period 5 s côté
@@ -22,7 +22,7 @@
 // Comptes de rôle (refus réel de l'éditeur SQL) : un compte Trino
 // `parus-role-<role_id>` par rôle applicatif. Les requêtes SQL des
 // utilisateurs (éditeur, explorateur, purge à la suppression) s'exécutent
-// sous le compte du rôle ACTIF, contraint par rules.json — la qualification
+// sous le compte du rôle ACTIF, contraint par rules.json - la qualification
 // croisée de catalogue (`SELECT * FROM prod.x.y` avec un grant sur dev
 // seule) est refusée PAR TRINO, pas seulement par la garde applicative
 // iam.has_grant. Le rôle `admin` (hérite de tout) reçoit allow:all ; un
@@ -32,14 +32,14 @@
 // (apps/trino/setup.sh) pour password.db. Le compte BFF (`parus-app`) n'a
 // plus d'usage data-plane depuis la migration de l'éditeur sur les comptes
 // de rôle : il est restreint ici à la lecture du catalogue `system`
-// (diagnostic CLI) et refusé ailleurs — les endpoints HTTP /v1/query et
+// (diagnostic CLI) et refusé ailleurs - les endpoints HTTP /v1/query et
 // /v1/info du cycle de redémarrage ne sont pas soumis à l'access control
 // (vérifié empiriquement). mcp-trino reste en lecture seule globale (borné
 // réellement par TRINO_ALLOWED_SCHEMAS côté serveur MCP).
 //
 // Prérequis Trino (vérifiés empiriquement sur trino:484) : première règle
 // qui matche s'applique ; sans correspondance = refus SAUF pour le
-// catalogue `system`, accessible à tous par défaut — il faut une règle
+// catalogue `system`, accessible à tous par défaut - il faut une règle
 // explicite `allow: "none"` par compte pour le fermer (sinon
 // system.runtime.queries expose le SQL des requêtes des autres
 // utilisateurs). `user`/`catalog` sont des regex (échappement + ancres
@@ -59,7 +59,7 @@ const TRINO_SERVICE_USER = process.env.TRINO_USER ?? "parus-app";
 const TRINO_MCP_USER = process.env.TRINO_MCP_USER ?? "parus-mcp";
 // Compte outillage (CLI, seed e2e) : accès complet, jamais utilisé par le
 // BFF pour des requêtes portées par une session utilisateur. Seul le nom
-// est connu de l'application — le mot de passe vit dans apps/trino/.env.
+// est connu de l'application - le mot de passe vit dans apps/trino/.env.
 const TRINO_OPS_USER = process.env.TRINO_OPS_USER ?? "parus-ops";
 // Préfixe réservé des comptes de rôle : parus-role-<role uuid>.
 export const TRINO_ROLE_USER_PREFIX = "parus-role-";
@@ -70,7 +70,7 @@ export function trinoSecurityDir(): string | null {
 }
 
 // bcryptjs produit un préfixe $2a$/$2b$ ; Trino exige le marqueur $2y$
-// (même algorithme bcrypt, marqueur « corrigé » de crypt_blowfish —
+// (même algorithme bcrypt, marqueur « corrigé » de crypt_blowfish -
 // interopérable, htpasswd -B produit la même forme).
 export function bcryptForTrino(password: string): string {
   return bcrypt.hashSync(password, 10).replace(/^\$2[ab]\$/, "$2y$");
@@ -83,7 +83,7 @@ export function generateTrinoPassword(): string {
 }
 
 // Nom d'utilisateur Trino d'un compte applicatif : le nom du compte
-// (pattern APP_USER_NAME_PATTERN : minuscules, chiffres, tirets — sûr pour
+// (pattern APP_USER_NAME_PATTERN : minuscules, chiffres, tirets - sûr pour
 // les regex et les en-têtes basic auth).
 export function trinoUserOf(appUserName: string): string {
   return appUserName;
@@ -91,7 +91,7 @@ export function trinoUserOf(appUserName: string): string {
 
 // Nom d'utilisateur Trino du compte d'un rôle applicatif : dérivé de
 // l'uuid du rôle (invariable, sans collision possible avec un compte
-// applicatif — le préfixe est réservé, cf. isReservedTrinoUserName).
+// applicatif - le préfixe est réservé, cf. isReservedTrinoUserName).
 export function trinoRoleUser(roleId: string): string {
   return `${TRINO_ROLE_USER_PREFIX}${roleId}`;
 }
@@ -178,7 +178,7 @@ export async function removeTrinoPassword(
 }
 
 // ---------------------------------------------------------------------------
-// rules.json — régénération complète depuis iam.grants
+// rules.json - régénération complète depuis iam.grants
 // ---------------------------------------------------------------------------
 
 interface RulesFile {
@@ -192,7 +192,7 @@ interface RulesFile {
 }
 
 // Règles d'un compte sur un catalogue selon le privilège maximal détenu
-// (hiérarchie manage ⊇ write ⊇ read) — mapping commun aux comptes de rôle
+// (hiérarchie manage ⊇ write ⊇ read) - mapping commun aux comptes de rôle
 // et aux comptes applicatifs.
 function pushCatalogRules(
   rules: RulesFile,
@@ -279,14 +279,14 @@ export async function syncTrinoRules(): Promise<{ ok: boolean; error?: string }>
     catalogs: [
       // Compte BFF : plus d'usage data-plane depuis la migration de
       // l'éditeur sur les comptes de rôle. Lecture du catalogue system
-      // uniquement (diagnostic CLI `sh run.sh cli`) — les endpoints HTTP
+      // uniquement (diagnostic CLI `sh run.sh cli`) - les endpoints HTTP
       // de supervision (trino-restart) ne sont pas soumis à l'access
       // control.
       { user: userRegex(TRINO_SERVICE_USER), catalog: SYSTEM, allow: "read-only" },
       { user: userRegex(TRINO_SERVICE_USER), allow: "none" },
       { user: userRegex(TRINO_MCP_USER), allow: "read-only" },
       // Compte outillage (CLI apps/trino/run.sh, seed du test e2e Chat IA) :
-      // accès complet — opération d'exploitation, hors chemin des requêtes
+      // accès complet - opération d'exploitation, hors chemin des requêtes
       // des utilisateurs (comptes de rôle ci-dessous).
       { user: userRegex(TRINO_OPS_USER), allow: "all" },
     ],
@@ -295,7 +295,7 @@ export async function syncTrinoRules(): Promise<{ ok: boolean; error?: string }>
   };
 
   // Rôles : le compte parus-role-<id> du rôle actif porte ses droits réels
-  // — refus de la qualification croisée PAR TRINO. Le rôle admin hérite de
+  // - refus de la qualification croisée PAR TRINO. Le rôle admin hérite de
   // tout (allow:all) ; un rôle sans accès catalogue reçoit allow:none
   // (compte inerte : seul `SELECT 1` sans catalogue passe).
   for (const role of (roles ?? []) as { id: string; key: string }[]) {
@@ -328,7 +328,7 @@ export async function syncTrinoRules(): Promise<{ ok: boolean; error?: string }>
   try {
     // Piège Trino (vérifié empiriquement) : les clés "schemas" et "tables"
     // présentes mais VIDES font échouer SHOW SCHEMAS pour tous les
-    // utilisateurs, y compris allow:all — une section sans règle doit être
+    // utilisateurs, y compris allow:all - une section sans règle doit être
     // absente du JSON, jamais un tableau vide.
     const file: Record<string, unknown> = { catalogs: rules.catalogs };
     if (rules.schemas.length > 0) file.schemas = rules.schemas;
@@ -349,7 +349,7 @@ export async function syncTrinoRules(): Promise<{ ok: boolean; error?: string }>
 
 // Resynchronisation paresseuse (rattrapage de dérive, appelée avant une
 // requête BFF) : comptes de rôle (création/rattrapage, mots de passe
-// chiffrés donc régénérables — contrairement aux comptes applicatifs) puis
+// chiffrés donc régénérables - contrairement aux comptes applicatifs) puis
 // rules.json, une fois par processus. Les actions admin déclenchent déjà
 // la génération à chaque mutation.
 let ensuredOnce = false;
@@ -381,7 +381,7 @@ export function isReservedTrinoUserName(name: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Comptes de rôle (iam.role_trino_accounts) — créés paresseusement, mot de
+// Comptes de rôle (iam.role_trino_accounts) - créés paresseusement, mot de
 // passe chiffré AES-256-GCM, ligne bcrypt fusionnée dans password.db.
 // ---------------------------------------------------------------------------
 
@@ -395,7 +395,7 @@ const roleCredentialsCache = new Map<
 // Re-synchronise les comptes de rôle : crée les manquants (rôle créé depuis
 // l'administration), restaure les lignes password.db perdues (dossier
 // security réinitialisé) depuis le mot de passe chiffré, et retire les
-// lignes orphelines (rôle supprimé — la ligne SQL est cascade-détriuite).
+// lignes orphelines (rôle supprimé - la ligne SQL est cascade-détriuite).
 export async function ensureRoleTrinoAccounts(): Promise<{
   ok: boolean;
   error?: string;

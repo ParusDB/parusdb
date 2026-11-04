@@ -77,7 +77,7 @@ export function CatalogsView({
   const router = useRouter();
 
   // Redémarrage automatique de Trino : l'état vit côté serveur (attente
-  // d'inactivité, docker restart, retour à la santé) — l'UI le suit par
+  // d'inactivité, docker restart, retour à la santé) - l'UI le suit par
   // polling tant que le cycle est en cours, puis rafraîchit la page pour
   // faire apparaître le binding.
   useEffect(() => {

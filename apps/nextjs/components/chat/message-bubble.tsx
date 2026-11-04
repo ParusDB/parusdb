@@ -12,10 +12,10 @@ import { cn } from "@/lib/utils";
 // gauche sur fond charbon. Le contenu de l'agent est du markdown rendu via
 // react-markdown (titres, listes, gras, code inline, tableaux), les blocs de
 // code sont colorés syntaxiquement (highlight.js via rehype-highlight) et
-// passent à la ligne — pas de défilement horizontal dans la bulle.
+// passent à la ligne - pas de défilement horizontal dans la bulle.
 
 // Texte brut d'un bloc fenced depuis l'élément code enfant (pour le bouton
-// « Copier ») — traverse les spans de coloration éventuels.
+// « Copier ») - traverse les spans de coloration éventuels.
 function codeText(children: ReactNode): string {
   if (typeof children === "string" || typeof children === "number") {
     return String(children);

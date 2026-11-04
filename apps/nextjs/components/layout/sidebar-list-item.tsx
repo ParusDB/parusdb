@@ -35,7 +35,7 @@ import { ConfirmNameDialog } from "@/components/parus/confirm-name-dialog";
 // enfant, le bouton « trois points » n'apparaît qu'au survol et ouvre le menu
 // Renommer / Supprimer. La suppression d'un agent suit le pattern destructif
 // obligatoire (ressaisie du nom), celle d'une conversation une confirmation
-// simple — mêmes patterns que les pages Chat et Agents.
+// simple - mêmes patterns que les pages Chat et Agents.
 export function SidebarListItem({
   children,
   label,

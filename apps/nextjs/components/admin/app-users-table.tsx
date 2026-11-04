@@ -40,7 +40,7 @@ import {
   updateAppUserRole,
 } from "@/app/(app)/admin/actions";
 
-// Utilisateurs applicatifs (comptes service pour les outils data —
+// Utilisateurs applicatifs (comptes service pour les outils data -
 // spec fonctionnelle § « Rôles et Permissions ») : miroir applicatif d'un principal Polaris. Le
 // clientSecret n'est JAMAIS stocké ni réaffiché : il apparaît une seule
 // fois, à la création ou à la réinitialisation.
@@ -252,7 +252,7 @@ export function AppUsersTable({
         </CharbonPanel>
       ) : (
         <div className="overflow-hidden rounded-3xl border border-border bg-card">
-          <Table>
+          <Table className="[&_th]:px-4 [&_td]:px-4">
             <TableHeader>
               <TableRow>
                 <TableHead>Nom</TableHead>
@@ -306,7 +306,7 @@ export function AppUsersTable({
                     {formatDateOnly(u.createdAt)}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {u.rotatedAt ? formatDateOnly(u.rotatedAt) : "—"}
+                    {u.rotatedAt ? formatDateOnly(u.rotatedAt) : "-"}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center justify-end gap-1">
@@ -350,7 +350,7 @@ export function AppUsersTable({
             <DialogDescription>
               Compte service pour un outil data (dbt, Power BI, Airbyte…) : il
               accède au catalogue Iceberg Polaris avec les droits du rôle
-              choisi — jamais avec les credentials du compte root.
+              choisi - jamais avec les credentials du compte root.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">

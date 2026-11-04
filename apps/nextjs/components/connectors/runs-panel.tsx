@@ -13,7 +13,7 @@ import {
 import { StatusBadge } from "@/components/parus/status";
 import { formatDate, formatDuration } from "@/lib/format";
 
-// Historique des exécutions (connectors.pipeline_runs) — rafraîchi tant
+// Historique des exécutions (connectors.pipeline_runs) - rafraîchi tant
 // qu'un run est en file ou en cours (l'ordonnanceur dlt démarre le conteneur
 // jetable puis écrit le résultat, quelques secondes de latence).
 
@@ -73,7 +73,7 @@ export function RunsPanel({ runs }: { runs: RunRow[] }) {
   return (
     <div className="space-y-2">
       <div className="overflow-hidden rounded-3xl border border-border bg-card">
-        <Table>
+        <Table className="[&_th]:px-4 [&_td]:px-4">
           <TableHeader>
             <TableRow>
               <TableHead>Pipeline</TableHead>
@@ -104,7 +104,7 @@ export function RunsPanel({ runs }: { runs: RunRow[] }) {
                     {TRIGGER_LABEL[run.trigger]}
                   </TableCell>
                   <TableCell className="mono text-xs">
-                    {run.rows_loaded ?? "—"}
+                    {run.rows_loaded ?? "-"}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {formatDuration(duration)}
@@ -113,7 +113,7 @@ export function RunsPanel({ runs }: { runs: RunRow[] }) {
                     {formatDate(run.started_at)}
                   </TableCell>
                   <TableCell className="max-w-80 truncate text-xs text-muted-foreground">
-                    {run.message ?? "—"}
+                    {run.message ?? "-"}
                   </TableCell>
                 </TableRow>
               );
@@ -123,7 +123,7 @@ export function RunsPanel({ runs }: { runs: RunRow[] }) {
       </div>
       <p className="text-xs text-muted-foreground">
         {pending
-          ? "Exécution en cours — la liste se rafraîchit automatiquement."
+          ? "Exécution en cours - la liste se rafraîchit automatiquement."
           : "Historique des dernières exécutions."}
       </p>
     </div>

@@ -3,7 +3,7 @@ import { SignUpForm } from "@/components/sign-up-form";
 import { isFirstInstall } from "@/lib/onboarding";
 import { redirect } from "next/navigation";
 
-// Premier démarrage : aucun compte n'existe — la création passe par
+// Premier démarrage : aucun compte n'existe - la création passe par
 // l'onboarding (rôle Administrateur, sans lien de confirmation email) ;
 // le sign-up classique (avec lien de confirmation) reprend ensuite la main.
 export const instant = false;

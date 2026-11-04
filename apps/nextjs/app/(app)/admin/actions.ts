@@ -28,7 +28,7 @@ import {
 } from "@/lib/trino-security";
 
 // ---------------------------------------------------------------------------
-// Utilisateurs (spec §Administration — Utilisateurs)
+// Utilisateurs (spec §Administration - Utilisateurs)
 // ---------------------------------------------------------------------------
 
 export interface AdminUserInput {
@@ -156,7 +156,7 @@ export async function deleteUser(
 
 // ---------------------------------------------------------------------------
 // Utilisateurs applicatifs (comptes service pour les outils data : dbt,
-// Power BI, Airbyte… — spec fonctionnelle § « Rôles et Permissions »/§4). Credentials Polaris
+// Power BI, Airbyte… - spec fonctionnelle § « Rôles et Permissions »/§4). Credentials Polaris
 // affichées UNE FOIS : jamais stockées côté applicatif.
 // ---------------------------------------------------------------------------
 
@@ -257,7 +257,7 @@ export async function createAppUser(input: {
     };
   }
 
-  // 5. Registre applicatif (clientId seulement — jamais le secret).
+  // 5. Registre applicatif (clientId seulement - jamais le secret).
   const { error: insertError } = await admin
     .schema("iam")
     .from("app_users")
@@ -303,7 +303,7 @@ export async function createAppUser(input: {
 }
 
 // Réinitialisation : nouveaux secrets Polaris ET Trino (rotés ensemble,
-// même parcours — spec fonctionnelle § « Intégration Technique » (durcissement Trino).2), retournés une seule fois. Le
+// même parcours - spec fonctionnelle § « Intégration Technique » (durcissement Trino).2), retournés une seule fois. Le
 // clientId reste inchangé.
 export async function rotateAppUserCredentials(
   appUserId: string,
@@ -481,7 +481,7 @@ export async function deleteAppUser(
 }
 
 // ---------------------------------------------------------------------------
-// Rôles (spec §Administration — Rôles)
+// Rôles (spec §Administration - Rôles)
 // ---------------------------------------------------------------------------
 
 export async function createRole(input: {
@@ -575,7 +575,7 @@ export async function deleteRole(
   }
   // Durcissement Trino : la ligne SQL du compte de rôle est cascade-
   // détruite ; retirer la ligne bcrypt + resynchroniser rules.json (best
-  // effort — révocation effective après refresh 5 s).
+  // effort - révocation effective après refresh 5 s).
   const accounts = await ensureRoleTrinoAccounts();
   const rules = accounts.ok ? await syncTrinoRules() : accounts;
   revalidatePath("/admin/roles");
@@ -693,7 +693,7 @@ export async function setRoleGrant(input: {
       return { ok: false, error: `L'enregistrement a échoué : ${error.message}` };
     }
   }
-  // Miroir Polaris (comptes applicatifs du rôle) : best effort — un échec
+  // Miroir Polaris (comptes applicatifs du rôle) : best effort - un échec
   // est renvoyé en avertissement sans bloquer l'édition applicative
   // (synchronisation éventuellement cohérente, spec fonctionnelle § « Rôles et Permissions »).
   let warning: string | undefined;
@@ -703,7 +703,7 @@ export async function setRoleGrant(input: {
       warning = `Droit enregistré, mais la synchronisation Polaris a échoué : ${sync.error}`;
     }
     // Durcissement Trino : rules.json régénéré depuis iam.grants (source de
-    // vérité unique) — refus effectif sur le chemin Trino (dbt, Power BI,
+    // vérité unique) - refus effectif sur le chemin Trino (dbt, Power BI,
     // JDBC) après refresh (5 s), sans redémarrage. Best effort identique.
     const trinoSync = await syncTrinoRules();
     if (!trinoSync.ok) {
@@ -747,7 +747,7 @@ async function mirrorRoleCatalogAccess(
   return syncRoleCatalogAccess({ roleKey: role.key, catalogGrants });
 }
 // ---------------------------------------------------------------------------
-// Fournisseurs LLM (spec §Administration — Fournisseurs LLM)
+// Fournisseurs LLM (spec §Administration - Fournisseurs LLM)
 // ---------------------------------------------------------------------------
 
 const API_KINDS: ProviderApiKind[] = [
@@ -771,7 +771,7 @@ function normalizeBaseUrl(raw: string): string {
 }
 
 // Ajout d'un fournisseur : la clé est validée par la découverte réelle des
-// modèles — aucune sauvegarde si le fournisseur la rejette.
+// modèles - aucune sauvegarde si le fournisseur la rejette.
 export async function addProvider(input: {
   name: string;
   apiKind: ProviderApiKind;

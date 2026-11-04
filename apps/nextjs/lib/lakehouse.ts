@@ -19,7 +19,7 @@ export interface CatalogView {
 }
 
 // Catalogue Trino lié à un catalogue Polaris : le binding porte toujours le
-// nom du catalogue (catalog/<catalogue>.properties — le fichier du catalogue
+// nom du catalogue (catalog/<catalogue>.properties - le fichier du catalogue
 // par défaut et du catalogue système est généré par apps/trino/setup.sh, les
 // autres le sont à la création par l'app).
 export function trinoBindingFor(catalog: string): string | null {
@@ -69,7 +69,7 @@ export async function loadCatalogViews(
 export function trinoBindingFileContent(catalog: string): string {
   return `#
 # Catalogue Trino "${catalog}" : Iceberg REST -> Polaris (généré par ParusDB).
-# Chargé par Trino à son prochain (re)démarrage — automatique après création
+# Chargé par Trino à son prochain (re)démarrage - automatique après création
 # via l'application (dès qu'aucune requête n'est en cours).
 #
 connector.name=iceberg
@@ -90,7 +90,7 @@ s3.region=\${ENV:S3_REGION}
 
 // Arbre schémas -> tables -> colonnes d'un catalogue lié (2 requêtes Trino).
 // Toute requête passe par l'executor du rôle actif (compte Trino du rôle,
-// contraint par rules.json) — jamais le compte de service BFF.
+// contraint par rules.json) - jamais le compte de service BFF.
 export interface ColumnInfo {
   name: string;
   type: string;

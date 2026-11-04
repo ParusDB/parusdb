@@ -1,7 +1,7 @@
 // Informations de connexion du lakehouse pour les outils data externes
 // (spec fonctionnelle § « Rôles et Permissions »). Adresses publiques : le hostname des URLs internes
 // (ex. http://rustfs:9000, interne au réseau Docker) est remplacé par
-// PARUSDB_PUBLIC_HOST (défaut : localhost) — ports et chemins conservés.
+// PARUSDB_PUBLIC_HOST (défaut : localhost) - ports et chemins conservés.
 
 export interface ConnectionEndpoints {
   trinoUrl: string;
@@ -67,7 +67,7 @@ export function getConnectionEndpoints(): ConnectionEndpoints {
 }
 
 // Clés S3 (RustFS) : nécessaires aux outils qui écrivent directement dans
-// l'object storage (Airbyte) — Polaris vends des credentials temporaires aux
+// l'object storage (Airbyte) - Polaris vends des credentials temporaires aux
 // clients Iceberg REST (Spark, Flink, pyiceberg), pas aux connecteurs S3.
 export function getS3Keys(): {
   accessKeyId: string;
