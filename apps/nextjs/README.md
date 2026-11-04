@@ -6,8 +6,10 @@ Application web ParusDB : frontend + BFF (Backend-For-Frontend) en Next.js 16
 
 Toute l'interface est en français, la charte appliquée est « Mésange
 Charbonnière » (`docs/functional/brand_guidelines.md` — tokens dans
-`app/globals.css`, polices Inter / Space Grotesk / JetBrains Mono via
-`next/font`).
+`app/globals.css`, polices Inter / Space Grotesk / JetBrains Mono
+**auto-hébergées** via `next/font/local`, fichiers variables woff2 et
+licences SIL OFL dans `app/fonts/` — le build n'interroge jamais Google
+Fonts, y compris en CI).
 
 ## Démarrage
 
@@ -131,7 +133,7 @@ afficher** (copie par `sed`/`grep`, pas de copier-coller dans un terminal).
 
 ## Vérifications et dépannage
 
-Livraison : `npm run lint`, `npx tsc --noEmit`, `npm run build` — puis
+Livraison : `npm run lint`, `npm run typecheck`, `npm run build` — puis
 vérification RLS par requêtes de test et, pour le chat, un test e2e rejoué
 (le LLM est non déterministe : ne jamais conclure sur une seule exécution).
 
