@@ -165,7 +165,7 @@ NVIDIA Container Toolkit (runtime `nvidia`) — voir `apps/ollama/README.md`.
 | Dev frontend (http://localhost:3000) | `cd apps/nextjs && npm run dev` |
 | Build de production | `cd apps/nextjs && npm run build` |
 | Lint | `cd apps/nextjs && npm run lint` |
-| Typecheck | `cd apps/nextjs && npx tsc --noEmit` |
+| Typecheck | `cd apps/nextjs && npm run typecheck` |
 | Démarrer le stack Supabase | `cd apps/supabase && sh run.sh start` (alias `docker compose up -d`) |
 | Logs / statut du stack | `sh run.sh logs [service]` / `sh run.sh status` |
 | Secrets du stack | `sh run.sh secrets` — **ne jamais copier le contenu dans une PR, un log ou une conversation** |
@@ -246,8 +246,12 @@ lockfiles à la main.
   entiers ; pas de renommages en cascade non sollicités.
 - **Pas d'emoji dans l'UI** — uniquement des icônes `lucide-react` (voir §8).
 - **Vérification systématique** : avant de déclarer un travail terminé, exécuter
-  `npm run lint`, `npx tsc --noEmit` et `npm run build` dans `apps/nextjs` (et les tests dès
-  qu'ils existent, voir §13).
+  `npm run lint`, `npm run typecheck` et `npm run build` dans `apps/nextjs` (et les tests dès
+  qu'ils existent, voir §13) — la CI GitHub exécute ces trois commandes + Gitleaks sur
+  chaque PR et chaque push sur `main`/`v1.0.0` (`.github/workflows/`).
+- **Dépendances épinglées** : jamais de `latest` ni de `^` sur les dépendances majeures
+  du `apps/nextjs/package.json` — un contributeur clonant le dépôt doit obtenir les mêmes
+  versions que la CI (leçon : `next`/`@supabase/*` en `latest` contournaient le lockfile).
 - **Erreurs** : après 2 échecs consécutifs sur une même approche, changer de stratégie ou
   escalader — ne pas boucler.
 
@@ -330,11 +334,15 @@ l'app.
 
 **État actuel** : la migration Tailwind CSS **v4** est faite — tout vit dans
 `app/globals.css` (tokens de la charte §3 copiés à l'identique, pas de
-`tailwind.config.ts`), polices via `next/font` (Inter, Space Grotesk, JetBrains
-Mono — graisses exactes de la charte §4), `tw-animate-css` à la place de
-`tailwindcss-animate`, `components.json` shadcn (baseColor `slate`,
-`cssVariables: true`). Tout nouvel écran doit réutiliser ces tokens — aucun
-style de template par défaut (neutre, police Geist).
+`tailwind.config.ts`), polices **auto-hébergées** via `next/font/local`
+(Inter, Space Grotesk, JetBrains Mono — fichiers variables woff2 dans
+`app/fonts/`, licences SIL OFL documentées dans `app/fonts/README.md` et le
+`NOTICE` ; le build n'interroge **jamais** Google Fonts — leçon : l'échec de
+téléchargement sur les runners CI faisait échouer Turbopack en
+« `next/font/google queries have exactly one entry` », message trompeur),
+`tw-animate-css` à la place de `tailwindcss-animate`, `components.json` shadcn
+(baseColor `slate`, `cssVariables: true`). Tout nouvel écran doit réutiliser ces
+tokens — aucun style de template par défaut (neutre, police Geist).
 
 **Règles permanentes :**
 
@@ -758,7 +766,7 @@ complet : question métier → exploration du lakehouse → SQL exécuté → r�
 
 Une contribution est terminée quand :
 
-1. `npm run lint`, `npx tsc --noEmit` et `npm run build` passent dans `apps/nextjs` ;
+1. `npm run lint`, `npm run typecheck` et `npm run build` passent dans `apps/nextjs` ;
 2. Le changement SQL est appliqué et vérifié par une requête de test (§9) ;
 3. Toute requête/UX implémentée correspond à la spec fonctionnelle (§2) ;
 4. Tout écran passe la checklist de conformité de la charte (§8 + charte §14) ;
@@ -768,6 +776,14 @@ Une contribution est terminée quand :
 unitaire/intégration avec **Vitest + React Testing Library**, e2e des parcours critiques
 (auth, création catalogue, pipeline) avec **Playwright**. Toute nouvelle fonctionnalité
 s'accompagne de tests ; corriger un bug commence par un test qui le reproduit.
+
+**CI GitHub** (`.github/workflows/`) : le job Frontend exécute lint + typecheck + build
+sur Node 22 (`npm ci`) ; le job Gitleaks scanne **tout l'historique Git** avec le binaire
+officiel (l'action `gitleaks-action` exige une licence payante pour les organisations).
+Les faux positifs connus (clés de démo Supabase du template, valeurs inertes des tests
+vendor) vivent dans `.gitleaks.toml` — la liste blanche doit rester **ciblée par
+fichier**, jamais par dossier entier : blanchir un dossier masquerait un vrai secret
+futur. Toute nouvelle dépendance passe par Dependabot (`.github/dependabot.yml`).
 
 ## 14. Git et conventions de contribution
 
