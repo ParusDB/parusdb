@@ -10,10 +10,14 @@
 
 - [ ] `npm run lint` passe dans `apps/nextjs`
 - [ ] `npm run typecheck` passe dans `apps/nextjs`
+- [ ] `npm test` (Vitest) passe dans `apps/nextjs`
 - [ ] `npm run build` passe dans `apps/nextjs`
+- [ ] `pytest tests` passe dans `apps/dlt` (si le runner est touché)
 - [ ] Le SQL éventuel est versionné, idempotent et vérifié par une requête de test
 - [ ] Les écrans éventuels respectent la charte (checklist `docs/functional/brand_guidelines.md` §14)
 - [ ] Les messages d'erreur sont en français, factuels et actionnables
+
+<!-- Détail complet des vérifications : docs/technical/CI.md. -->
 
 ## Écarts assumés
 

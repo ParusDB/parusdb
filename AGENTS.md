@@ -100,6 +100,7 @@ parusdb/
 ├── reset.sh                      # Désinstallation complète : reset des apps en ordre inverse
 │                                 # (destructif ; option --purge-images pour retirer les images)
 ├── docs/functional/              # Specs produit : fiche, fonctionnel, charte
+├── docs/technical/               # Docs techniques : CI (docs/technical/CI.md)
 ├── .agents/skills/               # Skills officiels Supabase (voir §9)
 │   ├── supabase/SKILL.md
 │   └── supabase-postgres-best-practices/  # SKILL.md + references/*.md (règles par catégorie)
@@ -254,7 +255,7 @@ lockfiles à la main.
   (`.github/workflows/`). La CI couvre en outre le SQL applicatif
   (idempotence + tests RLS sur un Postgres éphémère), les scripts shell
   (shellcheck), les configurations compose (validation à env factices) et le
-  runner dlt (pytest) ; le détail vit dans `docs/CI.md`, et le test e2e
+  runner dlt (pytest) ; le détail vit dans `docs/technical/CI.md`, et le test e2e
   complet est un lancement manuel (`e2e-elt.yml`).
 - **Dépendances épinglées** : jamais de `latest` ni de `^` sur les dépendances majeures
   du `apps/nextjs/package.json` — un contributeur clonant le dépôt doit obtenir les mêmes
@@ -793,7 +794,7 @@ chiffrement compatible BFF). Les tests RLS rejouables vivent dans
 `apps/supabase/sql/tests/` et sont exécutés par la CI. Les parcours UI
 (auth) attendent **Playwright**. Toute nouvelle fonctionnalité
 s'accompagne de tests ; corriger un bug commence par un test qui le reproduit.
-Inventaire complet (unitaires, CI, e2e manuel) : `docs/CI.md`.
+Inventaire complet (unitaires, CI, e2e manuel) : `docs/technical/CI.md`.
 
 **CI GitHub** (`.github/workflows/`) : le job Frontend exécute lint + typecheck + build
 sur Node 22 (`npm ci`) ; le job Gitleaks scanne **tout l'historique Git** avec le binaire

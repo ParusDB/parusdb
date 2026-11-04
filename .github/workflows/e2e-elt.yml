@@ -9,7 +9,7 @@ name: E2E ELT (manuel)
 # lakehouse sont identiques aux lignes sources.
 #
 # Hors périmètre : Ollama/Chat IA (GPU requis), mcp-trino, frontend.
-# Documentation complète et mode opératoire : docs/CI.md (§ e2e manuel).
+# Documentation complète et mode opératoire : docs/technical/CI.md (§ e2e manuel).
 #
 # Durée : 20-40 min (build de l'image runner + installation des stacks).
 
