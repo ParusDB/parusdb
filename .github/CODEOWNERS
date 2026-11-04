@@ -1,0 +1,19 @@
+# Code Owners ParusDB — toute modification du dépôt requiert la validation
+# du mainteneur (AGENTS.md §14 : pas de commit direct, PR obligatoire).
+# Ce fichier n'a d'effet que combiné à la protection de branche de `main`
+# (Settings → Branches → Require a pull request before merging +
+# Require review from Code Owners). Une seule approbation d'un des
+# deux owners suffit.
+
+# Default : tout le dépôt appartient au mainteneur (comptes mainteneur
+# principal @gbalthazar-pb — auteur des commits — et compte historique
+# @Ghiloup).
+* @gbalthazar-pb @Ghiloup
+
+# Périmètres sensibles — ligne explicite pour la lisibilité ; déjà couverts
+# par la règle default ci-dessus.
+/LICENSE              @gbalthazar-pb @Ghiloup
+/NOTICE               @gbalthazar-pb @Ghiloup
+/SECURITY.md          @gbalthazar-pb @Ghiloup
+/.github/workflows/   @gbalthazar-pb @Ghiloup
+/.gitleaks.toml       @gbalthazar-pb @Ghiloup
