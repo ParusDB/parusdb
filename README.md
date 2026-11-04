@@ -1,6 +1,10 @@
-# ParusDB
+<p align="center">
+  <img src="docs/functional/parusdb-logo.jpg" alt="Logo ParusDB" width="500">
+</p>
 
-> La plateforme Data Analytique IAgentique Open Source — « Vos données, enfin parlantes. »
+<p align="center">
+  <em>La plateforme Data Analytique IAgentique Open Source — « Vos données, enfin parlantes. »</em>
+</p>
 
 [![Licence](https://img.shields.io/badge/licence-Apache%202.0-1A1A1A)](#licence)
 [![Statut](https://img.shields.io/badge/statut-en%20d%C3%A9veloppement-FFD700)](#état-du-projet)
@@ -182,11 +186,15 @@ complète, clients SSR) est fonctionnel ; les briques produit arrivent dans cet 
 parusdb/
 ├── AGENTS.md             # Règles de développement pour agents IA et contributeurs
 ├── README.md             # Ce fichier
+├── setup.sh              # Première installation : orchestre les apps dans l'ordre des dépendances
+├── run.sh                # Cycle de vie de toute la stack : start/stop/restart/status/logs
+├── reset.sh              # Désinstallation complète (destructif)
 ├── CONTRIBUTING.md       # Guide de contribution
 ├── SECURITY.md           # Politique de sécurité (divulgation responsable)
 ├── CODE_OF_CONDUCT.md    # Code de conduite
 ├── CHANGELOG.md          # Journal des versions
-├── docs/functional/      # Fiche produit, spécifications fonctionnelles, charte graphique
+├── docs/functional/      # Fiche produit, spécifications fonctionnelles, charte graphique, logo
+├── docs/technical/       # Documentation technique (CI, pipeline d'intégration)
 ├── .agents/skills/       # Skills Supabase officiels (guides de contribution assistée par IA)
 ├── .github/              # CI (lint, typecheck, build), scan de secrets, templates d'issues/PR
 ├── apps/nextjs/          # Application Next.js 16 (App Router) — frontend + BFF
@@ -211,6 +219,8 @@ parusdb/
   guides et pièges d'intégration du Data Lakehouse
 - [`apps/dlt/README.md`](apps/dlt/README.md) — architecture, sources et modèle d'exécution
   du moteur ELT (validation e2e incluse)
+- [`docs/technical/CI.md`](docs/technical/CI.md) — pipeline d'intégration : jobs, tests,
+  validation locale avant d'ouvrir une PR
 
 ## Contribuer
 
