@@ -595,19 +595,48 @@ items actifs, logo officiel plein cadre en tête (bandeau blanc, bouton accueil)
 
 ## 9. Intégration Next.js (setup exact)
 
-### 9.1 Polices avec `next/font/google`
+### 9.1 Polices avec `next/font/local` (auto-hébergées)
+
+Les trois polices sont **auto-hébergées** : fichiers variables woff2 dans
+`apps/nextjs/app/fonts/` (licences SIL OFL 1.1, documentées dans
+`app/fonts/README.md` et le `NOTICE` du dépôt). Le build **n'interroge jamais
+Google Fonts** — y compris en CI : l'échec de téléchargement sur un runner
+faisait échouer Turbopack en « `next/font/google queries have exactly one
+entry` », message trompeur. Ne pas revenir à `next/font/google`.
+
+Les polices variables couvrent les graisses de la section 4.1 (Inter 100–900,
+Space Grotesk 300–700, JetBrains Mono 100–800) — le CSS n'utilise que les
+graisses de la charte.
 
 ```tsx
 // app/layout.tsx
 import type { Metadata } from "next";
-import { Inter, Space_Grotesk, JetBrains_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-inter" });
-const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], weight: ["500", "600", "700"], variable: "--font-space-grotesk" });
-const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-jetbrains-mono" });
+const inter = localFont({
+  src: "./fonts/inter-var.woff2",
+  weight: "100 900",
+  variable: "--font-inter",
+  display: "swap",
+});
+
+const spaceGrotesk = localFont({
+  src: "./fonts/space-grotesk-var.woff2",
+  weight: "300 700",
+  variable: "--font-space-grotesk",
+  display: "swap",
+});
+
+const jetbrainsMono = localFont({
+  src: "./fonts/jetbrains-mono-var.woff2",
+  weight: "100 800",
+  variable: "--font-jetbrains-mono",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://parusdb.com"),
   title: "ParusDB — Plateforme Data Analytique IAgentique Open Source",
   description:
     "ParusDB unifie ELT, Data Lakehouse et agents IA dans une plateforme open source et souveraine. Licence Apache 2.0.",
@@ -741,7 +770,8 @@ factuelles et actionnables (« La connexion a échoué : clé API invalide »), 
 Avant de considérer un écran « conforme à la marque » :
 
 - [ ]  `globals.css` identique à la section 3 (tokens, base, utilitaires).
-- [ ]  Les 3 polices chargées via `next/font` avec les graisses exactes.
+- [ ]  Les 3 polices auto-hébergées chargées via `next/font/local` (`app/fonts/`, section 9.1)
+       avec les graisses exactes de la section 4.1.
 - [ ]  Focus visible jaune (`ring` = `#FFD700`) sur tous les éléments interactifs.
 - [ ]  `::selection` jaune/charbon.
 - [ ]  Boutons primaires = jaune/charbon ; texte sur jaune toujours charbon.
