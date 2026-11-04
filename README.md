@@ -259,3 +259,22 @@ sans autorisation du mainteneur.
 - **Site** : <https://parusdb.com/>
 - **GitHub** : <https://github.com/ParusDB/parusdb>
 - **Documentation, guides** : en construction
+
+### Sites qui ont permis de développer ParusDB
+
+| Technologie | Site / Documentation |
+|---|---|
+| Next.js | <https://nextjs.org/> |
+| Tailwind CSS | <https://tailwindcss.com/> |
+| shadcn/ui | <https://ui.shadcn.com/> |
+| Supabase (self-hosting, Auth, Realtime) | <https://supabase.com/> · <https://supabase.com/docs/guides/self-hosting> |
+| PostgreSQL | <https://www.postgresql.org/> |
+| Apache Polaris | <https://polaris.apache.org/> |
+| Trino | <https://trino.io/> |
+| Apache Iceberg | <https://iceberg.apache.org/> |
+| RustFS | <https://rustfs.com/> |
+| dlt (data load tool) | <https://dlthub.com/> |
+| Ollama | <https://ollama.com/> |
+| Model Context Protocol (MCP) | <https://modelcontextprotocol.io/> |
+| mcp-trino (Tuan Nguyen) | <https://github.com/tuannvm/mcp-trino> |
+| Docker | <https://docs.docker.com/> |
