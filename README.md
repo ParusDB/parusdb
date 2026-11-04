@@ -7,7 +7,7 @@
 </p>
 
 [![Licence](https://img.shields.io/badge/licence-Apache%202.0-1A1A1A)](#licence)
-[![Statut](https://img.shields.io/badge/statut-en%20d%C3%A9veloppement-FFD700)](#état-du-projet)
+[![Version](https://img.shields.io/badge/version-v1.0.0-FFD700)](https://github.com/ParusDB/parusdb/releases)
 [![Langue](https://img.shields.io/badge/langue-Fran%C3%A7ais-6B8E23)](https://parusdb.com/)
 
 **ParusDB** unifie **ELT**, **Data Lakehouse** et **agents IA** dans une plateforme open
@@ -167,8 +167,7 @@ pipeline de type PostgreSQL dans l'interface. Détails :
 
 ## État du projet
 
-Le projet est en **développement actif**. Le socle Next.js + Supabase (authentification
-complète, clients SSR) est fonctionnel ; les briques produit arrivent dans cet ordre :
+La version **1.0.0** est publiée : toutes les briques produit sont fonctionnelles.
 
 - [x] **Socle** — Next.js (App Router) + Supabase self-hosted, auth fonctionnelle
 - [x] **Data Lakehouse** — catalogues, schémas, explorateur, éditeur SQL
@@ -178,7 +177,6 @@ complète, clients SSR) est fonctionnel ; les briques produit arrivent dans cet 
       applicatifs pour les outils data, Trino HTTPS + authentification + access
       control générés depuis les droits
 - [x] **Flux ELT** — dlt, 40+ connecteurs, pipelines, CRON
-- [ ] **Release open source** — première version publique taguée `v1.0.0`
 
 ## Structure du dépôt
 

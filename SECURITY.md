@@ -3,7 +3,7 @@
 ## Versions supportées
 
 Le projet est publié au fil des releases GitHub. Seule la dernière release
-(` vX.Y.Z`) reçoit des correctifs de sécurité.
+(`vX.Y.Z`) reçoit des correctifs de sécurité.
 
 | Version | Supportée |
 |---|---|
