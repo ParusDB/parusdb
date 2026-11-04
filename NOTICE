@@ -31,7 +31,7 @@ This product also depends on, but does not redistribute the source of:
 Apache Polaris, Trino, RustFS, Ollama, mcp-trino — deployed as containers
 via docker-compose, each under its own license.
 
-Marque : « ParusDB » et son logo sont des marques du projet ParusDB
-(dépôt INPI en cours). Ils ne sont pas soumis à la licence Apache 2.0 :
-le nom et le logo ne peuvent être réutilisés pour nommer un produit ou
-un service sans autorisation du mainteneur.
+Marque : « ParusDB » et son logo sont des marques déposées auprès de
+l'INPI. Ils ne sont pas soumis à la licence Apache 2.0 : le nom et le logo
+ne peuvent être réutilisés pour nommer un produit ou un service sans
+autorisation du mainteneur.

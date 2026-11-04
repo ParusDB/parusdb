@@ -249,8 +249,8 @@ conditions usuelles de la licence (conservation des notices, mention des
 modifications, clause de non-contrefaçon de brevets).
 Texte intégral : [`LICENSE`](LICENSE). Mentions des composants tiers : [`NOTICE`](NOTICE).
 
-**Marque** : le nom « ParusDB » et son logo sont des marques du projet
-(dépôt INPI en cours). Ils ne sont pas soumis à la licence Apache 2.0 : le nom
+**Marque** : le nom « ParusDB » et son logo sont des marques déposées auprès de
+l'INPI. Ils ne sont pas soumis à la licence Apache 2.0 : le nom
 et le logo ne peuvent être réutilisés pour nommer un produit ou un service
 sans autorisation du mainteneur.
 
