@@ -1,0 +1,54 @@
+name: E2E ELT (manuel)
+
+# Test e2e du moteur ELT - EXÉCUTION MANUELLE UNIQUEMENT.
+#
+# Installe une plateforme éphémère complète sur le runner (stack Supabase,
+# Polaris, Trino durci, ordonnanceur dlt), charge les sources de démo
+# (PostgreSQL + Kafka), crée deux pipelines avec credentials chiffrés,
+# exécute les chargements puis vérifie depuis Trino que les lignes du
+# lakehouse sont identiques aux lignes sources.
+#
+# Hors périmètre : Ollama/Chat IA (GPU requis), mcp-trino, frontend.
+# Documentation complète et mode opératoire : docs/technical/CI.md (§ e2e manuel).
+#
+# Durée : 20-40 min (build de l'image runner + installation des stacks).
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-elt
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: Installation + chargement ELT + assertions Trino
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: E2E ELT (scripts/ci/e2e-elt.sh)
+        run: sh scripts/ci/e2e-elt.sh
+
+      - name: Journaux en cas d'échec
+        if: failure()
+        run: |
+          docker ps -a --format '{{.Names}}\t{{.Status}}' | head -40 || true
+          cd apps/dlt && (sh run.sh logs scheduler 2>/dev/null | tail -60) || true
+          cd ../.. && for f in .e2e-*.log; do
+            [ -f "$f" ] || continue
+            echo "===== $f (fin)"; tail -50 "$f"
+          done
+
+      - name: Nettoyage (conteneurs, volumes, .env de test)
+        if: always()
+        run: |
+          apps=$(ls apps)
+          for app in $apps; do
+            if [ -f "apps/$app/reset.sh" ]; then
+              (cd "apps/$app" && sh reset.sh >/dev/null 2>&1) || true
+            fi
+          done
+          docker volume ls -q | grep -E '^parus-' | xargs -r docker volume rm >/dev/null 2>&1 || true
+          rm -f apps/nextjs/.env apps/dlt/demo/.pipelines-seed.sql .e2e-*.log

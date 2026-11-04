@@ -1,0 +1,15 @@
+# Environnements locaux — jamais commiter de secret
+.env
+.env.*
+!.env.example
+
+# Dépendances et builds
+node_modules/
+.next/
+
+# Données des stacks locales (volumes bind-mountés)
+volumes/
+
+# Outillage agent interne
+.vibe/
+__pycache__/

@@ -1,0 +1,14 @@
+.env
+.env.old
+
+# Bindings de catalogues Trino : seuls les catalogues d'installation sont
+# versionnés (générés par setup.sh) ; les bindings créés par l'application
+# ou par d'autres environnements restent locaux à la machine.
+catalog/*
+!catalog/parusdb.properties
+!catalog/dev.properties
+
+# Durcissement (spec fonctionnelle § « Intégration Technique » (durcissement Trino)) : config, keystore TLS et fichiers de
+# sécurité sont générés par setup.sh (secrets dans .env) — jamais commités.
+etc/
+security/

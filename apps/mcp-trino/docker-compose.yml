@@ -1,0 +1,82 @@
+#
+# mcp-trino — serveur MCP (Model Context Protocol) exposant Trino aux LLM.
+#
+# Rôle strict (AGENTS.md §11) : unique chemin LLM ↔ données. Le modèle ne
+# reçoit jamais de chaîne de connexion ni de secret : il appelle les outils
+# MCP (list_catalogs, list_schemas, list_tables, get_table_schema,
+# execute_query, explain_query) et le serveur exécute sur Trino avec ses
+# propres paramètres. Lecture seule par défaut
+# (TRINO_ALLOW_WRITE_QUERIES=false) : le chat ne peut jamais écrire dans le
+# lakehouse.
+#
+# Dépendances assumées :
+#   - réseau externe `supabase_default` (stack Supabase démarrée) ;
+#   - service `trino` (apps/trino) démarré et sain : le serveur vérifie la
+#     connexion Trino au démarrage et s'arrête sinon (log.Fatalf).
+#
+# Pas de depends_on possible entre projets compose distincts : `sh run.sh
+# start` vérifie que Trino est démarré avant de lancer mcp-trino.
+#
+# Démarrage : `sh run.sh start` (après `sh setup.sh`).
+#
+
+name: parus-mcp-trino
+
+networks:
+  supabase:
+    name: supabase_default
+    external: true
+
+services:
+
+  mcp-trino:
+    image: ghcr.io/tuannvm/mcp-trino:4.3.1
+    container_name: parus-mcp-trino
+    restart: unless-stopped
+    networks:
+      - supabase
+    ports:
+      # Endpoint MCP Streamable HTTP : http://localhost:<port>/mcp
+      # (consommé par le BFF Next.js / le futur runner d'agents).
+      # Le port interne du conteneur est toujours 8080.
+      - "${MCP_TRINO_HTTP_PORT:-8185}:8080"
+    environment:
+      # Trino vu depuis le réseau `supabase_default` (alias compose du service
+      # `trino` de apps/trino). Durcissement (spec fonctionnelle § « Intégration Technique » (durcissement Trino)) : HTTPS
+      # (certificat autosigné, validation ignorée) + basic auth du compte de
+      # service mcp-trino (règle read-only dans rules.json).
+      TRINO_HOST: "${TRINO_HOST:-trino}"
+      TRINO_PORT: "${TRINO_PORT:-8443}"
+      TRINO_USER: "${TRINO_USER:-parus-mcp}"
+      TRINO_PASSWORD: "${TRINO_PASSWORD:?TRINO_PASSWORD manquant dans .env}"
+      TRINO_CATALOG: "${TRINO_CATALOG:-dev}"
+      TRINO_SCHEMA: "${TRINO_SCHEMA:-sales}"
+      TRINO_SCHEME: "${TRINO_SCHEME:-https}"
+      TRINO_SSL: "${TRINO_SSL:-true}"
+      TRINO_SSL_INSECURE: "${TRINO_SSL_INSECURE:-true}"
+      # Le runtime Go de mcp-trino valide le certificat autosigné de Trino
+      # (son transport custom ignore les DSN SSL/SSLInsecure) : le
+      # certificat public de Trino est monté et désigné comme autorité de
+      # confiance. Il doit porter le SAN DNS:trino (nom réseau utilisé ici).
+      SSL_CERT_FILE: /certs/parus-trino.pem
+      # Lecture seule : le LLM ne peut pas écrire dans le lakehouse.
+      TRINO_ALLOW_WRITE_QUERIES: "${TRINO_ALLOW_WRITE_QUERIES:-false}"
+      TRINO_QUERY_TIMEOUT: "${TRINO_QUERY_TIMEOUT:-60}"
+      # Schémas exposés aux LLM (liste catalog.schéma séparés par des
+      # virgules) : borne l'exploration et les requêtes.
+      TRINO_ALLOWED_SCHEMAS: "${TRINO_ALLOWED_SCHEMAS:-dev.sales}"
+      # Transport MCP : Streamable HTTP sur /mcp (legacy /sse conservé).
+      MCP_TRANSPORT: "http"
+      MCP_HOST: "0.0.0.0"
+      MCP_PORT: "8080"
+      MCP_URL: "${MCP_URL:-http://localhost:8185}"
+    volumes:
+      # Certificat public (jamais la clé) du keystore de apps/trino.
+      - ../trino/etc/keystore.crt:/certs/parus-trino.pem:ro
+    healthcheck:
+      # Endpoint de statut du serveur (voir internal/mcp/server.go).
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/status || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s

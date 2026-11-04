@@ -1,0 +1,79 @@
+#
+# Trino — moteur SQL du Data Lakehouse ParusDB.
+#
+# Rôle strict (AGENTS.md §10) : Trino est l'unique moteur de requêtage. Il ne
+# connaît pas le RustFS directement : il interroge Apache Polaris (apps/polaris)
+# via le protocole Iceberg REST et reçoit des credentials vendus (vended
+# credentials). Aucune chaîne de connexion, aucun secret d'infrastructure dans
+# les sessions des utilisateurs.
+#
+# Dépendances assumées :
+#   - réseau externe `supabase_default` (stack Supabase démarrée) ;
+#   - service `polaris` (apps/polaris) : catalogue Iceberg REST, OAuth2 ;
+#   - service `rustfs` (stack Supabase) : accès S3 aux fichiers de données,
+#     avec credentials vendus par Polaris.
+#
+# Pas de depends_on possible entre projets compose distincts : `sh run.sh start`
+# vérifie que Polaris est démarré et sain avant de lancer Trino.
+#
+# Démarrage : `sh run.sh start` (après `sh setup.sh`).
+#
+name: parus-trino
+
+networks:
+  supabase:
+    name: supabase_default
+    external: true
+
+services:
+
+  trino:
+    image: trinodb/trino:484
+    container_name: parus-trino
+    restart: unless-stopped
+    networks:
+      - supabase
+    ports:
+      # API + UI web en HTTPS (durcissement, spec fonctionnelle § « Intégration Technique » (durcissement Trino)). Le port
+      # interne du conteneur est toujours 8443 ; le port hôte par défaut
+      # (8453) évite la collision avec Kong (supabase-kong publie déjà
+      # 8443). Le port interne 8080 (HTTP) reste ouvert dans le conteneur
+      # pour la communication interne (discovery) mais n'est pas publié :
+      # l'authentification par mot de passe exige TLS.
+      - "${TRINO_HTTPS_PORT:-8453}:8443"
+    environment:
+      # Injectées par substitution ${ENV:VAR} dans les bindings générés
+      # (catalog/<catalogue>.properties : un fichier par catalogue Polaris,
+      # générés par setup.sh ou par l'application — le nom du fichier Trino est
+      # le nom du catalogue Polaris).
+      POLARIS_URI: "${POLARIS_URI:-http://polaris:8181/api/catalog}"
+      POLARIS_REALM: "${POLARIS_REALM:-POLARIS}"
+      CLIENT_ID: "${POLARIS_CLIENT_ID:?POLARIS_CLIENT_ID manquant dans .env}"
+      CLIENT_SECRET: "${POLARIS_CLIENT_SECRET:?POLARIS_CLIENT_SECRET manquant dans .env}"
+      S3_ENDPOINT: "${S3_ENDPOINT:-http://rustfs:9000}"
+      S3_REGION: "${S3_REGION:-us-east-1}"
+      # Config copiée depuis l'image (config.properties généré par setup.sh
+      # reprend la valeur du catalogue management de l'image).
+      CATALOG_MANAGEMENT: "${CATALOG_MANAGEMENT:-static}"
+    volumes:
+      # Catalogues iceberg : Iceberg REST -> Polaris (un .properties par
+      # catalogue, généré — plus aucun fichier statique commité).
+      - ./catalog:/etc/trino/catalog:ro
+      # Durcissement (générés par setup.sh, jamais commités) :
+      # config (HTTPS + auth + secret interne), authenticator password
+      # file, access control, keystore TLS autosigné.
+      - ./etc/config.properties:/etc/trino/config.properties:ro
+      - ./etc/password-authenticator.properties:/etc/trino/password-authenticator.properties:ro
+      - ./etc/access-control.properties:/etc/trino/access-control.properties:ro
+      - ./etc/keystore.pem:/etc/trino/keystore.pem:ro
+      # Fichiers de sécurité générés par l'application (apps/nextjs,
+      # TRINO_SECURITY_DIR) : password.db (bcrypt) + rules.json (access
+      # control). Le conteneur n'écrit pas dedans : recharge périodique
+      # (file.refresh-period / security.refresh-period, sans redémarrage).
+      - ./security:/etc/trino/security:ro
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--insecure", "https://localhost:8443/v1/info"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+      start_period: 30s

@@ -1,68 +1,220 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@import "tw-animate-css";
 
-@layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
-    --radius: 0.5rem;
-  }
-  .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
-  }
+@custom-variant dark (&:is(.dark *));
+
+/* =========================================================
+   ParusDB — Charte "Mésange Charbonnière"
+   Palette officielle :
+   - Charbon      #1A1A1A
+   - Cendre       #3A3A3A
+   - Jaune vif    #FFD700
+   - Blanc cassé  #F5F5F5
+   - Vert olive   #6B8E23
+   - Bleu data    #2E86C1
+========================================================= */
+
+@theme inline {
+  /* Polices : variables posées par next/font (voir section 9 de la charte) */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-space-grotesk), "Inter", sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+
+  /* Rayons (base 12px) */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+
+  /* Couleurs de marque -> classes utilitaires bg-charbon, text-jaune, etc. */
+  --color-charbon: var(--charbon);
+  --color-cendre: var(--cendre);
+  --color-jaune: var(--jaune);
+  --color-blanc: var(--blanc);
+  --color-olive: var(--olive);
+  --color-bleu: var(--bleu);
+
+  /* Alias sémantiques shadcn/ui */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+:root {
+  --radius: 0.75rem;
+
+  --charbon: #1a1a1a;
+  --cendre: #3a3a3a;
+  --jaune: #ffd700;
+  --blanc: #f5f5f5;
+  --olive: #6b8e23;
+  --bleu: #2e86c1;
+
+  --background: #f5f5f5;
+  --foreground: #1a1a1a;
+  --card: #ffffff;
+  --card-foreground: #1a1a1a;
+  --popover: #ffffff;
+  --popover-foreground: #1a1a1a;
+  --primary: #ffd700;
+  --primary-foreground: #1a1a1a;
+  --secondary: #1a1a1a;
+  --secondary-foreground: #f5f5f5;
+  --muted: #ececec;
+  --muted-foreground: #3a3a3a;
+  --accent: #6b8e23;
+  --accent-foreground: #f5f5f5;
+  --destructive: #b23a48;
+  --destructive-foreground: #f5f5f5;
+  --border: rgba(26, 26, 26, 0.1);
+  --input: rgba(26, 26, 26, 0.14);
+  --ring: #ffd700;
+
+  --gradient-yolk: linear-gradient(135deg, #ffd700 0%, #ffb800 100%);
+  --gradient-ink: linear-gradient(180deg, #1a1a1a 0%, #0a0a0a 100%);
+  --shadow-yolk: 0 20px 60px -20px rgba(255, 215, 0, 0.45);
+  --shadow-elev: 0 24px 60px -30px rgba(26, 26, 26, 0.35);
+}
+
+.dark {
+  --background: #0f0f0f;
+  --foreground: #f5f5f5;
+  --card: #1a1a1a;
+  --card-foreground: #f5f5f5;
+  --popover: #1a1a1a;
+  --popover-foreground: #f5f5f5;
+  --primary: #ffd700;
+  --primary-foreground: #1a1a1a;
+  --secondary: #2a2a2a;
+  --secondary-foreground: #f5f5f5;
+  --muted: #2a2a2a;
+  --muted-foreground: #a8a8a8;
+  --accent: #6b8e23;
+  --accent-foreground: #f5f5f5;
+  --border: rgba(245, 245, 245, 0.1);
+  --input: rgba(245, 245, 245, 0.14);
 }
 
 @layer base {
   * {
-    @apply border-border;
+    border-color: var(--color-border);
+  }
+  html {
+    scroll-behavior: smooth;
   }
   body {
-    @apply bg-background text-foreground;
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    font-feature-settings: "ss01", "cv11";
+    -webkit-font-smoothing: antialiased;
   }
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+    font-weight: 600;
+  }
+  code,
+  pre,
+  .mono {
+    font-family: var(--font-mono);
+  }
+  ::selection {
+    background: var(--jaune);
+    color: var(--charbon);
+  }
+}
+
+@utility yolk-stripe {
+  background-image: repeating-linear-gradient(135deg, var(--jaune) 0 10px, transparent 10px 20px);
+}
+
+@utility grid-bg {
+  background-image:
+    linear-gradient(rgba(245, 245, 245, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(245, 245, 245, 0.06) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+@utility text-balance {
+  text-wrap: balance;
+}
+
+/* Coloration syntaxique des blocs de code (highlight.js, branché via
+   rehype-highlight dans le rendu markdown du chat). Palette inspirée de
+   One Dark, adaptée au fond charbon des bulles agent ; les noms de classes
+   et types reprennent le jaune de marque. Ces valeurs vivent ici, dans la
+   feuille de tokens — jamais en dur dans les composants (charte §8). */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-doctag {
+  color: #c678dd;
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-addition {
+  color: #98c379;
+}
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-meta,
+.hljs-link {
+  color: #d19a66;
+}
+.hljs-title,
+.hljs-title.function_,
+.hljs-section {
+  color: #61afef;
+}
+.hljs-title.class_,
+.hljs-type,
+.hljs-built_in,
+.hljs-selector-class,
+.hljs-selector-id,
+.hljs-selector-attr {
+  color: var(--jaune);
+}
+.hljs-attr,
+.hljs-attribute,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-property,
+.hljs-name {
+  color: #e06c75;
+}
+.hljs-comment,
+.hljs-quote {
+  color: #8b9199;
+  font-style: italic;
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: 600;
+}
+.hljs-deletion {
+  color: #e06c75;
 }

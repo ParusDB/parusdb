@@ -33,26 +33,50 @@ confirm
 
 echo "===> Stopping and removing all containers..."
 
-if [ -f ".env" ]; then
-    docker compose -f docker-compose.yml -f ./dev/docker-compose.dev.yml down -v --remove-orphans
-elif [ -f ".env.example" ]; then
-    echo "No .env found, using .env.example for docker compose down..."
-    docker compose --env-file .env.example -f docker-compose.yml -f ./dev/docker-compose.dev.yml down -v --remove-orphans
+# A `docker compose down` needs no real environment values: only the
+# `${VAR:?...}` interpolations have to resolve. An unreadable `.env` (created
+# by root through a sudo run) must not block the teardown, so dummy values
+# are provided for every variable referenced by the compose files and a
+# readable env file is forced.
+if [ -r ".env" ]; then
+    env_file=".env"
+elif [ -r ".env.example" ]; then
+    env_file=".env.example"
 else
-    echo "Skipping 'docker compose down' because there's no env-file."
+    env_file="/dev/null"
 fi
+compose_vars=""
+for var in $(grep -ohE '\$\{[A-Za-z_][A-Za-z0-9_]*' docker-compose.yml ./dev/docker-compose.dev.yml \
+    | sed 's/^\${//' | sort -u); do
+    compose_vars="$compose_vars $var=1"
+done
+# shellcheck disable=SC2086
+env $compose_vars docker compose --env-file "$env_file" \
+    -f docker-compose.yml -f ./dev/docker-compose.dev.yml down -v --remove-orphans
 
 echo "===> Cleaning up bind-mounted directories..."
-BIND_MOUNTS="./volumes/db/data ./volumes/storage"
-
-for dir in $BIND_MOUNTS; do
+# Fichiers écrits par les conteneurs (propriétaire root) : suppression via un
+# conteneur éphémère busybox (Docker tourne en root), sans sudo. Repli sur
+# rm -rf si Docker échoue (fichiers appartenant à l'utilisateur).
+remove_bind_mount() {
+    dir="$1"
     if [ -d "$dir" ]; then
         echo "Removing $dir..."
         confirm
-        rm -rf "$dir"
+        parent=$(cd "$(dirname "$dir")" && pwd)
+        base=$(basename "$dir")
+        if ! docker run --rm -v "$parent:/v" busybox rm -rf "/v/$base" 2>/dev/null; then
+            rm -rf "$dir"
+        fi
     else
         echo "$dir not found."
     fi
+}
+
+BIND_MOUNTS="./volumes/db/data ./volumes/storage"
+
+for dir in $BIND_MOUNTS; do
+    remove_bind_mount "$dir"
 done
 
 echo "===> Resetting .env file (will save backup to .env.old)..."

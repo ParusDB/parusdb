@@ -1,0 +1,41 @@
+name: Signaler un bug
+about: Un comportement incorrect ou inattendu
+title: "[bug] "
+labels: bug
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Décrivez le bug, de façon factuelle : ce qui se passe vs ce qui devrait se passer.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Étapes de reproduction
+      placeholder: |
+        1. Aller sur…
+        2. Cliquer sur…
+        3. Observer…
+    validations:
+      required: true
+  - type: textarea
+    id: attendu
+    attributes:
+      label: Comportement attendu
+    validations:
+      required: true
+  - type: textarea
+    id: environnement
+    attributes:
+      label: Environnement
+      description: Version de ParusDB (tag ou commit), OS, navigateur, stack déployée (setup.sh, brique concernée).
+      placeholder: "Ex. : v1.0.0, Ubuntu 24.04, Chrome, stack complète via setup.sh"
+    validations:
+      required: true
+  - type: textarea
+    id: contexte
+    attributes:
+      label: Contexte additionnel
+      description: Captures, logs (sans secrets ni données personnelles), configuration.

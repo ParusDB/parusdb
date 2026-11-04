@@ -1,418 +1,280 @@
-# Next.js + Supabase Starter Template
-
-[![Next.js](https://img.shields.io/badge/Next.js-16+-000000?logo=nextdotjs)](https://nextjs.org)
-[![Supabase](https://img.shields.io/badge/Supabase-3.0+-3ECF8E?logo=supabase)](https://supabase.com)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6?logo=typescript)](https://www.typescriptlang.org)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4+-06B6D4?logo=tailwindcss)](https://tailwindcss.com)
-[![shadcn/ui](https://img.shields.io/badge/shadcn/ui-0.4+-000000?logo=github)](https://ui.shadcn.com)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
-**Template de demarrage ultra-rapide pour creer des applications web full-stack avec Next.js et Supabase.**
-
-Ce depot fournit une **base reproductible et prete a l'emploi** pour lancer de nouveaux projets web modernes. Il combine une stack full-stack prete a deployer avec les meilleures pratiques Supabase et Next.js.
-
----
-
-## Pourquoi ce template ?
-
-| Avantages | Description |
-|--|--|
-| :zap: Pret en 5 minutes | Clonez, configurez, codez |
-| :dart: Deux modes possibles | Supabase Cloud OU auto-heberge avec Docker |
-| :lock: Authentification incluse | Cookie-based auth avec @supabase/ssr |
-| :art: UI moderne | Tailwind CSS + shadcn/ui |
-| :package: Full-stack | PostgreSQL, Auth, Storage, Realtime |
-| :rocket: Production ready | Deployable sur Vercel, Netlify, etc. |
-
----
-
-## :file_folder: Structure du projet
-
-```
-sandbox/
-├── apps/
-│   ├── nextjs/                 # Votre application Next.js
-│   │   ├── app/                # Pages et routes (App Router)
-│   │   │   ├── auth/           # Pages d'authentification
-│   │   │   ├── protected/      # Pages protegees (require auth)
-│   │   │   ├── layout.tsx      # Layout principal
-│   │   │   └── page.tsx        # Page d'accueil
-│   │   ├── components/         # Composants React (shadcn/ui)
-│   │   ├── lib/                # Configuration Supabase
-│   │   │   ├── server.ts       # Client Supabase (server-side)
-│   │   │   └── client.ts       # Client Supabase (client-side)
-│   │   ├── proxy.ts            # Middleware pour Supabase
-│   │   ├── .env.example        # Exemple de variables d'environnement
-│   │   └── package.json        # Dependances
-│   │
-│   └── supabase/               # Configuration Supabase auto-heberge
-│       ├── docker-compose.yml # Orchestration Docker
-│       ├── .env.example        # Configuration par defaut
-│       ├── utils/              # Scripts utilitaires
-│       │   ├── generate-keys.sh      # Genere des cles securisees
-│       │   └── add-new-auth-keys.sh   # Ajout des nouvelles cles d'auth
-│       └── volumes/            # Donnees persistantes
-└── docs/
-    └── getting-started/        # Documentation locale
-        ├── Self_Hosting_with_Docker.md
-        └── Use_Supabase_with_Nextjs.md
-```
-
----
-
-## :rocket: Demarrage rapide
-
-### Option 1: Supabase Cloud (Recommande pour commencer)
-
-La maniere la plus simple pour demarrer.
-
-```bash
-# 1. Aller dans l'application Next.js
-cd apps/nextjs/
-
-# 2. Copier le fichier d'exemple
-cp .env.example .env.local
-
-# 3. Editer .env.local avec vos identifiants Supabase
-```
-
-Editez le fichier avec vos valeurs (disponibles dans Settings > API de votre projet Supabase) :
-```env
-NEXT_PUBLIC_SUPABASE_URL=https://votre-projet.supabase.co
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sbp_XXX_votre_cle_publique_XXX
-```
-
-```bash
-# 4. Installer les dependances et demarrer
-npm install
-npm run dev
-```
-
-Votre application sera disponible sur **[http://localhost:3000](http://localhost:3000)**
-
----
-
-### Option 2: Supabase Auto-heberge (Full local)
-
-Pour un developpement **100% local** sans dependance externe.
-
-```bash
-# 1. Demarrer Supabase avec Docker
-cd apps/supabase
-
-# 2. Copier la configuration
-cp .env.example .env
-
-# 3. Generer des cles securisees (OBLIGATOIRE !)
-sh utils/generate-keys.sh
-sh utils/add-new-auth-keys.sh
-
-# 4. Demarrer tous les services
-docker compose pull
-docker compose up -d
-```
-
-Attendez que tous les services soient `Up (healthy)` :
-```bash
-docker compose ps
-```
-
-```bash
-# 5. Configurer l'application Next.js
-cd ../nextjs/
-
-# Recuperer l'URL et la cle publique depuis Studio (http://localhost:8000)
-# Identifiants : DASHBOARD_USERNAME / DASHBOARD_PASSWORD (dans .env)
-
-# Creer .env.local
-echo "NEXT_PUBLIC_SUPABASE_URL=http://localhost:8000" > .env.local
-echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$(grep SUPABASE_PUBLISHABLE_KEY ../supabase/.env | cut -d'=' -f2)" >> .env.local
-
-# 6. Demarrer l'application
-npm install
-npm run dev
-```
-
-Votre application Next.js communiquera avec votre instance Supabase locale !
-
----
-
-## :clipboard: Prerequis
-
-### Option 1 (Supabase Cloud)
-- Node.js 18+ 
-- npm, yarn ou pnpm
-- Un [projet Supabase](https://database.new) (gratuit)
-
-### Option 2 (Auto-heberge)
-| Ressource | Minimum | Recommande |
-|----------|---------|-------------|
-| RAM | 4 GB | 8 GB+ |
-| CPU | 2 coeurs | 4 coeurs+ |
-| Disk | 50 GB SSD | 80 GB+ SSD |
-| OS | Linux/macOS/Windows | Linux (recommande) |
-
-- Docker et Docker Compose
-- Git
-
----
-
-## :toolbox: Fonctionnalites incluses
-
-### Next.js 14
-- :zap: **App Router** - Routing moderne avec React Server Components
-- :lock: **Auth Cookie-based** - Gestion des sessions avec @supabase/ssr
-- :art: **Tailwind CSS** - Styling utilitaire-first
-- :jigsaw: **shadcn/ui** - Composants accessibles et personnalisables
-- :package: **Server Actions** - Mutations cote serveur
-- :globe_with_meridians: **Middleware** - Protection des routes
-- :sparkles: **TypeScript** - Typage fort partout
-
-### Supabase
-- :card_file_box: **PostgreSQL** - Base de donnees relationnelle avec RLS
-- :key: **Auth** - Authentification (email/password, OAuth, magic links)
-- :file_folder: **Storage** - Stockage de fichiers S3-compatible
-- :envelope: **Realtime** - Subscriptions temps reel via WebSockets
-- :wrench: **PostgREST** - API REST auto-generee partir de PostgreSQL
-- :bullseye: **Edge Functions** - Executer du code serverless
-
-### Auto-hebergement (Docker)
-- :whale: **Docker Compose** - Orchestration de tous les services
-- :bar_chart: **Studio Dashboard** - Interface d'administration
-- :closed_lock_with_key: **Configuration securisee** - Generation automatique des secrets
-- :scroll: **Scripts utilitaires** - Maintenance et mise a jour
-
----
-
-## :books: Documentation
-
-Ce template suit les **documentations officielles** Supabase :
-
-| Resource | Lien |
-|----------|------|
-| Self-Hosting with Docker | [supabase.com/docs/guides/self-hosting/docker](https://supabase.com/docs/guides/self-hosting/docker) |
-| Next.js Quickstart | [supabase.com/docs/guides/getting-started/quickstarts/nextjs](https://supabase.com/docs/guides/getting-started/quickstarts/nextjs) |
-| Auth with Next.js | [supabase.com/docs/guides/auth/server-side/nextjs](https://supabase.com/docs/guides/auth/server-side/nextjs) |
-
-**Copies locales disponibles** dans `docs/getting-started/` :
-- `Self_Hosting_with_Docker.md`
-- `Use_Supabase_with_Nextjs.md`
-
----
-
-## :dart: Cas d'utilisation
-
-### 1. Creer une nouvelle application
-
-```bash
-# Cloner ce template pour un nouveau projet
-git clone <ce-depot> mon-nouveau-projet
-cd mon-nouveau-projet
-
-# Supprimer l'historique git pour repartir de zero
-rm -rf .git
-
-# Initialiser un nouveau depot git
-git init
-git add .
-git commit -m "Initial commit: Next.js + Supabase starter"
-
-# Suivre les etapes de demarrage ci-dessus
-```
-
-### 2. Developper localement avec Supabase Cloud
-
-La configuration par defaut fonctionne parfaitement avec **Supabase Cloud** :
-1. Creez un projet sur [supabase.com/database/new](https://database.new)
-2. Recuperez l'URL et la cle dans `Settings > API`
-3. Configurez `.env.local`
-4. Codez !
-
-### 3. Developper 100% localement
-
-Pour un environnement de developpement **isole** :
-1. Demarrez Supabase avec `docker compose up -d`
-2. Configurez Next.js pour pointer vers `http://localhost:8000`
-3. Tout fonctionne en local sans dependance externe !
-
-### 4. Ajouter des fonctionnalites
-
-Exemples :
-- **Nouveaux providers OAuth** (Google, GitHub, etc.) dans `apps/supabase/docker-compose.yml`
-- **Edge Functions** dans `apps/supabase/volumes/functions/`
-- **Nouvelles tables** via SQL Editor ou migrations
-- **Row Level Security** pour protege vos donnees
-
----
-
-## :gear: Configuration
-
-### Variables d'environnement (Next.js)
-
-| Variable | Description | Exemple | Obligatoire |
-|----------|-------------|---------|-------------|
-| `NEXT_PUBLIC_SUPABASE_URL` | URL de votre projet Supabase | `https://xxx.supabase.co` | :white_check_mark: |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Cle publique (client-side) | `sbp_XXX` | :white_check_mark: |
-
-### Variables d'environnement (Supabase - Auto-heberge)
-
-Fichier : `apps/supabase/.env`
-
-| Variable | Description | Exemple | Obligatoire |
-|----------|-------------|---------|-------------|
-| `SUPABASE_PUBLIC_URL` | URL base pour Supabase | `http://localhost:8000` | :white_check_mark: |
-| `API_EXTERNAL_URL` | URL pour les callbacks Auth | `http://localhost:8000` | :white_check_mark: |
-| `SITE_URL` | URL de redirection par defaut | `http://localhost:3000` | :white_check_mark: |
-| `POSTGRES_PASSWORD` | Mot de passe PostgreSQL | `(genere automatiquement)` | :white_check_mark: |
-| `SUPABASE_PUBLISHABLE_KEY` | Cle publique | `(generee automatiquement)` | :white_check_mark: |
-| `SUPABASE_SECRET_KEY` | Cle secrte (server-side) | `(generee automatiquement)` | :white_check_mark: |
-| `DASHBOARD_PASSWORD` | Mot de passe Studio | `mon-mot-de-passe` | :white_check_mark: |
-| `DASHBOARD_USERNAME` | Nom d'utilisateur Studio | `admin` | :x: |
-
-> :warning: **IMPORTANT** : Executez `sh utils/generate-keys.sh` et `sh utils/add-new-auth-keys.sh` avant de demarrer !
-
----
-
-## :rocket: Deployment
-
-### Application Next.js
-
-#### Vercel (Recommande)
-
-```bash
-# Dans apps/nextjs/
-vercel
-```
-
-Vercel detectera automatiquement l'integration Supabase.
-
-Pour forcer l'installation :
-```bash
-vercel --integration supabase
-```
-
-#### Autres plateformes
-- **Netlify** - Serverless Functions
-- **AWS Amplify** - Support Next.js
-- **Railway** - Deployment facile
-- **Render** - Applications full-stack
-
-### Supabase Auto-heberge (Production)
-
-1. **Choisir un VPS**
-   - DigitalOcean Droplet
-   - AWS EC2 (t3.medium minimum)
-   - Hetzner Cloud
-   - OVH
-
-2. **Installer les prequis**
-   ```bash
-   # Ubuntu/Debian
-   sudo apt update
-   sudo apt install -y docker.io docker-compose git
-   ```
-
-3. **Deployer Supabase**
-   ```bash
-   git clone <ce-depot>
-   cd sandbox/apps/supabase
-   
-   sh utils/generate-keys.sh
-   sh utils/add-new-auth-keys.sh
-   
-   # Configurer l'URL publique dans .env
-   # SUPABASE_PUBLIC_URL=https://votre-domaine.com
-   
-   docker compose pull
-   docker compose up -d
-   ```
-
-4. **Configurer HTTPS**
-   - **Caddy** (recommande) : `docker-compose.caddy.yml`
-   - **Nginx** : `docker-compose.nginx.yml`
-   - **Envoy** : `docker-compose.envoy.yml`
-
-5. **Configurer les backups**
-   ```bash
-   # Backup de la base de donnees
-   docker exec supabase-db pg_dump -U postgres -d postgres > backup.sql
-   
-   # Backup des volumes
-   docker run --rm --volumes-from supabase-db -v $(pwd):/backup alpine \
-     tar cvf /backup/db-backup.tar /var/lib/postgresql/data
-   ```
-
----
-
-## :bulb: Bonnes pratiques
-
-### Developpement
-- :white_check_mark: Utilisez des **branches** pour chaque fonctionnalite
-- :white_check_mark: Configurez **ESLint** (`npm run lint`)
-- :white_check_mark: Utilisez **TypeScript** partout
-- :white_check_mark: Activez **RLS** sur toutes les tables
-
-### Production
-- :white_check_mark: Utilisez un **gestionnaire de secrets** (Doppler, Infisical, AWS Secrets Manager)
-- :white_check_mark: **HTTPS obligatoire** pour OAuth
-- :white_check_mark: Configurez des **backups automatiques**
-- :white_check_mark: **Monitoring** avec Vector + Logflare
-- :white_check_mark: Suivez le [CHANGELOG](apps/supabase/CHANGELOG.md)
-
-### Securite
-- :x: Ne commitez **JAMAIS** `.env` ou `.env.local`
-- :x: Ne partagez **JAMAIS** `SUPABASE_SECRET_KEY`
-- :x: Utilisez **toujours** HTTPS en production
-- :x: Activez **toujours** RLS sur les tables sensibles
-
----
-
-## :telephone: Support et Ressources
-
-### Documentation
-- [Supabase Docs](https://supabase.com/docs)
-- [Next.js Docs](https://nextjs.org/docs)
-- [shadcn/ui Docs](https://ui.shadcn.com/docs)
-- [Tailwind CSS](https://tailwindcss.com/docs)
-
-### Communaute
-- [Supabase Discord](https://discord.supabase.com)
-- [Supabase GitHub](https://github.com/supabase/supabase)
-- [Next.js Discord](https://nextjs.org/discord)
-- [Stack Overflow](https://stackoverflow.com/questions/tagged/supabase)
-
-### Tutoriels
-- [Cookie-based Auth with Next.js 13+](https://youtube.com/playlist?list=PL5S4mPUpp4OtMhpnp93EFSo42iQ40XjbF)
-- [Supabase Examples](https://github.com/supabase/supabase/tree/master/examples)
-
----
-
-## :handshake: Contribution
-
-1. Forker le depot
-2. Cree une branche (`git checkout -b feature/amazing-feature`)
-3. Commitez vos changements (`git commit -m 'Add amazing feature'`)
-4. Poussez vers la branche (`git push origin feature/amazing-feature`)
-5. Ouvrez une Pull Request
-
----
-
-## :scroll: License
-
-**MIT License** - libre d'utiliser, modifier et distribuer.
-
-Voir [LICENSE](LICENSE) pour plus de details.
-
----
-
-## :memo: Changelog
-
-| Date | Version | Description |
-|------|---------|-------------|
-| 2025-05-XX | 1.0.0 | Version initiale - Next.js 14 + Supabase Starter |
-
----
+<p align="center">
+  <img src="docs/functional/parusdb-logo.jpg" alt="Logo ParusDB" width="500">
+</p>
 
 <p align="center">
-  Made with :heart: using Next.js and Supabase
+  <em>La plateforme Data Analytique IAgentique Open Source — « Vos données, enfin parlantes. »</em>
 </p>
+
+[![Licence](https://img.shields.io/badge/licence-Apache%202.0-1A1A1A)](#licence)
+[![Version](https://img.shields.io/badge/version-v1.0.0-FFD700)](https://github.com/ParusDB/parusdb/releases)
+[![Langue](https://img.shields.io/badge/langue-Fran%C3%A7ais-6B8E23)](https://parusdb.com/)
+
+**ParusDB** unifie **ELT**, **Data Lakehouse** et **agents IA** dans une plateforme open
+source et souveraine. Déployez-la vous-même, contribuez, ou utilisez-la gratuitement.
+
+Assembler une Modern Data Stack, c'est long, cher, fragile. ParusDB supprime ces barrières :
+une plateforme **unifiée** où chaque équipe interroge ses données **en langage naturel** via des
+agents IA, où le déploiement se fait **en minutes, pas en mois**, et où vos données ne quittent
+**jamais** votre infrastructure.
+
+- **100 % Open Source** sous licence **Apache 2.0** : forkez, contribuez, déployez où
+  vous voulez.
+- **Auto-hébergement** par défaut : votre serveur, votre cloud, votre local — aucun vendor
+  lock-in.
+- **Souveraineté totale** : chiffrement au repos et en transit, conforme RGPD, BYO tout
+  (S3, LLM, infrastructure).
+- **Libre d'utilisation** : aucune redevance, aucune limite. Juste du code, des
+  conteneurs, et la liberté de déployer où vous voulez.
+
+## Une plateforme, cinq briques
+
+| Brique | Ce que ça fait |
+|---|---|
+| **Chat IA** | Interrogation en langage naturel : l'agent choisit le catalogue, écrit le SQL, restitue des chiffres, tableaux et graphiques sourcés — visualisés et exportables. |
+| **Agents IA personnalisables** | Pré-instructions, sources associées, LLM au choix par agent : modèles open source exécutés en local (Mistral, Qwen…) ou propriétaires via clé API. Un agent par usage : ventes, support, finance. |
+| **Data Lakehouse intégré** | Object Storage S3 (RustFS) + catalogue Iceberg (Apache Polaris) + moteur SQL (Trino). La puissance d'une stack moderne, sans l'assembler. |
+| **40+ connecteurs ELT** | Snowflake, PostgreSQL, Salesforce, HubSpot, Notion, Stripe, Shopify, S3… Ingestion incrémentale, ordonnancement CRON, glisser-déposer. Extensibles par la communauté. |
+| **RBAC & gouvernance** | Modèle à grants calqué sur Apache Polaris : rôles multiples, rôle actif, droits Lecture/Écriture/Gestion par catalogue, agent et pipeline. Comptes applicatifs dédiés pour les outils data (dbt, Power BI, Airbyte…) — jamais le compte root. |
+
+Brique transversale : le tout est **open source, auditable et transparent** (licence
+Apache 2.0).
+
+## Stack technique
+
+| Couche | Technologie | Rôle |
+|---|---|---|
+| **Frontend** | Next.js (App Router) · TypeScript · Tailwind CSS · shadcn/ui | Interface réactive, typage de bout en bout |
+| **Backend** | Supabase (PostgreSQL), self-hosted | Auth, utilisateurs, RBAC, données transactionnelles |
+| **Data Lakehouse** | RustFS S3 (Supabase) · Apache Polaris · Trino | Stockage objet, catalogue Iceberg, requêtage SQL fédéré |
+| **Chat IA** | Ollama · mcp-trino (Model Context Protocol) | LLM en local, interrogation Trino via MCP |
+| **ELT** | dlt (data load tool) | Pipelines d'ingestion génériques et variabilisés |
+| **Temps réel** | Supabase Realtime | Streaming des conversations chat |
+
+## Architecture
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                      Sources de données                      │
+│     PostgreSQL · Salesforce · Stripe · S3 · fichiers · …     │
+└──────────────────────────────┬───────────────────────────────┘
+                               │ ELT — dlt (incrémental, CRON)
+                               ▼
+┌──────────────────────────────────────────────────────────────┐
+│                        Data Lakehouse                        │
+│    RustFS S3 (stockage objet) · Apache Polaris (catalogue    │
+│             Iceberg) · Trino (moteur SQL fédéré)             │
+└──────────────▲──────────────────────────────▲────────────────┘
+               │ SQL                          │ SQL via mcp-trino
+               │                              │
+┌──────────────┴─────────────┐    ┌───────────┴────────────────┐
+│     Interface Next.js      │    │         Agents IA          │
+│  éditeur SQL · chat        │◄──►│  Ollama (local) ou LLM     │
+│  connecteurs · admin       │    │  propriétaires via clé API │
+└─────────┬─────────────────┘    └───────────────────────────┘
+          │
+          ▼
+┌──────────────────────────────────────────────────────────────┐
+│             Supabase — PostgreSQL (self-hosted)              │
+│         Auth · RBAC · rôles actifs · config agents,          │
+│                pipelines, serveurs (S3, LLM)                 │
+└──────────────────────────────────────────────────────────────┘
+```
+
+## Démarrage rapide
+
+**Prérequis** : Git, Node.js LTS + npm, Docker avec le plugin Compose.
+
+> Le plus simple : `sh setup.sh` à la racine orchestre toute l'installation
+> (ordre des dépendances, SQL applicatif, synchronisation du frontend, test
+> dlt). Le pas-à-pas ci-dessous détaille chaque brique pour comprendre la
+> mécanique.
+
+### 1. Stack Supabase (self-hosted)
+
+```bash
+cd apps/supabase
+cp .env.example .env
+sh utils/generate-keys.sh --update-env        # mots de passe + clés API
+sh utils/add-new-auth-keys.sh --update-env    # clés publishable/secret
+sh run.sh config add rustfs                   # backend S3 (RustFS) du storage
+sh run.sh config add rustfs-restart            # override ParusDB : RustFS redémarre après un reboot
+sh run.sh start                               # docker compose up -d --wait
+```
+
+Les URLs et ports des services (Studio, API, Auth…) sont définis dans
+`apps/supabase/.env`. Guide complet : [`apps/supabase/README.md`](apps/supabase/README.md)
+et la [documentation self-hosting Supabase](https://supabase.com/docs/guides/self-hosting/docker).
+
+> L'override `docker-compose.rustfs-restart.yml` (fichier ParusDB) est indispensable :
+> le service `rustfs` du vendor n'a pas de politique de redémarrage, et sans lui tout le
+> lakehouse — ainsi que le storage Supabase — reste silencieusement cassé après un reboot
+> de la machine. À enregistrer sur chaque installation via `sh run.sh config add rustfs-restart`.
+
+### 2. Data Lakehouse (Apache Polaris + Trino)
+
+```bash
+cd apps/polaris
+sh setup.sh        # base `polaris` dans le Postgres Supabase, bucket RustFS, stack, catalogues `parusdb` (système) + `dev`
+cd ../trino
+sh setup.sh        # bindings Trino (Iceberg REST), durcissement (HTTPS 8453 + comptes de service), test de bout en bout
+```
+
+Polaris persiste ses métadonnées dans le **Postgres de la stack Supabase** (base dédiée
+`polaris`) et stocke les fichiers Iceberg dans son **RustFS** — aucun service de données
+supplémentaire n'est démarré. Trino est durci : HTTPS avec certificat autosigné +
+authentification par mot de passe, règles d'access control générées depuis les droits RBAC.
+Détails et pièges d'intégration :
+[`apps/polaris/README.md`](apps/polaris/README.md) ·
+[`apps/trino/README.md`](apps/trino/README.md).
+
+### 3. Frontend Next.js
+
+```bash
+cd apps/nextjs
+npm install
+cp .env.example .env.local
+# Renseigner NEXT_PUBLIC_SUPABASE_URL et NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+npm run dev   # http://localhost:3000
+```
+
+La clé publishable est générée à l'étape précédente (`SUPABASE_PUBLISHABLE_KEY` dans
+`apps/supabase/.env`).
+
+### 4. Moteur ELT (dlt) — optionnel, pour le menu « Connecteurs »
+
+```bash
+cd apps/dlt
+sh setup.sh       # rôle parus_dlt, image du runner (45 sources), ordonnanceur
+sh run.sh verify  # runner + Postgres applicatif + catalogue Polaris
+```
+
+Prérequis : stacks Supabase et Polaris démarrées. Un **conteneur jetable par
+exécution** charge les sources (SQL, REST, object store, 29 sources verified)
+vers le lakehouse en table format Iceberg ; CRON inclus. Pour une validation
+rapide avec une source PostgreSQL bidon :
+`docker compose -f demo/docker-compose.yml up -d --wait` puis créez un
+pipeline de type PostgreSQL dans l'interface. Détails :
+[`apps/dlt/README.md`](apps/dlt/README.md).
+
+> **Parcours recommandé** : `sh setup.sh` à la racine orchestre toute
+> l'installation (ordre des dépendances, SQL applicatif, synchronisation du
+> frontend, vérification dlt) — l'instance est prête en quelques minutes. Au
+> premier lancement, l'interface guide la création du compte **Administrateur**
+> (onboarding), aucune commande supplémentaire. Les briques optionnelles
+> (Ollama pour le chat en local, dlt pour les connecteurs) se posent ensuite
+> selon vos besoins.
+
+## État du projet
+
+La version **1.0.0** est publiée : toutes les briques produit sont fonctionnelles.
+
+- [x] **Socle** — Next.js (App Router) + Supabase self-hosted, auth fonctionnelle
+- [x] **Data Lakehouse** — catalogues, schémas, explorateur, éditeur SQL
+- [x] **Chat IA** — agents, Ollama, mcp-trino, conversations, streaming
+- [x] **Interface frontend** — menus, RBAC, administration
+- [x] **RBAC à grants & durcissement** — rôles multiples + rôle actif, comptes
+      applicatifs pour les outils data, Trino HTTPS + authentification + access
+      control générés depuis les droits
+- [x] **Flux ELT** — dlt, 40+ connecteurs, pipelines, CRON
+
+## Structure du dépôt
+
+```
+parusdb/
+├── AGENTS.md             # Règles de développement pour agents IA et contributeurs
+├── README.md             # Ce fichier
+├── setup.sh              # Première installation : orchestre les apps dans l'ordre des dépendances
+├── run.sh                # Cycle de vie de toute la stack : start/stop/restart/status/logs
+├── reset.sh              # Désinstallation complète (destructif)
+├── CONTRIBUTING.md       # Guide de contribution
+├── SECURITY.md           # Politique de sécurité (divulgation responsable)
+├── CODE_OF_CONDUCT.md    # Code de conduite
+├── CHANGELOG.md          # Journal des versions
+├── docs/functional/      # Fiche produit, spécifications fonctionnelles, charte graphique, logo
+├── docs/technical/       # Documentation technique (CI, pipeline d'intégration)
+├── .agents/skills/       # Skills Supabase officiels (guides de contribution assistée par IA)
+├── .github/              # CI (lint, typecheck, build), scan de secrets, templates d'issues/PR
+├── apps/nextjs/          # Application Next.js 16 (App Router) — frontend + BFF
+├── apps/dlt/             # dlt — moteur ELT (pipelines → lakehouse, conteneur jetable par run)
+├── apps/mcp-trino/       # mcp-trino — serveur MCP exposant Trino aux LLM (lecture seule)
+├── apps/ollama/          # Ollama — serveur d'inférence LLM local (GPU)
+├── apps/polaris/         # Apache Polaris — catalogue Iceberg (Postgres + RustFS Supabase)
+├── apps/supabase/        # Stack Supabase self-hosted (Docker Compose)
+└── apps/trino/           # Trino — moteur SQL du lakehouse (Iceberg REST → Polaris)
+```
+
+## Documentation
+
+- [Fiche produit](docs/functional/product_page.md) — pitch, positionnement, promesses
+- [Spécifications fonctionnelles](docs/functional/functional_specifications.md) — menus,
+  fonctionnalités, modèle de données, RBAC, parcours
+- [Charte graphique « Mésange Charbonnière »](docs/functional/brand_guidelines.md) — tokens,
+  typographie, composants, conformité
+- [`apps/nextjs/README.md`](apps/nextjs/README.md) · [`apps/supabase/README.md`](apps/supabase/README.md)
+  · [`apps/supabase/CONFIG.md`](apps/supabase/CONFIG.md) — guides techniques des apps
+- [`apps/polaris/README.md`](apps/polaris/README.md) · [`apps/trino/README.md`](apps/trino/README.md) —
+  guides et pièges d'intégration du Data Lakehouse
+- [`apps/dlt/README.md`](apps/dlt/README.md) — architecture, sources et modèle d'exécution
+  du moteur ELT (validation e2e incluse)
+- [`docs/technical/CI.md`](docs/technical/CI.md) — pipeline d'intégration : jobs, tests,
+  validation locale avant d'ouvrir une PR
+
+## Contribuer
+
+Tous les contributeurs sont bienvenus : le guide complet (prérequis, workflow,
+conventions, definition of done) vit dans
+[`CONTRIBUTING.md`](CONTRIBUTING.md). En résumé :
+
+1. Forkez puis clonez le dépôt.
+2. Créez votre branche : `feat/<brique>-<sujet>` (ex. `feat/lakehouse-explorateur`).
+3. Développez en suivant [`AGENTS.md`](AGENTS.md) — conventions de code, charte graphique,
+   definition of done. Les agents de développement IA doivent le lire en premier.
+4. Vérifiez `npm run lint`, `npm run typecheck` et `npm run build` dans
+   `apps/nextjs` (la CI les exécute sur chaque PR).
+5. Ouvrez une Pull Request décrivant le quoi et le pourquoi.
+
+Pour signaler une vulnérabilité de sécurité : voir [`SECURITY.md`](SECURITY.md)
+— jamais d'issue publique pour ce cas.
+
+Questions et discussions : [GitHub Discussions](https://github.com/ParusDB/parusdb/discussions).
+Bugs : [Issues](https://github.com/ParusDB/parusdb/issues).
+Journal des versions : [`CHANGELOG.md`](CHANGELOG.md).
+
+## Licence
+
+Code source publié sous licence **Apache 2.0** : utilisation, modification et
+déploiement libres — y compris à des fins commerciales — sous réserve des
+conditions usuelles de la licence (conservation des notices, mention des
+modifications, clause de non-contrefaçon de brevets).
+Texte intégral : [`LICENSE`](LICENSE). Mentions des composants tiers : [`NOTICE`](NOTICE).
+
+**Marque** : le nom « ParusDB » et son logo sont des marques déposées auprès de
+l'INPI. Ils ne sont pas soumis à la licence Apache 2.0 : le nom
+et le logo ne peuvent être réutilisés pour nommer un produit ou un service
+sans autorisation du mainteneur.
+
+## Liens
+
+- **Site** : <https://parusdb.com/>
+- **GitHub** : <https://github.com/ParusDB/parusdb>
+- **Documentation, guides** : en construction
+
+### Sites qui ont permis de développer ParusDB
+
+| Technologie | Site / Documentation |
+|---|---|
+| Next.js | <https://nextjs.org/> |
+| Tailwind CSS | <https://tailwindcss.com/> |
+| shadcn/ui | <https://ui.shadcn.com/> |
+| Supabase (self-hosting, Auth, Realtime) | <https://supabase.com/> · <https://supabase.com/docs/guides/self-hosting> |
+| PostgreSQL | <https://www.postgresql.org/> |
+| Apache Polaris | <https://polaris.apache.org/> |
+| Trino | <https://trino.io/> |
+| Apache Iceberg | <https://iceberg.apache.org/> |
+| RustFS | <https://rustfs.com/> |
+| dlt (data load tool) | <https://dlthub.com/> |
+| Ollama | <https://ollama.com/> |
+| Model Context Protocol (MCP) | <https://modelcontextprotocol.io/> |
+| mcp-trino (Tuan Nguyen) | <https://github.com/tuannvm/mcp-trino> |
+| Docker | <https://docs.docker.com/> |

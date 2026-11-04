@@ -1,0 +1,23 @@
+name: Proposer une fonctionnalité
+about: Une nouvelle brique, un connecteur, une amélioration
+title: "[feature] "
+labels: enhancement
+body:
+  - type: textarea
+    id: probleme
+    attributes:
+      label: Problème ou besoin
+      description: Quel problème cette fonctionnalité résout-elle ? Pour qui (métier, technique, admin) ?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Solution proposée
+      description: Décrivez le comportement souhaité. Référencez la section de la spec fonctionnelle si elle existe.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives envisagées

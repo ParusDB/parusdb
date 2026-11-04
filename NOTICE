@@ -1,0 +1,37 @@
+ParusDB
+Copyright 2025 The ParusDB Authors
+
+« The ParusDB Authors » désigne les détenteurs du copyright du présent
+dépôt : le mainteneur fondateur du projet (personne physique) ainsi que
+toute personne listée comme contributeur du copyright dans ce fichier.
+Toute contribution acceptée dans le dépôt est publiée sous licence
+Apache 2.0 par son auteur, qui concède ainsi les droits correspondants
+aux utilisateurs du projet. Aucun CLA n'est requis ; le projet n'exige
+qu'un travail original, soumis par son auteur ou sous licence compatible.
+
+This product includes software developed by third parties and distributed
+under their own licenses:
+
+- Supabase self-hosted stack (supabase/docker) — Apache License 2.0,
+  Copyright Supabase, Inc. (fichiers vendés dans apps/supabase :
+  docker-compose*.yml, tests/, utils, scripts d'exécution).
+- Supabase agent skills (dépôt supabase/agent-skills) — licence MIT,
+  Copyright Supabase, Inc. (vendés dans .agents/skills/ : guides
+  « supabase » et « supabase-postgres-best-practices »).
+- dlt (data load tool) et dlt verified sources (dlthub) — Apache License
+  2.0, Copyright dltHub. Les sources verified ne sont pas vendées dans le
+  dépôt : elles sont téléchargées à la construction de l'image
+  (commit épinglé, cf. apps/dlt/Dockerfile).
+
+- Polices Inter, Space Grotesk et JetBrains Mono (auto-hébergées dans
+  apps/nextjs/app/fonts/) — SIL Open Font License 1.1, Copyright The Inter
+  Project Authors / Florian Karsten / The JetBrains Mono Project Authors.
+
+This product also depends on, but does not redistribute the source of:
+Apache Polaris, Trino, RustFS, Ollama, mcp-trino — deployed as containers
+via docker-compose, each under its own license.
+
+Marque : « ParusDB » et son logo sont des marques déposées auprès de
+l'INPI. Ils ne sont pas soumis à la licence Apache 2.0 : le nom et le logo
+ne peuvent être réutilisés pour nommer un produit ou un service sans
+autorisation du mainteneur.

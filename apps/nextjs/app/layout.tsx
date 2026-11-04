@@ -1,23 +1,36 @@
 import type { Metadata } from "next";
-import { Geist } from "next/font/google";
+import localFont from "next/font/local";
 import { ThemeProvider } from "next-themes";
+import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
-const defaultUrl = process.env.VERCEL_URL
-  ? `https://${process.env.VERCEL_URL}`
-  : "http://localhost:3000";
+const inter = localFont({
+  src: "./fonts/inter-var.woff2",
+  weight: "100 900",
+  variable: "--font-inter",
+  display: "swap",
+});
+
+const spaceGrotesk = localFont({
+  src: "./fonts/space-grotesk-var.woff2",
+  weight: "300 700",
+  variable: "--font-space-grotesk",
+  display: "swap",
+});
+
+const jetbrainsMono = localFont({
+  src: "./fonts/jetbrains-mono-var.woff2",
+  weight: "100 800",
+  variable: "--font-jetbrains-mono",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
-  metadataBase: new URL(defaultUrl),
-  title: "Next.js and Supabase Starter Kit",
-  description: "The fastest way to build apps with Next.js and Supabase",
+  metadataBase: new URL("https://parusdb.com"),
+  title: "ParusDB - Plateforme Data Analytique IAgentique Open Source",
+  description:
+    "ParusDB unifie ELT, Data Lakehouse et agents IA dans une plateforme open source et souveraine. Licence Apache 2.0.",
 };
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  display: "swap",
-  subsets: ["latin"],
-});
 
 export default function RootLayout({
   children,
@@ -25,15 +38,20 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.className} antialiased`}>
+    <html
+      lang="fr"
+      suppressHydrationWarning
+      className={`${inter.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable}`}
+    >
+      <body className="bg-background font-sans text-foreground antialiased">
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
+          defaultTheme="light"
           enableSystem
           disableTransitionOnChange
         >
           {children}
+          <Toaster />
         </ThemeProvider>
       </body>
     </html>

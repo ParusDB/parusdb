@@ -1,0 +1,187 @@
+name: CI
+
+on:
+  push:
+    branches: [main, v1.0.0]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend (lint, typecheck, tests, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/nextjs
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/nextjs/package-lock.json
+
+      # Cache de build Turbopack : le warning « No build cache found »
+      # disparaît dès le 2e run ; la clé contient le hash du lockfile pour
+      # invalider le cache à chaque changement de dépendances.
+      - name: Cache du build next (.next/cache)
+        uses: actions/cache@v4
+        with:
+          path: apps/nextjs/.next/cache
+          key: nextcache-${{ runner.os }}-${{ hashFiles('apps/nextjs/package-lock.json') }}
+          restore-keys: nextcache-${{ runner.os }}-
+
+      - name: Installation des dépendances
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Tests unitaires (Vitest)
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  # Schéma applicatif + tests RLS sur un PostgreSQL « nu » (le shim Supabase
+  # recrée les objets auth.* requis, apps/supabase/sql/tests/ci-shim-supabase.sql).
+  # Vérifie : idempotence du DDL, RLS du RBAC grants (26 assertions du fichier
+  # de tests rejoué 2 fois, sortie vérifiée ligne à ligne par scripts/ci/ci-parse-rls.py),
+  # seed des catalogues, rôle parus_dlt.
+  sql:
+    name: SQL (schéma idempotent + tests RLS)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PGPASSWORD: ci
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Installation du client psql
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+
+      - name: Shim Supabase minimal (rôles, auth.users, auth.uid, publication)
+        run: |
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            < apps/supabase/sql/tests/ci-shim-supabase.sql
+
+      - name: Schéma applicatif - première application
+        run: |
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            < apps/supabase/sql/01-parusdb-app.sql
+
+      - name: Schéma applicatif - idempotence (seconde application)
+        run: |
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            < apps/supabase/sql/01-parusdb-app.sql
+
+      - name: Rôle parus_dlt (moindre privilège) + politiques RLS associées
+        run: |
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -v db_role=parus_dlt -v db_password=ci-placeholder \
+            < apps/dlt/sql/01-dlt-role.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            < apps/supabase/sql/01-parusdb-app.sql
+
+      - name: Seed des catalogues d'installation (idempotent)
+        run: |
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -v system_catalog=parusdb -v default_catalog=dev \
+            < apps/supabase/sql/02-lakehouse-catalogs.sql
+
+      - name: Compte administrateur de test (débloque les sections T7/T8)
+        run: |
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -c \
+            "insert into auth.users (id, aud, role, email, email_confirmed_at, raw_app_meta_data, raw_user_meta_data)
+             values ('00000000-0000-4000-8000-000000000099', 'authenticated', 'authenticated',
+                     'ci-admin@test.local', now(), '{}', '{}')"
+
+      - name: Tests RLS rejoués 2 fois (fixtures puisées puis nettoyées)
+        run: |
+          # Passe 1 : sortie lisible dans le journal de la CI (les REFUS
+          # ATTENDUS apparaissent en ERROR - c'est le comportement voulu).
+          psql -h localhost -U postgres -d postgres \
+            < apps/supabase/sql/tests/rls-rbac-test.sql | tee rls-1.log
+          # Passe 2 : sortie machine (un seul champ par ligne) revérifiée.
+          psql -X -A -t -q -h localhost -U postgres -d postgres \
+            < apps/supabase/sql/tests/rls-rbac-test.sql > rls-machine.txt
+
+      - name: Vérification des assertions RLS (attendu vs obtenu)
+        run: python3 scripts/ci/ci-parse-rls.py rls-machine.txt
+
+  # Analyse statique des scripts de cycle de vie (setup/run/reset) : premier
+  # contact des utilisateurs, régressions fréquentes (AGENTS.md §5).
+  shellcheck:
+    name: Scripts shell (shellcheck)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: "Shellcheck sur tous les scripts (seuil : warning)"
+        run: |
+          docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable \
+            --severity=warning $(ls *.sh apps/*/*.sh)
+
+  # Validation statique des configurations compose de toutes les apps avec
+  # des valeurs factices (le contenu des .env réels ne quitte jamais les
+  # machines) : attrape YAML cassé, variables d'interpolation manquantes,
+  # chemins env_file inexistants.
+  compose-config:
+    name: Compose (validation des configurations)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: docker compose config sur chaque app (env factices)
+        run: |
+          set -e
+          for app in supabase dlt mcp-trino ollama polaris trino; do
+            echo "== $app"
+            (cd "apps/$app" \
+              && cp .env.example .env \
+              && docker compose --env-file .env \
+                  --env-file ../../scripts/ci/compose-dummy.env config -q)
+            rm "apps/$app/.env"
+          done
+
+  # Tests unitaires du runner dlt (fonctions pures : construction d'URL SQL,
+  # registre des sources aligné sur le wizard, chiffrement compatible BFF).
+  runner:
+    name: Runner dlt (pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/dlt
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installation des dépendances de test
+        run: pip install "dlt[sql-database,sqlalchemy]==1.31.0" pytest cryptography
+
+      - name: Tests
+        run: python -m pytest -q tests
