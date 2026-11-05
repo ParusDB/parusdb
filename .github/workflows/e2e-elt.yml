@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: E2E ELT (scripts/ci/e2e-elt.sh)
         run: sh scripts/ci/e2e-elt.sh
