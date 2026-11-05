@@ -236,6 +236,14 @@ lockfiles à la main.
 
 ## 6. Règles transversales
 
+- **La configuration n'évolue pas à l'usage** : une fois ParusDB lancé, l'utilisateur n'a
+  **pas vocation à toucher les fichiers du dépôt** (`.env`, `docker-compose.yml`, scripts).
+  Tout ce qui évolue en production catalogue par catalogue, schéma par schéma,
+  utilisateur par utilisateur) vit dans les **données** ou la **base** (grants RBAC,
+  registre des catalogues, tables métier) et est pris en charge par l'application —
+  jamais par une modification manuelle de fichiers. Un réglage qui exigerait d'éditer
+  la config à chaque usage est un bug de conception : le corriger (données ou
+  génération par l'app) ou le signaler.
 - **Langue** : UI, libellés, messages d'erreur et documentation en français ; identifiants de
   code (fichiers, variables, fonctions, tables SQL) en anglais, `snake_case` pour la base,
   `camelCase` pour le TS.
@@ -304,7 +312,12 @@ l'app.
   **ponctuel** : `await connection()` (importé de `next/server`) en tête de
   `getSessionContext()` (`lib/session.ts`) — point unique par lequel passent
   toutes les pages/actions ; ne PAS le dupliquer dans chaque layout/page
-  (incident réel sur `/agents` puis `/chat`).
+  (incident réel sur `/agents` puis `/chat`). **Exception documentée** : une
+  page qui appelle supabase-js **sans passer par `getSessionContext`** doit
+  porter son propre `await connection()` avant le premier appel (incident
+  réel : `/auth/onboarding`, « Blocking Route » à chaque navigation en dev) —
+  grep `supabase.auth.getUser` dans `app/` avant de prérendre une nouvelle
+  page publique.
 - **Multi-schémas PostgREST** : les accès passent par `supabase.schema('<schéma>')`
   (en-têtes `Accept-Profile`/`Content-Profile`) ; les schémas doivent être listés
   dans `PGRST_DB_SCHEMAS` (cf. §9), sinon PGRST205 « Could not find the table ».
@@ -437,7 +450,14 @@ revient en Envoy.
   modification manuelle via Studio sans fichier SQL commité. Le schéma applicatif ParusDB
   vit dans `apps/supabase/sql/01-parusdb-app.sql` (schémas `iam`, `agents`, `chat`,
   `lakehouse`, `connectors`, `admin`) : à appliquer sur une base déjà
-  initialisée avec la commande du §5, relançable sans risque.
+  initialisée avec la commande du §5, relançable sans risque. **Une nouvelle
+  table exige TROIS choses dans ce fichier** : la DDL, ses politiques RLS, et
+  ses grants explicites dans la **section « Droits fins par table »** (moindre
+  privilège) — une table avec RLS mais sans grant répond `permission denied`
+  côté PostgREST, indépendamment de ses politiques (incident réel :
+  `chat.pending_first_messages`, attrapé par les tests RLS rejouables — **les
+  relancer après tout ajout de table**, ils sont le filet de sécurité de ce
+  point).
 - **Exposition PostgREST des schémas métier** : chaque schéma consulté par le frontend
   doit être ajouté à `PGRST_DB_SCHEMAS` dans `apps/supabase/.env` puis le conteneur
   recréé (`docker compose up -d rest`) — sinon PostgREST répond PGRST205 « Could not
@@ -496,6 +516,15 @@ revient en Envoy.
 - **Éditeur SQL** (spec §Data Lakehouse) : coloration syntaxique, onglets, exécution, résultats,
   explorateur schémas → tables → colonnes. Toute requête exécutée par un utilisateur passe par
   les droits de son **rôle actif** (RBAC applicatif, permissions granulaires par catalogue).
+  **Multi-requêtes** : le client trino-js n'accepte qu'UNE requête par appel — un
+  « ; » terminal ou intermédiaire remonte SYNTAX_ERROR ; `splitSqlStatements`
+  (`lib/trino.ts`) découpe via un lexer (chaînes `'...'`, identifiants `"..."`,
+  commentaires `--` et `/* */` ; un fragment réduit à des commentaires est ignoré),
+  `executeQuery` exécute séquentiellement avec **arrêt à la première erreur**
+  (message préfixé « Requête k/N »), le privilège est vérifié **par requête**
+  (un « SELECT ; DROP » exige `write`) et `query_history` reçoit une ligne par
+  requête. Pas de rollback multi-requête en Trino : les requêtes déjà passées
+  restent appliquées.
 - **Destructif** : suppression d'un catalogue = confirmation admin + **ressaisie du nom**
   (action irréversible). Pattern obligatoire pour toute suppression cascade (catalogue,
   pipeline…).
@@ -599,7 +628,11 @@ revient en Envoy.
   pas) ; un compte outillage `parus-ops` (`TRINO_OPS_USER`/
   `TRINO_OPS_PASSWORD`, apps/trino/.env, jamais synchronisé vers Next.js)
   garde l'accès complet pour le CLI `sh run.sh cli` et le seed du test e2e ;
-  mcp-trino est `read-only` global. Pièges et mode opératoire :
+  mcp-trino est `read-only` global **avec le catalogue `system` fermé
+  explicitement** (règle `allow: "none"` générée par le BFF — piège §10 :
+  l'absence de règle ne referme PAS `system`), et son périmètre utilisateur
+  est appliqué en amont par le BFF (§11 : filtrage RBAC des outils MCP).
+  Pièges et mode opératoire :
   `apps/trino/README.md` (secret interne obligatoire, SANs + `SSL_CERT_FILE`
   pour mcp-trino, sections vides interdites dans rules.json, catalogue
   `system` ouvert par défaut — règle `allow: "none"` explicite requise,
@@ -638,9 +671,15 @@ revient en Envoy.
 
 **Déploiement en place** : `apps/ollama` (serveur d'inférence GPU, modèle par défaut
 `ministral-3:3b`, function calling natif) et `apps/mcp-trino` (endpoint MCP Streamable HTTP
-`http://localhost:8185/mcp`, lecture seule, schémas autorisés bornés par
-`TRINO_ALLOWED_SCHEMAS`, connecté au Trino durci en HTTPS avec son compte de
-service). Le test e2e `sh run.sh test` (apps/ollama) valide le parcours
+`http://localhost:8185/mcp`, lecture seule, connecté au Trino durci en HTTPS avec son compte de
+service `parus-mcp`). **Plus d'allowlist de schémas côté mcp-trino** : schémas et
+catalogues vivent dans les données (une fois ParusDB lancé, l'utilisateur ne touche
+pas aux fichiers du dépôt), le périmètre par utilisateur est appliqué par le BFF
+(`lib/agent-runner.ts` : catalogues autorisés par le rôle actif injectés dans le
+prompt, résultats `list_catalogs` synthétisés depuis le RBAC, garde sur chaque
+appel d'outil et sur le SQL, identifiants quottés compris) ; le serveur MCP reste
+le garde-fou lecture seule (règle Trino `read-only` + catalogue `system` fermé).
+Le test e2e `sh run.sh test` (apps/ollama) valide le parcours
 complet : question métier → exploration du lakehouse → SQL exécuté → réponse restituée.
 
 **Règles :**
@@ -691,6 +730,14 @@ complet : question métier → exploration du lakehouse → SQL exécuté → r�
   syntaxe rejetée : un LLM peut échouer de façon non déterministe, toujours
   rejouer un test e2e chat avant de conclure (même prompt socle dans le
   script e2e d'apps/ollama — les garder synchrones).
+- **Le modèle peut répondre sans appeler d'outils** (incident réel :
+  « C'est quoi mes données dans dev ? » → schémas inventés du registre
+  générique, `metadata.tool_calls` vide en base). Le prompt socle impose
+  l'exploration mais un petit modèle local ne le respecte pas toujours :
+  pour diagnostiquer une réponse suspecte, lire `chat.messages.metadata`
+  (tool_calls) AVANT d'incriminer le lakehouse ou le RBAC. Une garde
+  structurelle (nudge : refuser une réponse finale sans appel d'outil sur
+  les questions data) reste à l'étude.
 - **Backends LLM normalisés** (`lib/llm.ts`) : Ollama, compatible OpenAI
   (OpenAI, Mistral, endpoints personnalisés) et Anthropic partagent la même
   interface (`chat(model, messages, tools)`) ; la route de stream résout le
@@ -709,11 +756,23 @@ complet : question métier → exploration du lakehouse → SQL exécuté → r�
   (`admin.providers`), validées par un appel réel au fournisseur à l'ajout ;
   les conversations s'exécutent sur ces sources comme sur Ollama (backends
   `lib/llm.ts`, function calling via mcp-trino).
-- **Le premier message** transite par **query param** (`?pending=<message>`) depuis
-  « Nouveau chat » : la page RSC `/chat/[id]` lit `searchParams.pending` côté serveur
-  et le passe en prop à `ConversationView`, qui l'envoie au montage. Plus fiable
-  qu'un store mémoire (sessionStorage ou module-level) avec la navigation Next 16
-  (`cacheComponents`). L'agent est scellé avant l'envoi.
+- **Le premier message** transite par la **base** (`chat.pending_first_messages`) :
+  « Nouveau chat » crée la conversation et persiste la saisie dans l'action
+  `createConversation(agentId, content)` ; la page RSC `/chat/[id]` lit et
+  **consomme** la ligne au premier rendu (`delete().select()`, RLS
+  propriétaire) et la passe à `ConversationView`, qui l'envoie au montage.
+  L'URL reste propre (`/chat/<id>`, sans `?pending=` : une saisie utilisateur
+  dans l'URL fuit dans l'historique et les liens partagés — incident réel),
+  et la consommation au rendu fait qu'un refresh ne renvoie pas le message.
+  `sessionStorage`/store mémoire écartés (perdus au refresh, réinstallation
+  fragile avec la navigation Next 16). L'agent est scellé avant l'envoi.
+- **Bouton d'envoi à états** : un `pending` maintenu au-delà d'un
+  `router.push` **non résolu** laisse l'UI bloquée sans message ni
+  récupération (incident réel : « Ouverture… » figé, rechargement serveur
+  obligatoire). Règles : réinitialiser l'état AVANT la navigation (le push
+  est asynchrone, la page se démonte seule en cas de succès) et notifier
+  les erreurs par `toast.error` — un `throw` dans un appel `void` est un
+  rejet silencieux, jamais visible par l'utilisateur.
 - **Garde anti-double** : le texte final peut arriver par deux canaux (évènement
   Realtime `done` + filet de sécurité HTTP). `finalize()` vérifie
   `streamingRef.current` avant d'ajouter le message — un seul canal gagne.
@@ -803,6 +862,12 @@ Les faux positifs connus (clés de démo Supabase du template, valeurs inertes d
 vendor) vivent dans `.gitleaks.toml` — la liste blanche doit rester **ciblée par
 fichier**, jamais par dossier entier : blanchir un dossier masquerait un vrai secret
 futur. Toute nouvelle dépendance passe par Dependabot (`.github/dependabot.yml`).
+**Major refusées** : les versions majeures qui cassent la CI ne se ferment pas
+en silence — elles se consignent par une clause `ignore` **commentée, datée et
+motivée** dans `dependabot.yml` (cas réels : `typescript` 7.x, compilateur Go
+incompatible typescript-eslint ; `lucide-react` 1.x, icônes retirées dont
+`Trello`). Retirer l'`ignore` quand la compat/migration revient ; une version
+majeure ne se merge jamais sans migration maîtrisée et testée.
 
 ## 14. Git et conventions de contribution
 
@@ -832,6 +897,14 @@ futur. Toute nouvelle dépendance passe par Dependabot (`.github/dependabot.yml`
   spec concernée, lister les vérifications effectuées (§13), signaler tout écart assumé aux
   docs (§2).
 - **Jamais de push force** sans autorisation explicite ; `--force-with-lease` uniquement.
+- **Versions** : `main` est le tronc de développement, **sans version** ; les
+  chores (Dependabot notamment) s'y mergent sans rien décréter. La version
+  n'existe qu'au moment de publier : tag manuel **sémantique** posé sur le
+  commit de `main` à publier — `vX.Y.1` si seuls des correctifs/dépendances
+  séparent le tag précédent, `vX.(Y+1).0` dès qu'une fonctionnalité est
+  embarquée. La branche `v1.0.0` est la trace de la release initiale, pas une
+  branche de maintenance (tout le développement vit sur `main` ; cherry-picker
+  les correctifs si une maintenance de la 1.0 devenait nécessaire).
 - Ne pas commiter : `.env`, secrets, build (`node_modules`, `.next`, volumes Docker).
 
 ---

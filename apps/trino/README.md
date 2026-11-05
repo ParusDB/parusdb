@@ -55,18 +55,22 @@ d'UX :
   authentification est activée, même en mono-noeud.
 - **Comptes** : trois comptes de service gérés par `setup.sh`
   (`TRINO_SERVICE_USER` pour le BFF — restreint à la lecture du catalogue
-  `system` par rules.json, `TRINO_MCP_USER` pour mcp-trino, `TRINO_OPS_USER`
-  pour l'outillage — CLI, seed du test e2e ; mots de passe dans `.env`,
-  hashés via un conteneur éphémère `httpd:2-alpine htpasswd -B`). Les
-  comptes **applicatifs** sont gérés par le BFF (`lib/trino-security.ts`) :
-  mot de passe affiché une seule fois, hash fusionné dans `password.db`,
-  ligne retirée à la suppression (révocation immédiate). Les **comptes de
-  rôle** (`parus-role-<role_id>`, éditeur SQL) sont créés paresseusement par
-  le BFF : mot de passe aléatoire chiffré AES-256-GCM dans
-  `iam.role_trino_accounts` (RLS sans politique : seul le service_role du
-  BFF y accède), ligne bcrypt synchronisée dans `password.db` (restaurée
-  depuis le chiffré si le dossier security est réinitialisé, retirée à la
-  suppression du rôle).
+  `system` par rules.json, `TRINO_MCP_USER` pour mcp-trino — `read-only`
+  global **avec le catalogue `system` fermé explicitement** (règle
+  `allow: "none"` : l'absence de règle ne referme pas `system`) et sans
+  allowlist de schémas, le périmètre par utilisateur étant appliqué en amont
+  par le BFF (voir `apps/mcp-trino/README.md`),
+  `TRINO_OPS_USER` pour l'outillage — CLI, seed du test e2e ; mots de passe
+  dans `.env`, hashés via un conteneur éphémère `httpd:2-alpine htpasswd
+  -B`). Les comptes **applicatifs** sont gérés par le BFF
+  (`lib/trino-security.ts`) : mot de passe affiché une seule fois, hash
+  fusionné dans `password.db`, ligne retirée à la suppression (révocation
+  immédiate). Les **comptes de rôle** (`parus-role-<role_id>`, éditeur SQL)
+  sont créés paresseusement par le BFF : mot de passe aléatoire chiffré
+  AES-256-GCM dans `iam.role_trino_accounts` (RLS sans politique : seul le
+  service_role du BFF y accède), ligne bcrypt synchronisée dans
+  `password.db` (restaurée depuis le chiffré si le dossier security est
+  réinitialisé, retirée à la suppression du rôle).
 - **Access control** : `security/rules.json` régénéré en entier par le BFF
   à chaque modification de grants de catalogue / de rôles / de comptes
   applicatifs (rechargé toutes les 5 s, sans redémarrage). Mapping :

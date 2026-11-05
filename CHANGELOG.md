@@ -17,6 +17,47 @@ Politique de versionnage :
 
 ## [Non publié]
 
+## [1.1.0] — 2026-11-05
+
+### Ajouté
+
+- **Éditeur SQL multi-requêtes** : exécution séquentielle des requêtes
+  séparées par « ; » (arrêt à la première erreur, privilège vérifié par
+  requête, historique une ligne par requête). Le point-virgule terminal ou
+  intermédiaire n'est plus une erreur de syntaxe.
+- **Périmètre RBAC du Chat IA** : le LLM ne voit et n'interroge que les
+  catalogues du rôle actif — liste injectée dans le prompt système,
+  `list_catalogs` synthétisé depuis le RBAC, garde sur chaque appel d'outil
+  et sur le SQL (identifiants quottés compris). L'allowlist de schémas
+  `TRINO_ALLOWED_SCHEMAS` de mcp-trino est retirée : schémas et catalogues
+  vivent dans les données, pas dans la configuration.
+
+### Modifié
+
+- **Premier message d'une conversation** : transite par la base
+  (`chat.pending_first_messages`, lu et consommé au rendu) au lieu d'un
+  paramètre d'URL — l'URL des conversations reste propre, un refresh ne
+  renvoie pas le message déjà envoyé.
+- **Documentation consolidée** : AGENTS.md et les README (nextjs, trino,
+  mcp-trino) actent les retours d'expériences (grants des nouvelles tables,
+  `await connection()` hors session, diagnostics LLM) et la règle « la
+  configuration n'évolue pas à l'usage » ; Dependabot ignore les versions
+  majeures incompatibles avec commentaire motivé (typescript 7.x,
+  lucide-react 1.x).
+
+### Corrigé
+
+- **« Nouveau chat » bloqué** : le bouton d'envoi reste fonctionnel si la
+  navigation traîne ou échoue (plus d'état « Ouverture… » figé), les erreurs
+  de création s'affichent en notification.
+- **Catalogues fantômes dans le chat** : `list_catalogs` ne dérive plus les
+  catalogues vus par le compte de service MCP (`parusdb`, `system`…) —
+  l'utilisateur n'a plus l'impression d'un accès dont il ne dispose pas.
+- **Onboarding** : plus d'erreur « Blocking Route : unstable value
+  Date.now() » au prerender dev de `/auth/onboarding`.
+- **Compte mcp-trino** : catalogue `system` de Trino fermé explicitement
+  dans les règles d'access control générées.
+
 ## [1.0.0] — 2026-11-04
 
 Première release publique, sous licence Apache 2.0.
@@ -44,5 +85,6 @@ Première release publique, sous licence Apache 2.0.
 - **Authentification** : Supabase self-hosted, onboarding premier démarrage,
   expiration des sessions après inactivité.
 
-[Non publié]: https://github.com/ParusDB/parusdb/compare/v1.0.0...HEAD
+[Non publié]: https://github.com/ParusDB/parusdb/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/ParusDB/parusdb/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/ParusDB/parusdb/releases/tag/v1.0.0

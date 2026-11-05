@@ -83,6 +83,14 @@ afficher** (copie par `sed`/`grep`, pas de copier-coller dans un terminal).
   LLM ↔ mcp-trino (lecture seule), messages persistés
   dans `chat.messages`, titre généré par l'IA, requêtes SQL journalisées dans
   `lakehouse.query_history`. Le modèle ne reçoit aucune chaîne de connexion.
+  Le premier message transite par `chat.pending_first_messages` (lu et
+  consommé au rendu RSC — l'URL des conversations reste propre, et un
+  refresh ne renvoie pas le message). Le périmètre lakehouse vu par le LLM
+  est **celui du rôle actif** : catalogues autorisés injectés dans le
+  prompt, `list_catalogs` synthétisé depuis le RBAC, garde sur chaque appel
+  d'outil et sur le SQL (`lib/agent-runner.ts`, incl. identifiants quottés)
+  — le serveur MCP, lui, reste global (lecture seule, sans allowlist de
+  schémas : ceux-ci vivent dans les données, `apps/mcp-trino/README.md`).
   La source du modèle de l'agent détermine le backend (`lib/llm.ts` :
   Ollama local, compatible OpenAI, Anthropic — la clé d'un fournisseur
   externe est déchiffrée en mémoire serveur, `lib/providers.ts`), les
@@ -100,6 +108,12 @@ afficher** (copie par `sed`/`grep`, pas de copier-coller dans un terminal).
   (`polaris.config.drop-with-purge.enabled`) puis supprime le catalogue.
   La création d'un catalogue génère le binding Trino (`TRINO_CATALOG_DIR`) —
   redémarrage Trino requis pour l'activer.
+  L'éditeur SQL exécute les **multi-requêtes** séparées par « ; »
+  séquentiellement (`splitSqlStatements`, `lib/trino.ts` : lexer respectant
+  chaînes/identifiants quottés/commentaires — le client trino-js n'accepte
+  qu'une requête par appel) ; privilège vérifié par requête, arrêt à la
+  première erreur, pas de rollback (Trino) : les requêtes déjà exécutées
+  restent appliquées.
 - **Secrets** : credentials des connecteurs et clés API LLM chiffrés
   AES-256-GCM (`lib/crypto.ts`, clé `PARUSDB_ENCRYPTION_KEY`), jamais
   renvoyés au client.
@@ -109,6 +123,13 @@ afficher** (copie par `sed`/`grep`, pas de copier-coller dans un terminal).
 - **Pages à session** : `export const instant = false` sur le layout `(app)`
   **et** chaque page du groupe — sinon `cacheComponents` refuse le
   prérendu (« uncached or runtime data during prerendering »).
+- **Appels Supabase directs sur une page prérendue** : supabase-js évalue
+  `Date.now()` en interne ; les pages qui ne passent pas par
+  `getSessionContext()` (point de fix unique, `lib/session.ts`) portent
+  leur propre `await connection()` avant le premier appel — sinon
+  « Blocking Route : unstable value Date.now() » en dev (incident réel :
+  `/auth/onboarding`). Grepper `supabase.auth.getUser` dans `app/` avant
+  d'ajouter une page publique.
 - **Server Actions** colocalisées par feature (`actions.ts`), entrées
   validées, `revalidatePath`/`redirect` explicites. Les actions retournent
   des `{ ok, error }` français et actionnables, jamais d'exception brute.
@@ -159,12 +180,20 @@ vérification RLS par requêtes de test et, pour le chat, un test e2e rejoué
 - Les modèles de raisonnement renvoient parfois `content` en tableau de
   blocs (`thinking`/`text`) : seul le texte est retenu (`normalizeContent`
   dans `lib/llm.ts`).
-- L'éditeur SQL de l'interface s'exécute sous le compte de service BFF,
-  **non contraint** par les règles Trino (durcissement) : sa garde RBAC est
-  applicative (`iam.has_grant` : lecture/écriture par catalogue). Les
-  comptes applicatifs et les outils externes connectés à Trino, eux, sont
-  réellement contraints par les règles d'access control générées depuis
-  `iam.grants` — voir `apps/trino/README.md`.
+- L'éditeur SQL s'exécute sous le **compte Trino du rôle actif**
+  (`parus-role-<id>`), contraint par `rules.json` généré depuis
+  `iam.grants` — la qualification croisée de catalogue est refusée par
+  Trino lui-même ; `iam.has_grant` reste le premier filtre (message
+  français précoce). Toute requête portée par une session utilisateur
+  passe par ce compte, jamais le BFF. Multi-requêtes : pas de rollback
+  entre requêtes (Trino) — une erreur en requête 3/4 laisse les deux
+  premières appliquées.
+- Chat IA : un petit modèle local peut répondre **sans appeler les
+  outils** et inventer des schémas « plausibles » (incident réel :
+  `public`/`analytics`/`raw`/`staging` listés de tête). Diagnostiquer via
+  `chat.messages.metadata` (`tool_calls` vide = hallucination) avant
+  d'incriminer le lakehouse ; rejouer avant de conclure (LLM non
+  déterministe).
 - Connecteurs ELT : le CRON est évalué en UTC ; le mode d'insertion
   (incrémental / toutes les données) s'applique aux sources génériques
   (SQL, REST, fichiers) — les sources verified conservent leurs

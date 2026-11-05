@@ -11,6 +11,18 @@ updates:
         update-types:
           - minor
           - patch
+    # Major refusées explicitement (AGENTS.md §6 : dépendances majeures
+    # épinglées, pas de version non maîtrisée) :
+    # - typescript 7.0 : le compilateur réécrit en Go, typescript-eslint ne
+    #   le supporte pas encore (PR Dependabot fermée le 2026-11-05 pour ce
+    #   motif) - retirer l'ignore quand eslint-config-next s'alignera ;
+    # - lucide-react 1.x : retrait d'icônes utilisées par le code (ex.
+    #   `Trello` dans lib/sources.ts) - migration à planifier délibérément.
+    ignore:
+      - dependency-name: typescript
+        versions: ["7.x", "8.x"]
+      - dependency-name: lucide-react
+        versions: ["1.x", "2.x"]
     open-pull-requests-limit: 5
     labels:
       - dependencies
