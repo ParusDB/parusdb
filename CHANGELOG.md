@@ -4,9 +4,20 @@ Tout changement notable de ParusDB est documenté ici.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) ;
 versionnement [SemVer](https://semver.org/lang/fr/).
 
+Politique de versionnage :
+
+- **major** : rupture de compatibilité ; **minor** : nouvelle fonctionnalité
+  compatible ; **patch** : correctif. Un bug corrigé avant le merge d'une PR
+  ne produit pas de version : il est inclus dans la release suivante ;
+- les tags de version sont posés **uniquement sur `main`**, après le merge de
+  la PR, sur le commit final validé par la CI ;
+- **un tag publié ne bouge plus jamais** : pas de `git tag -f`, pas de
+  force-push de tag — les clones des utilisateurs embarquent les tags ;
+- le nom de version est réservé aux tags : jamais de branche `vX.Y.Z`.
+
 ## [Non publié]
 
-## [1.0.0] — À paraître
+## [1.0.0] — 2026-11-04
 
 Première release publique, sous licence Apache 2.0.
 

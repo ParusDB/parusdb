@@ -814,7 +814,20 @@ futur. Toute nouvelle dépendance passe par Dependabot (`.github/dependabot.yml`
   (Mistral Vibe ou autre) dans les messages de commit — l'auteur est le
   développeur, pas l'outil.
 - **Branches** : `feat/<brique>-<sujet>` (ex. `feat/lakehouse-explorateur`),
-  `fix/<sujet>`, `docs/<sujet>`. Pas de commit direct sur `main`.
+  `fix/<sujet>`, `docs/<sujet>`. Éphémères : une branche vit le temps d'un
+  sujet puis est supprimée après le merge — pas de branche de développement
+  longue durée, `main` reste toujours livrable. Pas de commit direct sur
+  `main` : PR obligatoire, revue d'un des Code Owners
+  (`.github/CODEOWNERS`), CI verte requise. Le nom de version est réservé
+  aux tags : jamais de branche `vX.Y.Z`.
+- **Versions (semver)** : major = rupture de compatibilité, minor =
+  nouvelle fonctionnalité compatible, patch = correctif. Un bug corrigé
+  avant le merge ne produit pas de version : il est inclus dans la release
+  suivante. Les tags de version sont posés **uniquement sur `main`**, après
+  le merge de la PR, sur le commit final validé par la CI ; **un tag publié
+  ne bouge plus jamais** (pas de `git tag -f`, pas de force-push de tag —
+  les clones des utilisateurs embarquent les tags). Politique complète :
+  en-tête du `CHANGELOG.md`.
 - **PR** : une PR = un changement logique ; décrire le quoi/pourquoi, référencer la section de
   spec concernée, lister les vérifications effectuées (§13), signaler tout écart assumé aux
   docs (§2).
