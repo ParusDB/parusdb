@@ -34,8 +34,9 @@
 // de rôle : il est restreint ici à la lecture du catalogue `system`
 // (diagnostic CLI) et refusé ailleurs - les endpoints HTTP /v1/query et
 // /v1/info du cycle de redémarrage ne sont pas soumis à l'access control
-// (vérifié empiriquement). mcp-trino reste en lecture seule globale (borné
-// réellement par TRINO_ALLOWED_SCHEMAS côté serveur MCP).
+// réellement par le BFF : filtrage RBAC des outils MCP côté chat ;
+// ici, lecture seule globale avec catalogue `system` fermé explicitement
+// pour mcp-trino).
 //
 // Prérequis Trino (vérifiés empiriquement sur trino:484) : première règle
 // qui matche s'applique ; sans correspondance = refus SAUF pour le
@@ -284,6 +285,13 @@ export async function syncTrinoRules(): Promise<{ ok: boolean; error?: string }>
       // control.
       { user: userRegex(TRINO_SERVICE_USER), catalog: SYSTEM, allow: "read-only" },
       { user: userRegex(TRINO_SERVICE_USER), allow: "none" },
+      // Compte mcp-trino (chat) : lecture seule sur les données, catalogue
+      // system fermé explicitement (il ne sert jamais au chat, et la
+      // fermeture par défaut n'est pas assurée pour `system`). Le périmètre
+      // utilisateur est appliqué en amont par le BFF (lib/agent-runner.ts,
+      // filtrage RBAC des outils MCP) : mcp-trino n'a pas de périmètre
+      // par requête.
+      { user: userRegex(TRINO_MCP_USER), ...DENY_SYSTEM },
       { user: userRegex(TRINO_MCP_USER), allow: "read-only" },
       // Compte outillage (CLI apps/trino/run.sh, seed du test e2e Chat IA) :
       // accès complet - opération d'exploitation, hors chemin des requêtes

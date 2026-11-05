@@ -3,6 +3,7 @@ import { runAgent, generateConversationTitle } from "@/lib/agent-runner";
 import { DEFAULT_MODEL } from "@/lib/ollama";
 import { createOllamaBackend, type LlmBackend } from "@/lib/llm";
 import { resolveProviderBackend } from "@/lib/providers";
+import { readableCatalogNames } from "@/lib/rbac";
 import { DEFAULT_CATALOG } from "@/lib/polaris";
 import { NextResponse } from "next/server";
 
@@ -154,6 +155,16 @@ export async function POST(
       model = agent.model_id;
       modelLabel = `${provider.name}/${agent.model_id}`;
     }
+    // Périmètre RBAC du rôle actif (lib/rbac.ts, filtré par RLS) : le LLM ne
+    // voit et n'interroge que les catalogues accessibles à l'utilisateur.
+    // Null si indisponible : le comportement revient au périmètre du compte
+    // de service mcp-trino (jamais bloquant pour répondre).
+    let allowedCatalogs: string[] | null = null;
+    try {
+      allowedCatalogs = await readableCatalogNames();
+    } catch {
+      allowedCatalogs = null;
+    }
     const result = await runAgent({
       model,
       modelLabel,
@@ -161,6 +172,7 @@ export async function POST(
       agentSystemPrompt: agent.system_prompt,
       history,
       userMessage: content,
+      allowedCatalogs,
       onEvent: (event) => {
         if (event.type === "status") {
           return emit("status", { label: event.label });
