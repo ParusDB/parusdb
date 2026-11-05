@@ -401,6 +401,9 @@ export function CatalogWorkspace({
                   <p className="mono mb-3 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
                     {result.rowCount} ligne{result.rowCount === 1 ? "" : "s"} ·{" "}
                     {result.durationMs} ms
+                    {(result.statementCount ?? 1) > 1
+                      ? ` · ${result.statementCount} requêtes exécutées`
+                      : ""}
                   </p>
                   {result.rowCount === 0 ? (
                     <p className="text-sm text-muted-foreground">

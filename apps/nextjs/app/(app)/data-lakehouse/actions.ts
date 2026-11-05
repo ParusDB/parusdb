@@ -15,7 +15,12 @@ import {
   trinoBindingFileContent,
   trinoBindingFor,
 } from "@/lib/lakehouse";
-import { quoteIdent, sessionTrinoExecutor } from "@/lib/trino";
+import {
+  quoteIdent,
+  sessionTrinoExecutor,
+  splitSqlStatements,
+  type TrinoQueryResult,
+} from "@/lib/trino";
 import {
   getTrinoRestartState,
   requestTrinoRestart,
@@ -40,6 +45,7 @@ export interface QueryExecution {
   rows?: unknown[][];
   rowCount?: number;
   durationMs?: number;
+  statementCount?: number;
   error?: string;
 }
 
@@ -48,19 +54,25 @@ export interface QueryExecution {
 // catalogue est refusée par Trino, pas seulement par la garde applicative)
 // après vérification applicative des droits (spec §Data Lakehouse, RBAC
 // refonte : message d'erreur français précoce avant d'atteindre Trino).
+// Plusieurs requêtes séparées par « ; » sont exécutées séquentiellement
+// (arrêt à la première erreur) : Trino n'offre pas de transaction
+// multi-requêtes, les requêtes déjà exécutées restent appliquées.
 export async function executeQuery(
   catalog: string,
   sql: string,
 ): Promise<QueryExecution> {
   const session = await requireSession();
   const supabase = await createClient();
-  const trimmed = sql.trim();
-  if (!trimmed) {
+  const statements = splitSqlStatements(sql);
+  if (statements.length === 0) {
     return { ok: false, error: "La requête est vide." };
   }
   // Lecture : privilège « Lecture » sur le catalogue ; toute requête
-  // modifiante exige le privilège « Écriture ».
-  const privilege = requiredSqlPrivilege(trimmed);
+  // modifiante exige le privilège « Écriture » - vérifié PAR REQUÊTE, un
+  // « SELECT ...; DROP TABLE ... » exige donc l'écriture.
+  const privilege = statements.some((statement) => requiredSqlPrivilege(statement) === "write")
+    ? "write"
+    : "read";
   const granted = await hasGrant(
     session.userId,
     "catalog",
@@ -91,36 +103,63 @@ export async function executeQuery(
         "Ce catalogue n'est pas encore lié à Trino. Si vous venez de le créer, son redémarrage automatique est peut-être en cours - réessayez dans un instant.",
     };
   }
+  const started = Date.now();
+  let executedCount = 0;
+  let lastResult: TrinoQueryResult | null = null;
+  let lastResultWithColumns: TrinoQueryResult | null = null;
   try {
     const run = await sessionTrinoExecutor(session);
-    const result = await run(trimmed);
-    await supabase.schema("lakehouse").from("query_history").insert({
-      user_id: session.userId,
-      catalog_name: catalog,
-      query: trimmed.slice(0, 8000),
-      status: "success",
-      duration_ms: result.durationMs,
-      row_count: result.rowCount,
-    });
-    return {
-      ok: true,
-      columns: result.columns,
-      rows: result.rows,
-      rowCount: result.rowCount,
-      durationMs: result.durationMs,
-    };
+    for (const statement of statements) {
+      const result = await run(statement);
+      executedCount += 1;
+      lastResult = result;
+      if (result.columns.length > 0) lastResultWithColumns = result;
+      await supabase.schema("lakehouse").from("query_history").insert({
+        user_id: session.userId,
+        catalog_name: catalog,
+        query: statement.slice(0, 8000),
+        status: "success",
+        duration_ms: result.durationMs,
+        row_count: result.rowCount,
+      });
+    }
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Erreur inattendue de Trino.";
+    const query =
+      statements[Math.min(executedCount, statements.length - 1)] ?? sql;
     await supabase.schema("lakehouse").from("query_history").insert({
       user_id: session.userId,
       catalog_name: catalog,
-      query: trimmed.slice(0, 8000),
+      query: query.slice(0, 8000),
       status: "error",
       error: message.slice(0, 2000),
     });
-    return { ok: false, error: message };
+    const position =
+      statements.length > 1
+        ? `Requête ${executedCount + 1}/${statements.length} : ${message}`
+        : message;
+    return {
+      ok: false,
+      statementCount: executedCount,
+      error: position,
+    };
   }
+  // Résultat affiché : celui de la dernière requête qui retourne des lignes
+  // (une suite CREATE/INSERT/SELECT montre le SELECT), sinon la dernière
+  // exécutée.
+  const result = lastResultWithColumns ?? lastResult;
+  if (!result) {
+    return { ok: false, error: "La requête est vide." };
+  }
+  return {
+    ok: true,
+    columns: result.columns,
+    rows: result.rows,
+    rowCount: result.rowCount,
+    durationMs: Date.now() - started,
+    statementCount: statements.length,
+  };
 }
 
 export async function createCatalogAction(
