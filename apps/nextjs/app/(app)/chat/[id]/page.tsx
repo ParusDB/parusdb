@@ -10,14 +10,11 @@ import type { Conversation, Message } from "@/types/db";
 
 export default async function ConversationPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ pending?: string }>;
 }) {
   const session = await requireSession();
   const { id } = await params;
-  const { pending } = await searchParams;
   const supabase = await createClient();
 
   const { data: conversation } = await supabase
@@ -64,6 +61,26 @@ export default async function ConversationPage({
     .eq("conversation_id", id)
     .order("created_at", { ascending: true })
     .limit(200);
+
+  // Premier message d'une conversation créée depuis « Nouveau chat » : lu et
+  // CONSOMMÉ atomiquement (delete + select au rendu) - la RLS borne au
+  // propriétaire, et un refresh ne renvoie pas le message. Uniquement pour
+  // une conversation encore vide, pour ne pas ressusciter une saisie déjà
+  // envoyée.
+  let pending: string | null = null;
+  if (
+    owned &&
+    (messages ?? []).length === 0 &&
+    conversation.title === null
+  ) {
+    const { data: pendingRow } = await supabase
+      .schema("chat")
+      .from("pending_first_messages")
+      .delete()
+      .eq("conversation_id", id)
+      .select("content");
+    pending = (pendingRow as { content: string }[] | null)?.[0]?.content ?? null;
+  }
 
   const providerLabels = await fetchProviderLabels(supabase).catch(
     () => new Map<string, string>(),

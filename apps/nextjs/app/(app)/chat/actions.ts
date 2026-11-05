@@ -6,8 +6,17 @@ import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/session";
 
 // Création d'une conversation : l'agent est immuable ensuite (spec §Chat).
-export async function createConversation(agentId: string): Promise<string> {
+// Le premier message transite par la table chat.pending_first_messages (lue
+// et consommée par la page /chat/<id>) - jamais par l'URL.
+export async function createConversation(
+  agentId: string,
+  firstMessage: string,
+): Promise<string> {
   const session = await requireSession();
+  const content = firstMessage.trim();
+  if (!content) {
+    throw new Error("Le message ne peut pas être vide.");
+  }
   const supabase = await createClient();
   const { data, error } = await supabase
     .schema("chat")
@@ -18,6 +27,15 @@ export async function createConversation(agentId: string): Promise<string> {
   if (error || !data) {
     throw new Error(
       `La création de la conversation a échoué : ${error?.message ?? "erreur inattendue"}`,
+    );
+  }
+  const { error: pendingError } = await supabase
+    .schema("chat")
+    .from("pending_first_messages")
+    .insert({ conversation_id: data.id, content });
+  if (pendingError) {
+    throw new Error(
+      `L'enregistrement du premier message a échoué : ${pendingError.message}`,
     );
   }
   revalidatePath("/chat");
