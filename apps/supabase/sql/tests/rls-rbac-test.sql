@@ -207,6 +207,32 @@ select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-0000000
 select 'T5d le propriétaire écrit toujours (attendu 1 : le message du membre a été refusé)' as test, count(*) as n
   from chat.messages m join chat.conversations c on c.id = m.conversation_id
   where c.title = 'conversation-test';
+-- Premier message en attente : le propriétaire insère et consomme
+insert into chat.pending_first_messages (conversation_id, content)
+select id, 'premier message' from chat.conversations where title = 'conversation-test';
+select 'T5e pending inséré par le propriétaire (attendu 1)' as test, count(*) as n
+  from chat.pending_first_messages p join chat.conversations c on c.id = p.conversation_id
+  where c.title = 'conversation-test';
+delete from chat.pending_first_messages
+ where conversation_id in (select id from chat.conversations where title = 'conversation-test');
+select 'T5f pending consommé par le propriétaire (attendu 0)' as test, count(*) as n
+  from chat.pending_first_messages p join chat.conversations c on c.id = p.conversation_id
+  where c.title = 'conversation-test';
+reset role;
+commit;
+
+begin;
+set role authenticated;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-000000000002","role":"authenticated"}', false);
+-- Lecture du pending par un membre bénéficiant d'un partage : la RLS le
+-- cache (count = 0, pas d'erreur).
+select 'T5g pending masqué pour le membre (attendu 0)' as test, count(*) as n
+  from chat.pending_first_messages;
+-- Insertion d'un pending sur la conversation du propriétaire : REFUS ATTENDU
+savepoint refusal;
+insert into chat.pending_first_messages (conversation_id, content)
+values ((select id from chat.conversations where title = 'conversation-test'), 'vol');
+rollback to savepoint refusal;
 reset role;
 commit;
 

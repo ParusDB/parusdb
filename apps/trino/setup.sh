@@ -287,8 +287,8 @@ PROPS
 # (révocation d'un grant = refus immédiat). Le fichier rules.json est
 # régénéré en entier par l'application ; ce bootstrap ne couvre que les
 # comptes de service statiques (BFF non contraint — la garde RBAC est
-# applicative côté éditeur SQL ; mcp-trino en lecture seule globale, son
-# périmètre réel est borné par TRINO_ALLOWED_SCHEMAS côté serveur MCP).
+# applicative côté éditeur SQL ; mcp-trino en lecture seule globale ; son
+# périmètre utilisateur est appliqué par le BFF, ce serveur MCP est global).
 cat > "$SCRIPT_DIR/etc/access-control.properties" <<PROPS
 access-control.name=file
 security.config-file=/etc/trino/security/rules.json

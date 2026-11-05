@@ -50,7 +50,7 @@ services:
       TRINO_USER: "${TRINO_USER:-parus-mcp}"
       TRINO_PASSWORD: "${TRINO_PASSWORD:?TRINO_PASSWORD manquant dans .env}"
       TRINO_CATALOG: "${TRINO_CATALOG:-dev}"
-      TRINO_SCHEMA: "${TRINO_SCHEMA:-sales}"
+      TRINO_SCHEMA: "${TRINO_SCHEMA:-test}"
       TRINO_SCHEME: "${TRINO_SCHEME:-https}"
       TRINO_SSL: "${TRINO_SSL:-true}"
       TRINO_SSL_INSECURE: "${TRINO_SSL_INSECURE:-true}"
@@ -62,9 +62,6 @@ services:
       # Lecture seule : le LLM ne peut pas écrire dans le lakehouse.
       TRINO_ALLOW_WRITE_QUERIES: "${TRINO_ALLOW_WRITE_QUERIES:-false}"
       TRINO_QUERY_TIMEOUT: "${TRINO_QUERY_TIMEOUT:-60}"
-      # Schémas exposés aux LLM (liste catalog.schéma séparés par des
-      # virgules) : borne l'exploration et les requêtes.
-      TRINO_ALLOWED_SCHEMAS: "${TRINO_ALLOWED_SCHEMAS:-dev.sales}"
       # Transport MCP : Streamable HTTP sur /mcp (legacy /sse conservé).
       MCP_TRANSPORT: "http"
       MCP_HOST: "0.0.0.0"

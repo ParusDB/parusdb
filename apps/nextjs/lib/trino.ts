@@ -31,6 +31,89 @@ export interface TrinoQueryResult {
   durationMs: number;
 }
 
+// Découpage en requêtes élémentaires sur les « ; », avec un mini-lexer
+// respectant les chaînes '...' (échappées par ''), les identifiants "..."
+// et les commentaires -- et /* */ : le client Trino n'accepte qu'une
+// requête par appel (un « ; » isolé remonte SYNTAX_ERROR), l'éditeur SQL
+// de l'app exécute séquentiellement chaque fragment non vide.
+export function splitSqlStatements(sql: string): string[] {
+  const statements: string[] = [];
+  let current = "";
+  let i = 0;
+  const len = sql.length;
+  while (i < len) {
+    const char = sql[i];
+    // Commentaire en ligne : jusqu'au bout de la ligne.
+    if (char === "-" && sql[i + 1] === "-") {
+      while (i < len && sql[i] !== "\n") {
+        current += sql[i];
+        i += 1;
+      }
+      continue;
+    }
+    // Commentaire en bloc.
+    if (char === "/" && sql[i + 1] === "*") {
+      const end = sql.indexOf("*/", i + 2);
+      if (end === -1) {
+        current += sql.slice(i);
+        break;
+      }
+      current += sql.slice(i, end + 2);
+      i = end + 2;
+      continue;
+    }
+    // Chaîne '...' : le séparateur ne compte pas dedans (« ; » dans une
+    // valeur, échappement '' d'une quote).
+    if (char === "'") {
+      const start = i;
+      i += 1;
+      while (i < len) {
+        if (sql[i] === "'" && sql[i + 1] === "'") {
+          i += 2;
+          continue;
+        }
+        if (sql[i] === "'") break;
+        i += 1;
+      }
+      i = Math.min(i + 1, len);
+      current += sql.slice(start, i);
+      continue;
+    }
+    // Identifiant quotté "..." (Trino) : le séparateur ne compte pas dedans.
+    if (char === '"') {
+      const start = i;
+      const end = sql.indexOf('"', i + 1);
+      const stop = end === -1 ? len : end + 1;
+      current += sql.slice(start, stop);
+      i = stop;
+      continue;
+    }
+    // Séparateur de fin de requête : un fragment constitué uniquement de
+    // commentaires/espaces n'est pas une requête (sinon Trino rejette
+    // l'énoncé vide en SYNTAX_ERROR).
+    if (char === ";") {
+      const trimmed = current.trim();
+      if (trimmed && stripSqlComments(trimmed).trim()) statements.push(trimmed);
+      current = "";
+      i += 1;
+      continue;
+    }
+    current += char;
+    i += 1;
+  }
+  const tail = current.trim();
+  if (tail && stripSqlComments(tail).trim()) statements.push(tail);
+  return statements;
+}
+
+// Requête privée de ses commentaires (ligne -- et bloc /* */) : sert à
+// distinguer un fragment réel de commentaires seuls.
+export function stripSqlComments(sql: string): string {
+  return sql
+    .replace(/--[^\n]*/g, " ")
+    .replace(/\/\*[\s\S]*?\*\//g, " ");
+}
+
 // Fonction d'exécution de requêtes : toute requête portée par une session
 // utilisateur s'exécute via un executor de rôle - jamais le compte BFF.
 export type TrinoExecutor = (sql: string) => Promise<TrinoQueryResult>;

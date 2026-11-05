@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Send } from "lucide-react";
 import {
   Select,
@@ -34,18 +35,27 @@ export function NewChat({ agents }: { agents: NewChatAgent[] }) {
     const content = message.trim();
     if (!content || !agentId || pending) return;
     setPending(true);
+    let conversationId: string | null = null;
     try {
-      const conversationId = await createConversation(agentId);
-      // Le premier message transite par l'URL (?pending=) : la page
-      // /chat/[id] le lit côté serveur et le passe à ConversationView.
-      // Plus fiable qu'un store mémoire (pas de risque de module réinstancié).
-      router.push(
-        `/chat/${conversationId}?pending=${encodeURIComponent(content)}`,
-      );
+      // Le premier message transite par la base
+      // (chat.pending_first_messages, consommé par /chat/[id]) : l'URL reste
+      // propre, sans saisie utilisateur visible dans l'historique.
+      conversationId = await createConversation(agentId, content);
     } catch (error) {
       setPending(false);
-      throw error;
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "La création de la conversation a échoué : erreur inattendue.",
+      );
+      return;
     }
+    // Le bouton redevient actif immédiatement : router.push est asynchrone et
+    // la navigation ne démonte la page qu'à l'arrivée. Une navigation qui
+    // traîne ou échoue ne doit pas laisser le bouton bloqué en
+    // « Ouverture… » sans espoir de récupération.
+    setPending(false);
+    router.push(`/chat/${conversationId}`);
   }
 
   return (

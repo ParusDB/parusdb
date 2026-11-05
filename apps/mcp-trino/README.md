@@ -15,7 +15,7 @@ jamais écrire dans le lakehouse.
 | Transport | MCP Streamable HTTP, endpoint `/mcp` (legacy `/sse` conservé) |
 | Outils | `list_catalogs`, `list_schemas`, `list_tables`, `get_table_schema`, `execute_query`, `explain_query` |
 | Cible | Trino durci (`apps/trino`) sur le réseau externe `supabase_default`, `https://trino:8443`, compte de service `parus-mcp` (AGENTS.md §10) |
-| Politique | lecture seule (`TRINO_ALLOW_WRITE_QUERIES=false`), schémas autorisés `dev.sales` ; règle Trino `read-only` globale (le périmètre réel du chat reste borné par `TRINO_ALLOWED_SCHEMAS` + le RBAC applicatif) |
+| Politique | lecture seule (`TRINO_ALLOW_WRITE_QUERIES=false`) + règle Trino `read-only` globale ; le périmètre par utilisateur (catalogues du rôle actif) est appliqué par le BFF (apps/nextjs) - ce service est volontairement global, sans allowlist de schémas |
 | TLS | certificat autosigné de Trino monté dans le conteneur + `SSL_CERT_FILE` (le transport custom Go ignore `TRINO_SSL_INSECURE` : validation complète) |
 | État | sans état ; aucune donnée stockée |
 
@@ -54,11 +54,15 @@ run.sh start` ; `cd apps/trino && sh run.sh start`).
   `SSLInsecure` de trino-go-client — la confiance TLS passe par le certificat
   public de Trino (`../trino/etc/keystore.crt`, SANs `DNS:trino` requis)
   monté en lecture seule et désigné par `SSL_CERT_FILE`.
-- `TRINO_ALLOWED_SCHEMAS` borne ce que le LLM voit et interroge : ajuster
-  quand de nouveaux domaines (schémas) sont ajoutés au lakehouse. Le RBAC
-  applicatif (rôle actif, sources par agent) est implémenté côté application
-  (apps/nextjs) mais n'affine pas encore `TRINO_ALLOWED_SCHEMAS`, qui reste
-  le garde-fou serveur.
+- **Plus d'allowlist de schémas** (l'ancienne variable `TRINO_ALLOWED_SCHEMAS`
+  est retirée) : schémas et catalogues évoluent dans les données (pipelines
+  dlt, éditeur SQL, UI lakehouse), pas dans la configuration - une fois
+  ParusDB lancé, l'utilisateur n'a pas vocation à toucher les fichiers du
+  dépôt. Le périmètre par utilisateur est appliqué par le BFF
+  (`apps/nextjs/lib/agent-runner.ts` : catalogues autorisés par le rôle
+  actif, garde sur chaque appel d'outil et sur le SQL) ; ce service reste
+  le garde-fou serveur lecture seule (règle Trino `read-only` globale +
+  catalogue `system` fermé dans rules.json).
 - Sans Trino démarré, le serveur s'arrête immédiatement (connexion testée au
   démarrage) : `sh run.sh start` le vérifie avant de lancer le conteneur.
 - **L'application (apps/nextjs) est un consommateur de cet endpoint** via

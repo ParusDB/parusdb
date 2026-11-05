@@ -60,6 +60,68 @@ function baseSystemPrompt(): string {
   ].join(" ");
 }
 
+// Bloc RBAC ajouté au prompt socle quand les catalogues accessibles au rôle
+// actif sont connus : le modèle cite et interroge uniquement ceux-ci.
+export function rbacSystemPrompt(allowedCatalogs: string[]): string {
+  const list = allowedCatalogs.join(", ");
+  return [
+    `Catalogues accessibles à l'utilisateur : ${list}.`,
+    "N'utilise et ne cite que ces catalogues - les autres (catalogue système,",
+    "catalogue par défaut) ne sont pas accessibles à cet utilisateur.",
+    "Pour une question d'accès ou de visibilité, réponds depuis cette liste,",
+    "pas depuis une exploration hors périmètre.",
+  ].join(" ");
+}
+
+// Catalogues référencés par une requête SQL (noms 3-parties
+// `<catalogue>.<schéma>.<table>` après FROM/JOIN, identifiants nus ou
+// quottés au format Trino `"cat"."sch"."table"`). Les noms 2-parties
+// (`schéma.table`) ne sont pas des catalogues. Les identifiants quottés
+// sont inclus : sans ça, un nom quotté contournerait la garde RBAC.
+const SQL_IDENT = String.raw`(?:"[^"]+"|[A-Za-z_][\w]*)`;
+const SQL_DOT = String.raw`\s*\.\s*`;
+
+export function extractSqlCatalogs(query: string): string[] {
+  const catalogs = new Set<string>();
+  const re = new RegExp(
+    `\\b(?:from|join)\\s+(${SQL_IDENT})${SQL_DOT}${SQL_IDENT}${SQL_DOT}${SQL_IDENT}`,
+    "gi",
+  );
+  for (const match of query.matchAll(re)) {
+    const catalog = match[1].replace(/^"|"$/g, "");
+    catalogs.add(catalog.toLowerCase());
+  }
+  return [...catalogs];
+}
+
+// Un appel d'outil sort-il du périmètre de catalogues autorisé ? Retourne le
+// catalogue fautif, sinon null. `list_catalogs` n'y passe pas : son résultat
+// est synthétisé depuis le RBAC (le compte de service mcp-trino verrait tous
+// les catalogues de l'installation).
+export function deniedToolCatalog(
+  tool: string,
+  args: Record<string, unknown>,
+  allowedCatalogs: string[],
+): string | null {
+  const allowed = new Set(allowedCatalogs.map((c) => c.toLowerCase()));
+  if (
+    tool === "list_schemas" ||
+    tool === "list_tables" ||
+    tool === "get_table_schema"
+  ) {
+    const catalog =
+      typeof args.catalog === "string" ? args.catalog.trim() : "";
+    if (catalog && !allowed.has(catalog.toLowerCase())) return catalog;
+  }
+  if (tool === "execute_query" || tool === "explain_query") {
+    const query = typeof args.query === "string" ? args.query : "";
+    for (const catalog of extractSqlCatalogs(query)) {
+      if (!allowed.has(catalog)) return catalog;
+    }
+  }
+  return null;
+}
+
 export async function runAgent(params: {
   // Identifiant du modèle tel que l'API du backend l'attend (sans préfixe
   // de fournisseur - « Mistral/mon-modele » serait rejeté en HTTP 400).
@@ -71,6 +133,10 @@ export async function runAgent(params: {
   agentSystemPrompt: string;
   history: { role: "user" | "assistant"; content: string }[];
   userMessage: string;
+  // Catalogues accessibles au rôle actif (RBAC, lib/rbac.ts via la route
+  // de stream). Null = périmètre inconnu (comportement inchangé) ; les
+  // résultats sont alors ceux du compte de service mcp-trino.
+  allowedCatalogs?: string[] | null;
   onEvent?: (event: AgentRunEvent) => Promise<void> | void;
 }): Promise<AgentRunResult> {
   const started = Date.now();
@@ -88,7 +154,13 @@ export async function runAgent(params: {
     parameters: t.inputSchema ?? { type: "object", properties: {} },
   }));
 
-  const systemPrompt = [baseSystemPrompt(), params.agentSystemPrompt]
+  const systemPrompt = [
+    baseSystemPrompt(),
+    params.allowedCatalogs?.length
+      ? rbacSystemPrompt(params.allowedCatalogs)
+      : null,
+    params.agentSystemPrompt,
+  ]
     .filter(Boolean)
     .join("\n\n");
   const messages: NormalizedMessage[] = [
@@ -130,7 +202,33 @@ export async function runAgent(params: {
       }
       const query = typeof args.query === "string" ? args.query : undefined;
       await emit({ type: "tool", tool: tc.name, query });
-      const { text, isError } = await mcp.callTool(tc.name, args);
+
+      let text: string;
+      let isError: boolean;
+      if (
+        tc.name === "list_catalogs" &&
+        params.allowedCatalogs !== undefined &&
+        params.allowedCatalogs !== null
+      ) {
+        // Le compte de service mcp-trino voit tous les catalogues de
+        // l'installation : on ne diffuse au LLM que le périmètre RBAC de
+        // l'utilisateur, en lieu et place de list_catalogs.
+        text = JSON.stringify(params.allowedCatalogs, null, 2);
+        isError = false;
+      } else {
+        const denied = params.allowedCatalogs
+          ? deniedToolCatalog(tc.name, args, params.allowedCatalogs)
+          : null;
+        if (denied) {
+          const allowed = params.allowedCatalogs ?? [];
+          text = `ACCÈS REFUSÉ : le catalogue « ${denied} » n'est pas accessible à l'utilisateur. Catalogues autorisés : ${allowed.join(", ")}.`;
+          isError = true;
+        } else {
+          const result = await mcp.callTool(tc.name, args);
+          text = result.text;
+          isError = result.isError;
+        }
+      }
       const ok = !isError;
       toolCalls.push({ name: tc.name, query, ok });
       await emit({ type: "tool_result", tool: tc.name, ok });

@@ -69,7 +69,7 @@ export interface ConversationViewProps {
   /** Rôles portés par le propriétaire, avec lesquels partager. */
   shareableRoles: { id: string; name: string }[];
   initialMessages: Message[];
-  /** Premier message passé par /chat/new via ?pending= - envoyé au montage. */
+  /** Premier message de la conversation (consommé depuis la base par la page) - envoyé au montage. */
   pendingMessage?: string | null;
 }
 
@@ -262,7 +262,7 @@ export function ConversationView({
     [conversation.id, finalize],
   );
 
-  // Premier message transmis depuis « Nouveau chat » via ?pending= (prop
+  // Premier message de la conversation créé depuis « Nouveau chat » (prop
   // lue côté serveur). Déclenchement au montage, hors du corps de l'effet.
   useEffect(() => {
     if (!pendingMessage) return;

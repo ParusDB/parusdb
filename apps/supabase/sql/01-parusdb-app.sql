@@ -703,6 +703,51 @@ drop trigger if exists touch_conversations on chat.conversations;
 create trigger touch_conversations before update on chat.conversations
   for each row execute function iam.touch_updated_at();
 
+-- Premier message d'une conversation créée depuis « Nouveau chat » : la
+-- saisie ne transite PLUS par l'URL (?pending=, visible dans l'historique)
+-- ni par un stockage navigateur (perdu au refresh) mais par la base, lue et
+-- consommée atomiquement par la page /chat/<id> au premier rendu (une seule
+-- consultation : un refresh ne renvoie pas le message). Ligne éphémère,
+-- supprimée avec la conversation.
+create table if not exists chat.pending_first_messages (
+  conversation_id uuid primary key references chat.conversations (id) on delete cascade,
+  content text not null,
+  created_at timestamptz not null default now()
+);
+
+alter table chat.pending_first_messages enable row level security;
+
+drop policy if exists pending_first_messages_owner_select on chat.pending_first_messages;
+drop policy if exists pending_first_messages_owner_insert on chat.pending_first_messages;
+drop policy if exists pending_first_messages_owner_delete on chat.pending_first_messages;
+create policy pending_first_messages_owner_select on chat.pending_first_messages
+  for select to authenticated
+  using (
+    exists (
+      select 1 from chat.conversations c
+       where c.id = pending_first_messages.conversation_id
+         and c.owner_id = (select auth.uid())
+    )
+  );
+create policy pending_first_messages_owner_insert on chat.pending_first_messages
+  for insert to authenticated
+  with check (
+    exists (
+      select 1 from chat.conversations c
+       where c.id = pending_first_messages.conversation_id
+         and c.owner_id = (select auth.uid())
+    )
+  );
+create policy pending_first_messages_owner_delete on chat.pending_first_messages
+  for delete to authenticated
+  using (
+    exists (
+      select 1 from chat.conversations c
+       where c.id = pending_first_messages.conversation_id
+         and c.owner_id = (select auth.uid())
+    )
+  );
+
 -- Évènements de diffusion d'une réponse d'agent : transport **Supabase
 -- Realtime** (spec §Chat / §Notes). Le BFF insère une ligne par évènement
 -- (statut, outil, fragment de réponse, fin) ; le navigateur s'abonne aux
@@ -1146,6 +1191,7 @@ grant select, insert, update, delete on agents.agent_sources to authenticated;
 grant select, insert, update, delete on chat.conversations to authenticated;
 grant select, insert, delete on chat.messages to authenticated;
 grant select, insert, delete on chat.conversation_shares to authenticated;
+grant select, insert, delete on chat.pending_first_messages to authenticated;
 
 grant select, insert, update, delete on lakehouse.catalog_registry to authenticated;
 grant select, insert on lakehouse.query_history to authenticated;
