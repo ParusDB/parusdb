@@ -7,7 +7,7 @@
 </p>
 
 [![Licence](https://img.shields.io/badge/licence-Apache%202.0-1A1A1A)](#licence)
-[![Version](https://img.shields.io/badge/version-v1.0.0-FFD700)](https://github.com/ParusDB/parusdb/releases)
+[![Version](https://img.shields.io/badge/version-v1.1.1-FFD700)](https://github.com/ParusDB/parusdb/releases)
 [![Langue](https://img.shields.io/badge/langue-Fran%C3%A7ais-6B8E23)](https://parusdb.com/)
 
 **ParusDB** unifie **ELT**, **Data Lakehouse** et **agents IA** dans une plateforme open
@@ -167,7 +167,7 @@ pipeline de type PostgreSQL dans l'interface. Détails :
 
 ## État du projet
 
-La version **1.0.0** est publiée : toutes les briques produit sont fonctionnelles.
+La version **1.1.1** est publiée : toutes les briques produit sont fonctionnelles.
 
 - [x] **Socle** — Next.js (App Router) + Supabase self-hosted, auth fonctionnelle
 - [x] **Data Lakehouse** — catalogues, schémas, explorateur, éditeur SQL
