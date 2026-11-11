@@ -223,8 +223,12 @@ sync_var "$NEXTJS_ENV_LOCAL" S3_ACCESS_KEY_ID "apps/polaris/.env" S3_ACCESS_KEY_
 sync_var "$NEXTJS_ENV_LOCAL" S3_SECRET_ACCESS_KEY "apps/polaris/.env" S3_SECRET_ACCESS_KEY
 
 # Clé de chiffrement des credentials (AES-256-GCM) : partagée avec le moteur
-# dlt (apps/dlt/.env l'importe depuis .env.local). Générée si absente.
-if [ -z "$(read_env_var "$NEXTJS_ENV_LOCAL" PARUSDB_ENCRYPTION_KEY)" ]; then
+# dlt (apps/dlt/.env l'importe depuis .env.local). Générée si absente OU si le
+# gabarit de .env.example (your-encryption-key) subsiste — c'est ce dernier cas
+# qui laissait une clé de 19 caractères non régénérée sur un clone frais
+# (incident réel : /data-lakehouse en erreur, ajout de fournisseur LLM en 500).
+if [ -z "$(read_env_var "$NEXTJS_ENV_LOCAL" PARUSDB_ENCRYPTION_KEY)" ] \
+   || [ "$(read_env_var "$NEXTJS_ENV_LOCAL" PARUSDB_ENCRYPTION_KEY)" = "your-encryption-key" ]; then
     key=$(openssl rand -hex 32)
     if grep -q "^PARUSDB_ENCRYPTION_KEY=" "$NEXTJS_ENV_LOCAL"; then
         sed -i "s|^PARUSDB_ENCRYPTION_KEY=.*|PARUSDB_ENCRYPTION_KEY=$key|" "$NEXTJS_ENV_LOCAL"
