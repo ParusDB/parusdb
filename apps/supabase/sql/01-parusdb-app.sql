@@ -299,6 +299,27 @@ begin
     return true;
   end if;
 
+  -- Garde fail-closed : un grant sur une ressource qui n'existe plus ne
+  -- vaut rien (les suppressions purge les grants, mais tout chemin direct
+  -- - SQL, scripts - peut en laisser). L'existence de la ressource est
+  -- revérifiée avant d'évaluer les grants.
+  if p_resource_type = 'catalog' then
+    if not exists (select 1 from lakehouse.catalog_registry cr
+                    where cr.catalog_name = p_resource_id) then
+      return false;
+    end if;
+  elsif p_resource_type = 'agent' then
+    if not exists (select 1 from agents.agents a
+                    where a.id::text = p_resource_id) then
+      return false;
+    end if;
+  elsif p_resource_type = 'pipeline' then
+    if not exists (select 1 from connectors.pipelines p
+                    where p.id::text = p_resource_id) then
+      return false;
+    end if;
+  end if;
+
   -- Grant explicite couvrant le privilège demandé (hiérarchie).
   return exists (
     select 1

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, unstable_rethrow } from "next/navigation";
 import { toast } from "sonner";
 import { MoreVertical, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -83,6 +83,8 @@ export function SidebarListItem({
       setRenaming(false);
       router.refresh();
     } catch (error) {
+      // redirect()/notFound() d'une Server Action : relancer, jamais afficher.
+      unstable_rethrow(error);
       toast.error(
         error instanceof Error ? error.message : "Le renommage a échoué.",
       );

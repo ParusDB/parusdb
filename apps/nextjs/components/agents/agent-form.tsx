@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, unstable_rethrow } from "next/navigation";
 import { toast } from "sonner";
 import { Database, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -101,6 +101,9 @@ export function AgentForm({ agentId, initial, modelSources, catalogs }: AgentFor
         await createAgent(input);
       }
     } catch (error) {
+      // redirect() de la Server Action se propage en erreur dédiée : la
+      // relancer hors du catch, jamais l'afficher en toast (NEXT_REDIRECT).
+      unstable_rethrow(error);
       toast.error(
         error instanceof Error ? error.message : "L’enregistrement a échoué.",
       );

@@ -10,6 +10,7 @@ import {
 } from "@/lib/session";
 import { revalidatePath } from "next/cache";
 import { createCatalog, deleteCatalog, ensureDefaultCatalogIsolated, DEFAULT_CATALOG } from "@/lib/polaris";
+import { deleteGrantsForResource } from "@/lib/rbac";
 import {
   loadCatalogTree,
   trinoBindingFileContent,
@@ -257,7 +258,7 @@ export async function createCatalogAction(
 // à la création), puis le catalogue est supprimé via l'API Management.
 export async function deleteCatalogAction(
   name: string,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; warning?: string }> {
   const session = await requireSession();
   const canDelete = await hasGrant(session.userId, "catalog", name, "manage");
   if (!canDelete) {
@@ -317,6 +318,16 @@ export async function deleteCatalogAction(
     .from("catalog_registry")
     .delete()
     .eq("catalog_name", name);
+  // Les grants sur le catalogue disparu n'ont plus de sens : purge (best
+  // effort - miroir de has_grant qui échoue fermé sur ressource inexistante).
+  const grantsCleanup = await deleteGrantsForResource("catalog", name);
+  if (!grantsCleanup.ok) {
+    revalidatePath("/data-lakehouse");
+    return {
+      ok: true,
+      warning: `Catalogue supprimé, mais la purge de ses droits a échoué : ${grantsCleanup.error}. Les supprimez depuis /admin/roles.`,
+    };
+  }
   const dir = process.env.TRINO_CATALOG_DIR;
   if (dir) {
     try {

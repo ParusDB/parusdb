@@ -101,6 +101,7 @@ parusdb/
 │                                 # (destructif ; option --purge-images pour retirer les images)
 ├── docs/functional/              # Specs produit : fiche, fonctionnel, charte
 ├── docs/technical/               # Docs techniques : CI (docs/technical/CI.md)
+├── scripts/ci/                   # Harnais CI : parseur RLS, env compose factice, e2e ELT
 ├── .agents/skills/               # Skills officiels Supabase (voir §9)
 │   ├── supabase/SKILL.md
 │   └── supabase-postgres-best-practices/  # SKILL.md + references/*.md (règles par catégorie)

@@ -14,7 +14,10 @@
 #   4. mcp-trino puis Ollama : setup (modèles re-téléchargés si absents) ;
 #   5. synchronisation de apps/nextjs/.env.local (clés Supabase, credentials
 #      Polaris, clé de chiffrement) — sans jamais les afficher ;
-#   6. moteur dlt : setup (importe la clé de chiffrement) puis vérification.
+#   6. moteur dlt : setup (importe la clé de chiffrement) puis vérification ;
+#   7. dépendances du frontend (npm ci si node_modules absent — un clone frais
+#      n'embarque pas node_modules, sans lui « npm run dev » échoue en
+#      « next: not found »).
 #
 # Usage :
 #   sh setup.sh              # installation complète
@@ -220,8 +223,12 @@ sync_var "$NEXTJS_ENV_LOCAL" S3_ACCESS_KEY_ID "apps/polaris/.env" S3_ACCESS_KEY_
 sync_var "$NEXTJS_ENV_LOCAL" S3_SECRET_ACCESS_KEY "apps/polaris/.env" S3_SECRET_ACCESS_KEY
 
 # Clé de chiffrement des credentials (AES-256-GCM) : partagée avec le moteur
-# dlt (apps/dlt/.env l'importe depuis .env.local). Générée si absente.
-if [ -z "$(read_env_var "$NEXTJS_ENV_LOCAL" PARUSDB_ENCRYPTION_KEY)" ]; then
+# dlt (apps/dlt/.env l'importe depuis .env.local). Générée si absente OU si le
+# gabarit de .env.example (your-encryption-key) subsiste — c'est ce dernier cas
+# qui laissait une clé de 19 caractères non régénérée sur un clone frais
+# (incident réel : /data-lakehouse en erreur, ajout de fournisseur LLM en 500).
+if [ -z "$(read_env_var "$NEXTJS_ENV_LOCAL" PARUSDB_ENCRYPTION_KEY)" ] \
+   || [ "$(read_env_var "$NEXTJS_ENV_LOCAL" PARUSDB_ENCRYPTION_KEY)" = "your-encryption-key" ]; then
     key=$(openssl rand -hex 32)
     if grep -q "^PARUSDB_ENCRYPTION_KEY=" "$NEXTJS_ENV_LOCAL"; then
         sed -i "s|^PARUSDB_ENCRYPTION_KEY=.*|PARUSDB_ENCRYPTION_KEY=$key|" "$NEXTJS_ENV_LOCAL"
@@ -241,6 +248,29 @@ echo "    dlt prêt"
 
 log "[dlt] vérification (runner, Postgres, Polaris)..."
 (cd apps/dlt && sh run.sh verify)
+
+# ---------------------------------------------------------------------------
+# 7. Dépendances du frontend
+# ---------------------------------------------------------------------------
+# node_modules n'est pas commité : un clone frais ne sait pas lancer « npm run
+# dev » (« next: not found », incident réel post-réinstallation complète).
+# npm ci (lockfile épinglé, §6) seulement si absent — un relancement reste
+# rapide et ne réinstalle pas.
+if [ ! -d "apps/nextjs/node_modules" ]; then
+    log "[nextjs] installation des dépendances (npm ci)..."
+    command -v npm >/dev/null 2>&1 \
+        || fail "npm est requis pour le frontend (Node.js LTS)"
+    # --loglevel=error : eslint-config-next épingle des plugins dont les
+    # peer ranges s'arrêtent à eslint 9 alors que la racine tourne en 10 —
+    # npm résume ces écarts en WARN ERESOLVE à chaque install (résolution
+    # déjà figée dans package-lock.json). Le setup machine s'assourdit ;
+    # une install manuelle conserve la verbosité par défaut.
+    (cd apps/nextjs && npm ci --no-fund --no-audit --loglevel=error) \
+        || fail "l'installation des dépendances du frontend a échoué"
+    echo "    dépendances installées"
+else
+    echo "[nextjs] dépendances déjà installées (node_modules présent)"
+fi
 
 echo ""
 echo "Stack ParusDB installée et démarrée."

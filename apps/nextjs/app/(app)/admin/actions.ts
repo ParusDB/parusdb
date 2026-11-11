@@ -814,11 +814,22 @@ export async function addProvider(input: {
   }
 
   const admin = createAdminClient();
+  let apiKeyEncrypted: string;
+  try {
+    apiKeyEncrypted = encryptSecret(input.apiKey.trim());
+  } catch (e) {
+    // Clé de chiffrement absente/courte : erreur de configuration serveur,
+    // à distinguer d'un rejet par le fournisseur (incident réel : 500 muet).
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Le chiffrement de la clé a échoué.",
+    };
+  }
   const { error } = await admin.schema("admin").from("providers").insert({
     name,
     api_kind: input.apiKind,
     base_url: baseUrl,
-    api_key_encrypted: encryptSecret(input.apiKey.trim()),
+    api_key_encrypted: apiKeyEncrypted,
     created_by: session.userId,
   });
   if (error) {
@@ -884,7 +895,14 @@ export async function updateProvider(
     base_url: baseUrl,
   };
   if (input.apiKey?.trim()) {
-    payload.api_key_encrypted = encryptSecret(input.apiKey.trim());
+    try {
+      payload.api_key_encrypted = encryptSecret(input.apiKey.trim());
+    } catch (e) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e.message : "Le chiffrement de la clé a échoué.",
+      };
+    }
   }
   const { error } = await admin
     .schema("admin")

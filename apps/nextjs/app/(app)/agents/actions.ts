@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { hasGrant, requireSession, type SessionContext } from "@/lib/session";
+import { deleteGrantsForResource } from "@/lib/rbac";
 
 // Droit requis sur l'agent, avec message français (la RLS reste la garde
 // finale côté base).
@@ -196,6 +197,9 @@ export async function deleteAgent(id: string): Promise<{ ok: boolean; error?: st
         : `La suppression a échoué : ${error.message}`,
     };
   }
+  // Purge des grants sur l'agent disparu (best effort, has_grant échoue
+  // fermé sur ressource inexistante de toute façon).
+  await deleteGrantsForResource("agent", id);
   revalidatePath("/agents");
   return { ok: true };
 }
