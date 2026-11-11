@@ -143,7 +143,7 @@ export function CatalogsView({
       <PageHeader
         eyebrow="Data Lakehouse"
         title="Catalogues"
-        description="Polaris catalogue les métadonnées Iceberg, Trino exécute le SQL, RustFS stocke les fichiers. Aucune donnée analytique ne vit dans PostgreSQL."
+        description="Polaris catalogue les métadonnées Iceberg, Trino exécute le SQL, RustFS stocke les fichiers."
         actions={
           <Button
             onClick={() => setCreateOpen(true)}

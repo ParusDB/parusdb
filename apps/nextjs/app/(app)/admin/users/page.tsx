@@ -92,7 +92,7 @@ export default async function AdminUsersPage() {
       <PageHeader
         eyebrow="Administration"
         title="Utilisateurs"
-        description="Comptes humains (connexion à l'interface) et comptes applicatifs (outils data connectés au catalogue Iceberg). Les rôles applicatifs vivent dans PostgreSQL, jamais dans les JWT claims éditables."
+        description="Comptes humains (connexion à l'interface) et comptes applicatifs (outils data connectés au catalogue Iceberg)."
       />
       <AdminUsersTabs users={users as AdminUserRow[]} appUsers={appUsers} roles={roleOptions} />
     </div>

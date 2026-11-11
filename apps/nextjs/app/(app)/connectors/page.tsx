@@ -77,7 +77,7 @@ export default async function ConnectorsPage({
       <PageHeader
         eyebrow="Connecteurs ELT"
         title="Pipelines d'ingestion"
-        description="Un pipeline charge les données d'une source vers un catalogue du Data Lakehouse. Destination unique : le lakehouse, jamais ailleurs."
+        description="Un pipeline charge les données d'une source vers un catalogue du Data Lakehouse."
         actions={
           <Button asChild className="rounded-full bg-jaune font-semibold text-charbon hover:bg-jaune/90">
             <Link href="/connectors/new">
