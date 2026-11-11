@@ -14,7 +14,10 @@
 #   4. mcp-trino puis Ollama : setup (modèles re-téléchargés si absents) ;
 #   5. synchronisation de apps/nextjs/.env.local (clés Supabase, credentials
 #      Polaris, clé de chiffrement) — sans jamais les afficher ;
-#   6. moteur dlt : setup (importe la clé de chiffrement) puis vérification.
+#   6. moteur dlt : setup (importe la clé de chiffrement) puis vérification ;
+#   7. dépendances du frontend (npm ci si node_modules absent — un clone frais
+#      n'embarque pas node_modules, sans lui « npm run dev » échoue en
+#      « next: not found »).
 #
 # Usage :
 #   sh setup.sh              # installation complète
@@ -241,6 +244,24 @@ echo "    dlt prêt"
 
 log "[dlt] vérification (runner, Postgres, Polaris)..."
 (cd apps/dlt && sh run.sh verify)
+
+# ---------------------------------------------------------------------------
+# 7. Dépendances du frontend
+# ---------------------------------------------------------------------------
+# node_modules n'est pas commité : un clone frais ne sait pas lancer « npm run
+# dev » (« next: not found », incident réel post-réinstallation complète).
+# npm ci (lockfile épinglé, §6) seulement si absent — un relancement reste
+# rapide et ne réinstalle pas.
+if [ ! -d "apps/nextjs/node_modules" ]; then
+    log "[nextjs] installation des dépendances (npm ci)..."
+    command -v npm >/dev/null 2>&1 \
+        || fail "npm est requis pour le frontend (Node.js LTS)"
+    (cd apps/nextjs && npm ci --no-fund --no-audit) \
+        || fail "l'installation des dépendances du frontend a échoué"
+    echo "    dépendances installées"
+else
+    echo "[nextjs] dépendances déjà installées (node_modules présent)"
+fi
 
 echo ""
 echo "Stack ParusDB installée et démarrée."
