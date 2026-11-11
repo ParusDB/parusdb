@@ -17,6 +17,41 @@ Politique de versionnage :
 
 ## [Non publié]
 
+## [1.1.1] — 2026-11-11
+
+### Corrigé
+
+- **Première installation sur un clone frais** : le setup racine installe
+  désormais les dépendances du frontend (`npm ci` manquant — échec
+  « next: not found ») et régénère la clé de chiffrement si la valeur
+  gabarit de `.env.example` subsistait (clé jamais tirée, cassant
+  silencieusement `/data-lakehouse` et l'ajout de fournisseur LLM en 500
+  muet) ; les actions admin renvoient désormais l'erreur de chiffrement
+  en message affichable.
+- **Erreurs de redirection affichées en toast** : les composants client
+  attrapant l'erreur de `redirect()` affichaient « NEXT_REDIRECT »
+  (création d'agent, assistant pipeline, boîte de confirmation) —
+  `unstable_rethrow` relance désormais redirection et `notFound`.
+- **Explorateur du lakehouse** : l'arborescence schémas/tables est
+  rafraîchie après une requête réussie (un `CREATE`/`DROP` est visible
+  immédiatement, sans recharger la page, onglets et résultats conservés).
+- **Grants orphelins** : les grants de `iam.grants` survivant à la
+  suppression du catalogue, agent ou pipeline visé (lignes fantômes dans le
+  dialogue « Gérer les droits ») sont purgés en cascade par les actions de
+  suppression, et `iam.has_grant` échoue fermé sur une ressource
+  disparue (test T9a du harnais RLS).
+- **Descriptions des pages** : les phrases d'architecture retirées des
+  descriptions des pages lakehouse, connecteurs et administration.
+
+### Modifié
+
+- **Setup** : les warnings `ERESOLVE` de `npm ci` (peer ranges
+  d'eslint-config-next arrêtées à eslint 9, résolution figée dans le
+  lockfile) sont assourdis côté machine ; une installation manuelle
+  reste verbeuse.
+- **Documentation** : le harnais CI (`scripts/ci`) figure dans
+  l'arborescence de référence du AGENTS.md.
+
 ## [1.1.0] — 2026-11-05
 
 ### Ajouté
@@ -85,6 +120,7 @@ Première release publique, sous licence Apache 2.0.
 - **Authentification** : Supabase self-hosted, onboarding premier démarrage,
   expiration des sessions après inactivité.
 
-[Non publié]: https://github.com/ParusDB/parusdb/compare/v1.1.0...HEAD
+[Non publié]: https://github.com/ParusDB/parusdb/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/ParusDB/parusdb/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/ParusDB/parusdb/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/ParusDB/parusdb/releases/tag/v1.0.0
