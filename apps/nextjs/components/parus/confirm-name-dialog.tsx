@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, unstable_rethrow } from "next/navigation";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -61,6 +61,8 @@ export function ConfirmNameDialog({
         toast.error(result.error ?? "La suppression a échoué.");
       }
     } catch (error) {
+      // redirect()/notFound() d'une Server Action : relancer, jamais afficher.
+      unstable_rethrow(error);
       toast.error(
         error instanceof Error
           ? error.message

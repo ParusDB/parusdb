@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, unstable_rethrow } from "next/navigation";
 import { toast } from "sonner";
 import { ArrowLeft, ArrowRight, Check, Save, X } from "lucide-react";
 import {
@@ -215,6 +215,9 @@ export function PipelineWizard({
         await createPipeline(input);
       }
     } catch (error) {
+      // redirect() de la Server Action se propage en erreur dédiée : la
+      // relancer hors du catch, jamais l'afficher en toast (NEXT_REDIRECT).
+      unstable_rethrow(error);
       toast.error(
         error instanceof Error ? error.message : "L’enregistrement a échoué.",
       );
