@@ -10,6 +10,7 @@ import {
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { decryptSecret, encryptSecret } from "@/lib/crypto";
+import { deleteGrantsForResource } from "@/lib/rbac";
 
 // Pipelines ELT exécutés par le moteur dlt (apps/dlt). Les credentials sont
 // chiffrés au repos (AES-256-GCM) et jamais renvoyés au client ni stockés en
@@ -338,6 +339,9 @@ export async function deletePipeline(
   if (error) {
     return { ok: false, error: `La suppression a échoué : ${error.message}` };
   }
+  // Purge des grants sur le pipeline disparu (best effort, has_grant échoue
+  // fermé sur ressource inexistante de toute façon).
+  await deleteGrantsForResource("pipeline", id);
   revalidatePath("/connectors");
   return { ok: true };
 }

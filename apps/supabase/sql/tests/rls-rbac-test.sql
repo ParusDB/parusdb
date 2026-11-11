@@ -310,6 +310,24 @@ delete from chat.conversation_shares where conversation_id in
 delete from chat.conversations where title = 'conversation-test';
 delete from connectors.pipelines where name in ('pipeline-test', 'pipeline-refuse');
 delete from agents.agents where name = 'agent-test';
+
+-- ---------------------------------------------------------------------------
+-- 9b. Grants orphelins : la suppression de la ressource invalide les grants
+--     qui la visent (garde d'existence de iam.has_grant). Le grant sales_test
+--     sur test_catalog_rls existe encore : il ne doit plus rien valoir dès
+--     que le catalogue disparaît.
+-- ---------------------------------------------------------------------------
+delete from lakehouse.catalog_registry where catalog_name = 'test_catalog_rls';
+select count(*) as grants_encore_presents from iam.grants where resource_type = 'catalog' and resource_id = 'test_catalog_rls';
+
+begin;
+set role authenticated;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-000000000001","role":"authenticated"}', false);
+select 'T9a grant orphelin inopérant après suppression du catalogue (attendu f)' as test,
+       iam.has_grant(auth.uid(), 'catalog', 'test_catalog_rls', 'read') as ok;
+reset role;
+commit;
+
 delete from auth.users where id in ('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000002');
 delete from iam.app_users where name = 'app-user-test';
 delete from iam.role_trino_accounts where username = 'parus-role-test';

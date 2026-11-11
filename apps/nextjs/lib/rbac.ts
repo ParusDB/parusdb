@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { SessionContext, Privilege, ResourceType } from "@/lib/session";
 import type { Grant } from "@/types/db";
 
@@ -96,4 +97,28 @@ export async function writableCatalogNames(
       can(session, grants, "catalog", r.catalog_name, r.owner_role_id, "write"),
     )
     .map((r) => r.catalog_name);
+}
+
+// Supprime les grants portant sur une ressource supprimée (catalogue, agent,
+// pipeline). iam.grants.resource_id est un identifiant libre sans clé
+// étrangère vers la ressource : sans ce nettoyage, les grants survivent à
+// la ressource (lignes fantômes dans le dialogue « Gérer les droits » et
+// satisfaisables par iam.has_grant avant sa garde d'existence). Le client
+// admin est requis : la RLS de iam.grants est réservée au compte admin et
+// le porteur du privilège « Gestion » ne l'est pas nécessairement. Best
+// effort : un échec n'annule pas la suppression déjà effectuée.
+export async function deleteGrantsForResource(
+  resourceType: ResourceType,
+  resourceId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const admin = createAdminClient();
+  const { error } = await admin
+    .schema("iam")
+    .from("grants")
+    .delete()
+    .eq("resource_type", resourceType)
+    .eq("resource_id", resourceId);
+  return error
+    ? { ok: false, error: error.message }
+    : { ok: true };
 }
