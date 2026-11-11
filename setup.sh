@@ -260,7 +260,12 @@ if [ ! -d "apps/nextjs/node_modules" ]; then
     log "[nextjs] installation des dépendances (npm ci)..."
     command -v npm >/dev/null 2>&1 \
         || fail "npm est requis pour le frontend (Node.js LTS)"
-    (cd apps/nextjs && npm ci --no-fund --no-audit) \
+    # --loglevel=error : eslint-config-next épingle des plugins dont les
+    # peer ranges s'arrêtent à eslint 9 alors que la racine tourne en 10 —
+    # npm résume ces écarts en WARN ERESOLVE à chaque install (résolution
+    # déjà figée dans package-lock.json). Le setup machine s'assourdit ;
+    # une install manuelle conserve la verbosité par défaut.
+    (cd apps/nextjs && npm ci --no-fund --no-audit --loglevel=error) \
         || fail "l'installation des dépendances du frontend a échoué"
     echo "    dépendances installées"
 else
