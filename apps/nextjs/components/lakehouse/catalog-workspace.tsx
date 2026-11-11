@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   ChevronRight,
@@ -62,6 +63,7 @@ export function CatalogWorkspace({
   treeError: string | null;
 }) {
   const storageKey = `parus:sql-tabs:${catalog}`;
+  const router = useRouter();
   const [tabs, setTabs] = useState<QueryTab[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [result, setResult] = useState<QueryExecution | null>(null);
@@ -152,6 +154,12 @@ export function CatalogWorkspace({
       setResult(execution);
       if (!execution.ok) {
         toast.error(execution.error ?? "La requête a échoué.");
+      } else {
+        // Une requête réussie peut modifier le lakehouse (CREATE/ALTER/DROP) :
+        // rafraîchir la page RSC pour recharger l'arborescence de
+        // l'explorateur sans recharger la page (les états d'ouverture
+        // ouverts, onglets, résultats sont conservés côté client).
+        router.refresh();
       }
     } catch (error) {
       toast.error(
