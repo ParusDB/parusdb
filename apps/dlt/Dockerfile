@@ -15,7 +15,7 @@
 #
 # Reconstruction : cd apps/dlt && sh run.sh build
 
-FROM python:3.12-slim AS verified-sources
+FROM python:3.15-slim AS verified-sources
 
 # Commit épinglé du dépôt officiel (mettre à jour consciemment : les sources
 # verified évoluent avec les versions de dlt).
@@ -43,7 +43,7 @@ RUN mkdir -p /vendor/reqs \
     && wc -l /vendor/reqs/all.txt
 
 
-FROM python:3.12-slim
+FROM python:3.15-slim
 
 ARG DLT_VERSION=1.31.0
 
